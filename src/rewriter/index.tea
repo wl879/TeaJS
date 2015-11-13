@@ -1,0 +1,6 @@
+
+var Reader = require "./reader.js";
+
+exports.read = function(ast, preprocessor):
+	preprocessor |= ast.preProcessor;
+	return Reader( preprocessor ).read( ast );

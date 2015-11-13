@@ -1,0 +1,106 @@
+
+class Argv:
+	constructor (argv, opt, desc_text, root_file):
+		@.___desc = {};
+		@.pathdata = {};
+		@.length = 0;
+		if arguments.length:
+			@.parse(argv, opt, desc_text, root_file)
+
+	parse (argv, opt, desc_text, root_file):
+		if desc_text:
+			var re = /^[\ \t]*(\-(?:\-[\w\-]+)?\w)\,?\ *(\-\-[\w\-]+)?\ *(\<[^\>]+\>)?\s*(.*)$/mg,
+				m, _opt = [];
+			while m = re.exec(desc_text):
+				_opt.push([m[1], m[2], m[3], m[4]]);
+			if _opt.length:
+				opt = opt ? opt.concat(_opt) : _opt;
+			@.___desc._help_ = desc_text;
+
+		if opt && opt.length:
+			for i, o => opt:
+				if o.length > 2 && o[0] && o[1] && o[0][0] == '-' && o[1][0] == '-':
+					@.add(o[0], o[1], o[3]||o[2]||'');
+
+		var basename = Path.basename(root_file || __filename), b;
+		var _i = 0;
+		if /node$/.test(argv[_i]):
+			_i ++;
+		if argv[_i].indexOf(basename) != -1:
+			_i ++;
+		for i = _i, a => argv:
+			if a[0] == '-':
+				b = argv[i+1];
+				if !b || b[0] == '-':
+					b = true;
+				else:
+					i += 1;
+				@[a] = b;
+			else if !@['--file']:
+				@['--file'] = a;
+			else:
+				@[@.length++] = a;
+		return @.check();
+
+	check():
+		@.pathdata = Path.countPath(@['--file'], @['--path'], @['--out']);
+		return @;
+
+	get file():
+		return @.pathdata.file;
+
+	get dir:
+		return @.pathdata.dir;
+
+	get path:
+		return @.pathdata.path;
+	
+	get outdir:
+		return @.pathdata.outdir;
+
+	get out:
+		if @.pathdata.out:
+			return @.pathdata.out;
+		if /\.tea$/.test( @.pathdata.file ):
+			return @.pathdata.file.replace(/\.tea$/, '.js');
+
+	set file(file):
+		@.pathdata = Path.countPath(file, @.pathdata.path, @.pathdata.outdir );
+		return @.pathdata.file;
+
+	set out(out):
+		@.pathdata = Path.countPath(@.pathdata.file, @.pathdata.path, out);
+		return @.pathdata.out;
+		
+	add (short, long, desc, fn):
+		if short.substr(0,2) == '--':
+			desc = long, long = short, short = null;
+		var name = long.replace(/^-+/, '');
+		if desc:
+			@.___desc[short] = desc;
+			@.___desc[long] = desc;
+
+		if short && long && short != long:
+			var self = @;
+			@.__defineGetter__(short, function(){return self[long];});
+			@.__defineSetter__(short, function(v){return self[long] = v;});
+	
+	showDesc (com):
+		return @.___desc[com];
+
+	showHelp():
+		print( @.___desc._help_ );
+
+	copy(extend):
+		var argv = new Argv();
+		for i -> @:
+			if @[i] == null || i[0] == '_' && i[1] == '_':
+				continue;
+			argv[i] = @[i];
+		if extend:
+			for i -> extend:
+				argv[i] = extend[i];
+		argv.parent = argv.parent || argv;
+		return argv;
+
+module.exports = Argv;

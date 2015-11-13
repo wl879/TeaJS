@@ -1,0 +1,41 @@
+[param]
+# fold: tea.*
+debug: console clear
+build: /usr/local/bin/node $ROOT/build.js
+testp: $ROOT/test
+plugin: $ROOT/plugin
+tml: TeaJS.tmLanguage
+teabin: /usr/local/bin/node $ROOT/bin/tea.js
+
+[cmd]
+# plugin
+cmd: ${betaVer} -f $FILE -o ${plugin}/${tml}.json -v && plutil -convert xml1 ${plugin}/${tml}.json -o ${plugin}/${tml} && cat ${plugin}/${tml} > ${plugin}/ln.${tml}
+watch: plugin\/.*\.tea
+
+[cmd]
+cmd: ${build} lib $FILE
+watch: src\/.*[^(?build)]+\.(js|tea)
+
+[cmd]
+cmd: ${teabin} -f $FILE -o $ROOT -v
+watch: build\.tea
+
+[cmd]
+cmd: ${teabin} -f $FILE -o $FILEDIR
+watch: test\/.*\.tea
+
+[cmd]
+cmd: ${build} test tmp
+watch: test\/.*\.tea
+
+[cmd]
+cmd: ${build} test token
+watch: src\/(tokens|preprocess)\/.*\.tea
+
+[cmd]
+cmd: ${build} test syntax
+watch: src\/(syntax)\/.*\.tea
+
+[cmd]
+cmd: ${build} test writer
+watch: src\/(rewriter)\/.*\.tea

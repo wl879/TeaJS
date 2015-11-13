@@ -1,0 +1,96 @@
+var Prep   = require "./preprocess";
+var Tokens = require "./tokens";
+var Syntax = require "./syntax";
+var ReWriter = require "./rewriter";
+
+class Context:
+
+	var def_pre_processor;
+
+	constructor(argv, extend):
+		if @.constructor != Context:
+			return new Context(argv, extend);
+		@.argv          = argv;
+		@.preProcessor  = Prep.new( def_pre_processor );
+		if extend:
+			@.extends(  argv && argv['preprocess'], extend);
+
+	extends():
+		for i, item => arguments:
+			if item:
+				@.preProcessor.extends( item.preProcessor || item );
+
+	get source:
+		if !@._source:
+			if @.argv.source:
+				@._source = @.argv.source;
+			else if @.argv.text || @.argv.file:
+				@._source = Prep.source(@.argv.text, @.argv.file, @.preProcessor);
+		return @._source;
+
+	get fileName:
+		return @.source.fileName;
+
+	get sourceText:
+		return @.source.source;
+
+	get ast:
+		if !@._ast:
+			@._ast = Syntax.parse(@.source, @.preProcessor);
+		return @._ast;
+
+	get scope:
+		return @.ast.scope;
+
+	get rewriter:
+		return ReWriter.read(@.ast, @.preProcessor);
+
+	get text:
+		return @.writer.text;
+
+	get sourcemap:
+		return '';
+
+	get requires:
+		return @.scope.requires;
+
+	echo ( file ):
+		file |= @.argv && @.argv.out;
+		var writer = @.rewriter;
+		var requires = @.requires;
+		var text;
+		if requires.length:
+			requires = loadRequiresList( requires, {} );
+			text = Prep.template.joinRequire(requires, writer);
+			var shell_comm = '';
+			text = text.replace(/\n\s*(\#\!.*\n)/g, function($0, $1){
+				shell_comm = $1;
+				return '\n';
+			});
+			text = shell_comm+text;
+		else:
+			text = writer.toText();
+		Text.writeFile( text, file );
+
+	static definePreProcessor():
+		if !def_pre_processor:
+			def_pre_processor = new Prep.new();
+		for i, item => arguments:
+			if item:
+				if item as 'string':
+					def_pre_processor.extends( Prep.parseByFile(item) );
+				else:
+					def_pre_processor.extends( item );
+
+	function loadRequiresList( list, cache ):
+		for file, key -> list:
+			if file == 'length' || file in cache:
+				continue;
+			tea_log '** require file: '+file;
+			var ctx = new Context({file: file});
+			cache[file] = [key, ctx, ctx.rewriter];
+			if ctx.requires.length:
+				loadRequiresList( ctx.requires, cache );
+		return cache;
+
+module.exports = Context;

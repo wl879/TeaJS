@@ -1,0 +1,193 @@
+#run
+global.ff = function(re):
+	return '"'+Text(re.replace(/\n\s*/g, '').slice(1, -1), '"')+'"';
+global.ll = function(name):
+	return '"'+name+'"';
+	
+#endrun
+
+#define START(N) "N": [{
+#define COMMENT() },{
+#define END }],
+#define MARK(ST, EN)
+""""
+#script
+write '"begin": '+ff(ST)+', "end": '+ff(EN)+',';
+#end
+""""
+#define TOKEN()
+""""
+#script
+var list = [], _i = 0, type = 'captures';
+if /captures/i.test(arguments[0]):
+	type = arguments[0], _i = 1;
+for i=_i, name => arguments:
+	list.push('"'+(i+1-_i)+'": {"name": '+ll(name)+'}' );
+write '"'+type+'":{'+list.join(',')+'},';
+#end
+""""
+#define MATCH(RE, N)
+""""
+#script
+write '"match": '+ff(RE)+', "name": '+ll(N)+''
+#end
+""""
+#define NAME(N)
+""""
+#script
+write '"name": '+ll(N)+','
+#end
+""""
+
+#define ID [\\$a-zA-Z_]\\w*
+#define KW break|case|catch|continue|default|do|else|finally|for|goto|if|import|package|return|switch|throw|delete|try|while|require|super
+#define KP ,|+|-|\\*|\\/|%|\\.|&{1,2}|\\|{1,2}|<=|>=|={1,3}|\\!={1,2}|->|<-|\\?|:
+#define CPL \\(((?:\\(.*?\\)|[^\\)]*)*)\\)
+#define H (?:(?:[,;]\\s*|^\\s*)?)
+#define HH (?:[,;]\\s*|^\\s*)
+
+{
+
+	#START patterns
+		MATCH "\'{3,}|\"{3,}|`{1,}", storage.type.template
+
+	#COMMENT patterns
+		MATCH "\$\{.*?\}", constant.character.escape.js
+
+	#COMMENT 预处理语法部分
+		#define PPR (?:(?:[^,;\\s\\\\]+(?:\\\\ )*)+)
+
+		MARK "#(include)", ";|(?<!,)\n"
+		#START patterns
+			MATCH "#{PPR}", entity.name.function
+		#END
+		TOKEN keyword.prep,entity.name.function
+
+	#COMMENT 预处理语法部分
+		TOKEN keyword.prep, entity.name.function,
+			  keyword.prep, entity.name.function, variable.parameter,
+			  keyword.prep, entity.name.function, variable.parameter,
+			  keyword.prep, comment,
+			  keyword.prep,
+			  keyword.prep, entity.name.function
+		MATCH '#(token)\ +(#{ID}(?:\s*,\s*#{ID})*)|
+			   #(exp|stat)\ +(#{ID})\ +(\/[^\/]+\/)|
+			   #(define)\ +(#{ID})(?:#{CPL})?|
+			   #(test|end\w*)(.*$)|
+			   #(run|endrun|line|token|define|exp|stat|argv|undef|if\w*|el\w+)\b|
+			   #(include)\s*(#{PPR}(?:\s*,\s*#{PPR})*)'
+
+
+
+	#COMMENT #comment
+		TOKEN comment, storage, constant.character, message
+		MATCH "(#\W.*$)|(#)(\w+)(.*$)"
+
+	#COMMENT 单行注释
+		MATCH "\/\/.*?$", comment.line
+
+	#COMMENT 多行注释
+		NAME comment
+		MARK "\/\*", "\*\/"
+
+	#COMMENT 保留符号
+		NAME string.quoted.single.js
+		MARK "'", "'"
+		#START patterns
+			TOKEN storage
+			MATCH "(err:\d+)|\\(x\h{2}|[0-2][0-7]{,2}|3[0-6][0-7]?|37[0-7]?|[4-7][0-7]?|.)", constant.character.escape.js
+		#END
+
+	#COMMENT string
+		NAME string.quoted.double.js
+		MARK "\"", "\""
+		#START patterns
+			TOKEN storage
+			MATCH "(err:\d+)|\\(x\h{2}|[0-2][0-7]{,2}|3[0-6][0-7]|37[0-7]?|[4-7][0-7]?|.)|\$\{.*?\}", constant.character.escape.js
+		#END
+
+	#COMMENT 数字
+		TOKEN constant.numeric
+		MATCH "(?<![a-zA-Z])(0[xX][0-9a-fA-F]+|(?:\.\d+|\d+(?:\.\d+)?)(?:e\-?\d+)?)"
+
+	#COMMENT 正则
+		NAME string
+		MARK "(?<=[=(:]|^|\&\&|\|\||\!|\,|return|if|else|while|switch|\<\-|\-\>)\s*(\/)(?![\/\*\+\{\}\?])", "(\/)[igm]*"
+		#START patterns
+			TOKEN storage
+			MATCH "(\|)|\\.", constant.character
+		#END
+
+	#COMMENT 特殊成员
+		TOKEN storage, entity.name.function, support.function, storage.type
+		MATCH "\.(?:(prototype|constructor|__proto__|length|\:\:)|
+					(?:([\w\$]+)(?=\s*\=\s*function))|
+					(length|warn|info|log|error|time|timeEnd|assert)|
+					([\w\$]+))\b|
+				(?<=\w|\])(\[)(#{ID})(\])|"
+
+	#COMMENT 关键字
+		TOKEN constant.language, storage.type, keyword.control, constant.character
+		MATCH "#{H}\b(?:(case|default)|
+						(boolean|class|var|let|const|export|void|Array|Object|String|Function)|
+						(#{KW}|\*init|\*proto)|
+						(true|false|null|Infinity|NaN|undefined))\b"
+
+	#COMMENT 表达式 function
+		TOKEN storage.type, entity.name.function, variable.parameter
+		MATCH "(?:#{H}(function)|#{HH}(#{ID}))\s*(?:#{CPL})\s*[:\{]"
+
+	#COMMENT 声明 function
+		TOKEN storage.type, storage, entity.name.function, variable.parameter
+		MATCH "#{H}\b(?:(function)|(get|set|static))\ +(#{ID})(?:#{CPL})?\s*[:\{]"
+
+	#COMMENT 模式 lambda function
+		TOKEN storage.type, variable.parameter, storage.type
+		MATCH "(?:#{HH}|[\=\:]\s*)(#{CPL})\s*(->)", function.js
+
+	#COMMENT 关键字
+		#define SK as|in|of|not\\ is|not|is|and|or|typeof|new|instanceof|extends
+		TOKEN storage, storage.type, constant.character
+		MATCH "#{H}\b(?:(#{SK})|
+						(exports)|
+						(global|console|eval))\b"
+
+	#COMMENT 常用命名方法
+		TOKEN constant.character, storage.type
+		MATCH "\b(?:(__#{ID})|([A-Z]#{ID}))\b"
+
+	#COMMENT 空括号
+		TOKEN storage, storage.type, storage
+		MATCH "\(\s*\)", comment
+
+	#COMMENT 符号
+		TOKEN storage, storage.type, storage
+		MATCH "(\:{2}|\.\.)|
+				([\<\>]\=+|\=+[\<\>\?]+|[\?\|]\=+|\|\||\&\&|\?|\<\-|\-\>|\-\-\>)|
+				(\={2}|[^\w\s\"'\#\{\}\;\,\.\[\]\(\)\:]+)"
+
+	#COMMENT call
+		TOKEN storage, storage.type
+		MATCH "#{HH}(#{ID}) +(?!#{SK}|#{KW}|[^\w\"\'\[])|
+			  (#{ID}(?=\())"
+
+	#COMMENT josn key
+		TOKEN entity.name.function
+		MATCH "(?<=[\,\{]|^)\s*\b(#{ID})(?=\s*\:)"
+
+	#COMMENT 数组赋值表达式
+		TOKEN storage, variable.parameter, storage
+		MATCH "(\[)\s*(#{ID}(?:\s*,\s*#{ID})*)\s*(\])\s*(?=\=)"
+
+	#END
+
+	"fileTypes": ["tea"],
+	"firstLineMatch": "^#!\/usr\/bin\/env node",
+	"foldingStartMarker": "",
+	"foldingStopMarker": "",
+	"keyEquivalent": "^~T",
+	"uuid": "93E017CC-6F27-11D9-90EB-000D93589AF6",
+	"comment": "TeaJS Syntax: version 0.1",
+	"name": "TeaJS",
+	"scopeName": "source.js"
+}
