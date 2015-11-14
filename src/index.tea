@@ -64,7 +64,7 @@ if !module.parent:
 			if file_list.length:
 				for i, file -> file_list:
 					tea_log '  * b{Compile:} d{"'+file+'"}';
-					ctx = tea.context( tea.argv.copy({file:file}));
+					ctx = tea.context( tea.argv.copy({file:file}) );
 					ctx.echo();
 					tea_log '  * g{Output to:} "'+ctx.argv.out+'"';
 			else:

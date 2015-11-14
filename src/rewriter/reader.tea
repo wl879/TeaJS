@@ -479,7 +479,8 @@ Reader::forCondition = function(node, __write):
 
 Reader::ForStam = function(node, __write):
 	var condition = node[1];
-	if condition.type == 'ForBaseConditionPatt' || condition.type == 'ForInConditionPatt':
+	if condition.type == 'ForBaseConditionPatt':
+		// condition.type == 'ForInConditionPatt':
 		return '#0 #1#2';
 
 	var scope = node.scope;

@@ -39,6 +39,8 @@ class Argv:
 
 	check():
 		@.pathdata = Path.countPath(@['--file'], @['--path'], @['--out']);
+		if @.pathdata.error:
+			Err @.pathdata.error;
 		return @;
 
 	get file():
@@ -61,10 +63,14 @@ class Argv:
 
 	set file(file):
 		@.pathdata = Path.countPath(file, @.pathdata.path, @.pathdata.outdir );
+		if @.pathdata.error:
+			Err @.pathdata.error;
 		return @.pathdata.file;
 
 	set out(out):
 		@.pathdata = Path.countPath(@.pathdata.file, @.pathdata.path, out);
+		if @.pathdata.error:
+			Err @.pathdata.error;
 		return @.pathdata.out;
 		
 	add (short, long, desc, fn):
@@ -88,12 +94,12 @@ class Argv:
 
 	copy(extend):
 		var argv = new Argv();
-		for var i in @:
+		for i in @:
 			if @[i] == null || i[0] == '_' && i[1] == '_':
 				continue;
 			argv[i] = @[i];
 		if extend:
-			for var i in extend:
+			for i in extend:
 				argv[i] = extend[i];
 		argv.parent = argv.parent || argv;
 		return argv;

@@ -161,9 +161,10 @@
 					break;
 			}
 		};
-		global.checkGlobalSpace = function(){
+		global.checkGlobalScope = function(){
 			var def = 'global process GLOBAL root console Path'.split(' ');
-			for (name in global){
+			for (var name in global){
+				if (!global.hasOwnProperty(name)) continue;
 				if (def.indexOf(name) >= 0){
 					continue;
 				}
@@ -228,7 +229,8 @@
 						tar.constructor = obj.constructor;
 					}
 				}
-				for (k in obj){
+				for (var k in obj){
+					if (!obj.hasOwnProperty(k)) continue;
 					tar[k] = deep ? Hash.clone(obj[k], (deep || 1)-1) : obj[k];
 				}
 				return tar;
@@ -239,7 +241,8 @@
 		Hash.concat = function(obj){
 			for (var i=1, arg; i < arguments.length; i++){
 				arg = arguments[i];
-				for (k in arg){
+				for (var k in arg){
+					if (!arg.hasOwnProperty(k)) continue;
 					obj[k] = arg[k];
 				}
 			}
@@ -472,7 +475,8 @@
 			}
 			circular.push(data);
 			var list = [], str = '', array_mode = data.hasOwnProperty('length');
-			for (k in data){
+			for (var k in data){
+				if (!data.hasOwnProperty(k)) continue;
 				if (array_mode && /\d+/.test(k)){
 					list.push(Text.print(data[k], circular));
 				}else {
@@ -692,7 +696,11 @@
 			}else {
 				data.file = Path.resolve(file || '');
 			}
-			if (Path.isDir(data.file)){
+			if (!data.file){
+				if (data.path){
+					data.dir = data.path;
+				}
+			}else if (Path.isDir(data.file)){
 				if (!path){
 					data.path = data.file;
 				}
@@ -700,7 +708,7 @@
 				data.file = '';
 			}else if (!Path.isFile(data.file)){
 				data.file = '';
-				data.error = 'can not find file';
+				data.error = 'can not find file: '+file;
 				return data;
 			}else {
 				data.dir = Path.dirname(data.file);
@@ -709,10 +717,12 @@
 				data.out = Path.resolve(out);
 				if (!Path.extname(data.out)){
 					data.outdir = data.out;
-					if (data.path){
-						data.out = Path.resolve(data.outdir, Path.relative(data.path, data.file));
-					}else {
-						data.out = Path.join(data.outdir, Path.basename(data.file));
+					if (data.file){
+						if (data.path){
+							data.out = Path.resolve(data.outdir, Path.relative(data.path, data.file));
+						}else {
+							data.out = Path.join(data.outdir, Path.basename(data.file));
+						}
 					}
 				}else {
 					data.outdir = Path.dirname(data.out);
@@ -780,6 +790,9 @@
 			}
 			Argv.prototype.check = function (){
 				this.pathdata = Path.countPath(this['--file'], this['--path'], this['--out']);
+				if (this.pathdata.error){
+					throw tea.error(new Error(), this.pathdata.error);
+				}
 				return this;
 			}
 			Argv.prototype.__defineGetter__("file", function(){
@@ -804,10 +817,16 @@
 			});
 			Argv.prototype.__defineSetter__("file", function(file){
 				this.pathdata = Path.countPath(file, this.pathdata.path, this.pathdata.outdir);
+				if (this.pathdata.error){
+					throw tea.error(new Error(), this.pathdata.error);
+				}
 				return this.pathdata.file;
 			});
 			Argv.prototype.__defineSetter__("out", function(out){
 				this.pathdata = Path.countPath(this.pathdata.file, this.pathdata.path, out);
+				if (this.pathdata.error){
+					throw tea.error(new Error(), this.pathdata.error);
+				}
 				return this.pathdata.out;
 			});
 			Argv.prototype.add = function (short, long, desc, fn){
@@ -838,6 +857,7 @@
 			Argv.prototype.copy = function (extend){
 				var argv = new Argv();
 				for (var i in this){
+					if (!this.hasOwnProperty(i)) continue;
 					if (this[i] == null || i[0] == '_' && i[1] == '_'){
 						continue;
 					}
@@ -845,6 +865,7 @@
 				}
 				if (extend){
 					for (var i in extend){
+						if (!extend.hasOwnProperty(i)) continue;
 						argv[i] = extend[i];
 					}
 				}
@@ -1338,7 +1359,8 @@
 			var literal_re, tmp;
 			if (arguments.length == 1){
 				if (isJson(types)){
-					for (i in types){
+					for (var i in types){
+						if (!types.hasOwnProperty(i)) continue;
 						Tokens.define(i, types[i]);
 					}
 				}
@@ -1871,7 +1893,8 @@
 			Node.define = function(types, names){
 				if (arguments.length == 1){
 					if (isJson(types)){
-						for (i in types){
+						for (var i in types){
+							if (!types.hasOwnProperty(i)) continue;
 							Node.define(i, types[i]);
 						}
 					}
@@ -2005,7 +2028,8 @@
 			}
 			Scope.prototype.get = function (type){
 				var variables = this.variables, list = [];
-				for (name in variables){
+				for (var name in variables){
+					if (!variables.hasOwnProperty(name)) continue;
 					if (variables[name] == type){
 						list.push(name);
 					}
@@ -2118,7 +2142,7 @@
 				} while (p = p.parent);
 				if (!idexpr){
 					if (argu_expr){
-						if (let_scope && let_scope.type == 'ForStam' && expr.type == 'VarDecl' && expr.parent.type == 'ForPConditionPatt'){
+						if (let_scope && let_scope.type == 'ForStam' && expr.type == 'VarDecl' && /ForPConditionPatt|ForInConditionPatt/.test(expr.parent.type)){
 							checkArguments('LetDecl', ass_expr, id, scope, let_scope);
 						}else {
 							checkArguments(expr.type, ass_expr, id, scope, let_scope);
@@ -2223,7 +2247,7 @@
 				if (let_scope && let_scope.isDefined(id.text, 'let')){
 					return;
 				}
-				var forstam = let_scope && let_scope.type == 'ForStam' && expr.type == 'ForPConditionPatt',
+				var forstam = let_scope && let_scope.type == 'ForStam' && /ForPConditionPatt|ForInConditionPatt/.test(expr.type),
 					def = scope.isDefined(id.text);
 				if (ass && idexpr.index == 0){
 					if (forstam && ass.parent.index == 0){
@@ -4722,7 +4746,7 @@
 		};
 		Reader.prototype.ForStam = function(node, __write){
 			var block_body, condition = node[1];
-			if (condition.type == 'ForBaseConditionPatt' || condition.type == 'ForInConditionPatt'){
+			if (condition.type == 'ForBaseConditionPatt'){
 				return '#0 #1#2';
 			}
 			var scope = node.scope,
@@ -5607,7 +5631,8 @@
 				}
 				if (key == 'sub' || key == 'letScope'){
 					var sub_text = [];
-					for (k in item){
+					for (var k in item){
+						if (!item.hasOwnProperty(k)) continue;
 						sub_text.push(k+' : '+scopePrinter(item[k]));
 					}
 					if (sub_text.length){
@@ -5727,7 +5752,8 @@
 		};
 		debug.disable = function(part){
 			debug_lv = parseDebugConf(part);
-			for (name in this.eventMap){
+			for (var name in this.eventMap){
+				if (!this.eventMap.hasOwnProperty(name)) continue;
 				if (debug[name] && (debug_lv&this.eventMap[name]) != this.eventMap[name]){
 					debug[name] = null;
 				}
@@ -5736,7 +5762,8 @@
 		debug.enable = function(part){
 			debug_lv = parseDebugConf(part);
 			var open_list = [];
-			for (name in this.eventMap){
+			for (var name in this.eventMap){
+				if (!this.eventMap.hasOwnProperty(name)) continue;
 				if (debug['__'+name]){
 					if ((debug_lv&this.eventMap[name]) == this.eventMap[name]){
 						debug[name] = debug['__'+name];

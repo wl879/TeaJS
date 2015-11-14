@@ -60,7 +60,7 @@ global.isHas = function(obj, target):
 			else:
 				return obj.hasOwnProperty(target);
 
-global.checkGlobalSpace = function():
+global.checkGlobalScope = function():
 	var def = 'global process GLOBAL root console Path'.split(' ');
 	for name in global:
 		if def.indexOf(name) >= 0:
@@ -117,7 +117,6 @@ Hash.clone = function(obj, deep):
 			if tar.prototype != obj.prototype:
 				tar.prototype = obj.prototype;
 				tar.constructor = obj.constructor;
-			// tar.__proto__ = obj.__proto__;
 		for k in obj:
 			tar[k] = deep ? Hash.clone(obj[k], (deep||1) -1) : obj[k];
 		return tar;
@@ -328,7 +327,6 @@ Text.print = function(data, circular):
 		str = '',
 		array_mode = 'length' in data;
 		
-	
 	for k in data:
 		if array_mode && /\d+/.test(k):
 			list.push( Text.print( data[k], circular ));
@@ -529,14 +527,18 @@ Path.countPath = function(file, path, out):
 	else:
 		data.file = Path.resolve(file||'');
 
-	if Path.isDir(data.file):
+	if !data.file:
+		if data.path:
+			data.dir = data.path;
+	else if Path.isDir(data.file):
 		if !path:
 			data.path = data.file;
+
 		data.dir = data.file;
 		data.file = '';
 	else if !Path.isFile(data.file):
 		data.file = '';
-		data.error = 'can not find file';
+		data.error = 'can not find file: '+file;
 		return data;
 	else:
 		data.dir =  Path.dirname( data.file );
@@ -545,12 +547,14 @@ Path.countPath = function(file, path, out):
 		data.out = Path.resolve(out);
 		if !Path.extname(data.out):
 			data.outdir = data.out;
-			if data.path:
-				data.out = Path.resolve(data.outdir, Path.relative(data.path, data.file) );
-			else:
-				data.out = Path.join( data.outdir, Path.basename( data.file ) );
+			if data.file:
+				if data.path:
+					data.out = Path.resolve(data.outdir, Path.relative(data.path, data.file) );
+				else:
+					data.out = Path.join( data.outdir, Path.basename( data.file ) );
 		else:
 			data.outdir = Path.dirname( data.out );
+
 	else if Path.extname(data.file) == 'tea':
 		data.out = data.file;
 		data.outdir = Path.dirname( data.out );

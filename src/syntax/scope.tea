@@ -176,7 +176,7 @@ class Scope:
 
 		if !idexpr:
 			if argu_expr:
-				if let_scope && let_scope.type == 'ForStam' && expr.type == 'VarDecl' && expr.parent.type == 'ForPConditionPatt':
+				if let_scope && let_scope.type == 'ForStam' && expr.type == 'VarDecl' && /ForPConditionPatt|ForInConditionPatt/.test(expr.parent.type):
 					checkArguments('LetDecl', ass_expr, id, scope, let_scope);
 				else:
 					checkArguments(expr.type, ass_expr, id, scope, let_scope);
@@ -257,7 +257,7 @@ class Scope:
 	function checkIdentifierExpr(expr, ass, idexpr, id, scope, let_scope):
 		if let_scope && let_scope.isDefined(id.text, 'let'):
 			return;
-		var forstam = let_scope && let_scope.type == 'ForStam' && expr.type == 'ForPConditionPatt';
+		var forstam = let_scope && let_scope.type == 'ForStam' && /ForPConditionPatt|ForInConditionPatt/.test(expr.type);
 		var def = scope.isDefined( id.text );
 		if ass && idexpr.index == 0:
 			if forstam && ass.parent.index == 0:
