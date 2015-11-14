@@ -3,5 +3,5 @@
 	npm-debug.log
 	todo.md
 	*.tmp.js
-	node_modules
+	/node_modules
 	build.tea

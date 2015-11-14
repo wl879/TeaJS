@@ -34,7 +34,7 @@ class Location:
 
 	function CountLineNumber(loc, start):
 		if data = source_cache[loc.__source_id]:
-			for i, line_data => data:
+			for i, line_data -> data:
 				if start >= line_data[1] && start <= line_data[2]:
 					loc.lineNumber = line_data[0];
 					loc.columnNumber = start - line_data[1];
@@ -56,13 +56,13 @@ class Location:
 			return source;
 		if source:
 			var index = -1;
-			for i => source_cache:
+			for i -> source_cache:
 				if source_cache[i].text == source:
 					index = i;
 					break;
 			if index == -1:
 				var lines = source.split('\n'), shift = 0, data = [];
-				for i, line => lines:
+				for i, line -> lines:
 					data.push( [i+1, shift, (shift += line.length + 1)-1, line+'\n'] );
 				data.source = source;
 				index = source_cache.push(data) - 1;

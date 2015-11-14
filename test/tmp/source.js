@@ -83,14 +83,13 @@ do:
 for var i; i<10; i++:
 for var i in obj1:
 for i, b in obj2:
-for i <= arr1:
-for ui <= arr2:
-for var i = 5, item <= arr3:
-for i = 3 => arr5:
-for i, item => arr6:
-for i -> obj3:
-for item ==> arr7:
-for val --> obj4:
+for i <- arr1:
+for item <= arr2:
+for var i = 5, item <- arr3:
+for i = 3 -> arr5:
+for i, item -> arr6:
+for i in obj3:
+for item => arr7:
 for [1,2,3,4]:
 
 // #: switch 语句

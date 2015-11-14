@@ -77,7 +77,7 @@ class Node extends NodeBase:
 		var list = arguments.length > 1 ? Hash.slice(arguments) : arguments[0].split(' ');
 		if list.indexOf( @.type ) != -1:
 			return @.type;
-		for i => list:
+		for i -> list:
 			if Node.isNode( @.type, list[i] ):
 				return list[i];
 		return false;
@@ -88,7 +88,7 @@ class Node extends NodeBase:
 		return false;
 
 	add ():
-		for i, node => arguments:
+		for i, node -> arguments:
 			if !node:
 				continue;
 			if node.isnode || node.istoken:
@@ -102,7 +102,7 @@ class Node extends NodeBase:
 
 	tokens (index):
 		var tokens = [];
-		for i => @:
+		for i -> @:
 			if @[i].istoken:
 				tokens.push(@[i]);
 			else:
@@ -115,7 +115,7 @@ class Node extends NodeBase:
 
 	clone ():
 		var node = new Node(@.type);
-		for i => @:
+		for i -> @:
 			node[node.length++] = @[i];
 		node.parent = @.parent;
 		return node;
@@ -135,18 +135,19 @@ class Node extends NodeBase:
 	static define(types, names):
 		if arguments.length == 1:
 			if isJson(types):
-				for i -> types : Node.define(i, types[i]);
+				for i in types:
+					Node.define(i, types[i]);
 			return;
 		types = isArray(types) ? types : types.split(' ');
 		names = isArray(names) ? names : names.split(' ');
 
-		for name ==> names:
+		for name => names:
 
 			if NodeMap.hasOwnProperty(name):
 				Node.define(types, NodeMap[name]);
 				// NodeMap[name].top = (NodeMap[name].top||[]).concat(types);
 
-			for type ==> types:
+			for type => types:
 				NodeMap[type] |= [];
 				NodeMap[type].push(name) if NodeMap[type].indexOf(name) == -1;
 				NodeMap['all'].push(name) if NodeMap['all'].indexOf(name) == -1;

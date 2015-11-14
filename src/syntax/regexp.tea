@@ -12,7 +12,7 @@ class SyntaxReg:
 		@.minmatch = 0;
 
 	push():
-		for i => arguments:
+		for i -> arguments:
 			if arguments[i] as SyntaxReg:
 				arguments[i].parent = @;
 		return Array.prototype.push.apply(@, arguments);
@@ -67,7 +67,7 @@ class SyntaxReg:
 
 	function compileSyReg(source, __parent):
 		var chips = Text.split( source, ' ' );
-		for i, chip <= chips:
+		for i, chip <- chips:
 			if /[^\\]\|[^\|]/.test(chip):
 				chipp = Text.split( chip, '|');
 				if chipp.length:
@@ -78,7 +78,7 @@ class SyntaxReg:
 		var stx_re = new SyntaxReg(),
 			or_list = [],
 			ptn;
-		for i, chip => chips:
+		for i, chip -> chips:
 			if chip == '|':
 				or_list.push(stx_re);
 				stx_re = new SyntaxReg();
@@ -92,7 +92,7 @@ class SyntaxReg:
 			if stx_re.length:
 				or_list.push(stx_re);
 			stx_re = new SyntaxReg();
-			for i => or_list:
+			for i -> or_list:
 				or_list[i].type = 'Or';
 				or_list[i].quantifier = '?';
 				or_list[i].parent = stx_re
@@ -181,7 +181,7 @@ class SyntaxReg:
 
 	function compileTokenCallParams(param):
 		var param = param.split(' '), yes_param = [], not_param = [];
-		for i => param:
+		for i -> param:
 			if param[i][0] == '!':
 				not_param.push( param[i].substr(1) );
 			else:
@@ -207,7 +207,7 @@ class SyntaxReg:
 			res_list  = [];
 			res_list.matched = 0;
 
-		for i, ptn => stx_re:
+		for i, ptn -> stx_re:
 			// 复原
 			if ptn.type == 'Or':
 				src.index = o_index, res_list.length = 0, res_list.matched = 0, @.checkIndent = false;
@@ -404,7 +404,7 @@ class SyntaxReg:
 		var index   = src.index - 1,
 			list    = [],
 			tokens  = ptn.key;
-		for key ==> tokens:
+		for key => tokens:
 			index ++;
 			if /^\s+$/.test(tokens) && src[index].type == 'BlankTokn':
 				continue;

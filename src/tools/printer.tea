@@ -64,7 +64,7 @@ print.border = function():
 		text_width = Text.width(text);
 	var lines = text.split('\n');
 	var c = is_terminal ? '\033[96m' : '', e = is_terminal ? '\033[0m' : '';
-	for i => lines:
+	for i -> lines:
 		lines[i] = c+'|  '+e+lines[i]+ print.strc(' ', text_width-lines[i].length)+c+'  |'+e;
 	lines.unshift( c+print.strc('-', text_width+6)+e );
 	lines.push( c+print.strc('-', text_width+6)+e );
@@ -138,7 +138,7 @@ function classToString(obj, igArray):
 		case 'Array':
 			if !igArray:
 				var text = [];
-				for i => obj:
+				for i -> obj:
 					text.push( classToString(obj[i], true) );
 				return text.join(' ');
 		case 'Object', 'Function':

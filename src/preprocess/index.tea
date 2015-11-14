@@ -5,7 +5,7 @@ var Template     = require "./template.js";
 
 exports.new = function(extend):
 	var prepor = new PreProcessor();
-	for i => arguments:
+	for i -> arguments:
 		if arguments[i]:
 			prepor.extends(arguments[i]);
 	return prepor;

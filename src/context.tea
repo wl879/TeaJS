@@ -16,7 +16,7 @@ class Context:
 			@.extends(  argv && argv['preprocess'], extend);
 
 	extends():
-		for i, item => arguments:
+		for i, item -> arguments:
 			if item:
 				@.preProcessor.extends( item.preProcessor || item );
 
@@ -75,7 +75,7 @@ class Context:
 	static definePreProcessor():
 		if !def_pre_processor:
 			def_pre_processor = new Prep.new();
-		for i, item => arguments:
+		for i, item -> arguments:
 			if item:
 				if item as 'string':
 					def_pre_processor.extends( Prep.parseByFile(item) );
@@ -83,7 +83,7 @@ class Context:
 					def_pre_processor.extends( item );
 
 	function loadRequiresList( list, cache ):
-		for file, key -> list:
+		for file, key in list:
 			if file == 'length' || file in cache:
 				continue;
 			tea_log '** require file: '+file;

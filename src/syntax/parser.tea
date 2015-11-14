@@ -212,7 +212,7 @@ Parser.ForCondition = function(src, opt):
 	if !exp1 || exp1.type == 'Empty':
 		 Err 309, src[o_index];
 
-	if src.peek.eq('in', 'of', '=>', '<=', '->', '<-', '==>', '<==', '-->', '<--'):
+	if src.peek.eq('in', 'of', '=>', '<=', '->', '<-'):
 		exp2= src.next(1).current;
 		if not exp3 = Parser.CommaExpr(src.next(1), opt):
 			Err 108, exp2;

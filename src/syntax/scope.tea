@@ -70,7 +70,7 @@ class Scope:
 
 	set (type, name, force):
 		var names = name as 'string' ? [name] : name;
-		for i, name => names:
+		for i, name -> names:
 			if type in @ && isArray(@[type]):
 				if @[type].indexOf(name) == -1:
 					 @[type].push(name);
@@ -84,7 +84,7 @@ class Scope:
 	get (type):
 		var variables = @.variables;
 		var list = [];
-		for name -> variables:
+		for name in variables:
 			if variables[name] == type:
 				list.push(name);
 		return list;
@@ -142,7 +142,7 @@ class Scope:
 				__let_scope = (__let_scope||__scope).create(node, 'let');
 			default:
 				node.scope = __let_scope || __scope;
-		for i, item => node:
+		for i, item -> node:
 			item.scope = __let_scope || __scope;
 			if item.type == 'IdentifierTokn':
 				checkIdentifier(node, item, __scope, __let_scope);

@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 (function(){
     var _r = {};
     function __require(nm){
@@ -86,7 +87,6 @@
 			var pathdata = Path.countPath(file, tea.argv.path, tea.argv.outdir);
 			return pathdata.out;
 		};
-		tea.different = function(text1, text2){};
 		var RunTimeAtLoaded = Date.now();
 	});
 	CreateModule("../src/tools/utils.tea", function(module, exports){
@@ -163,8 +163,7 @@
 		};
 		global.checkGlobalSpace = function(){
 			var def = 'global process GLOBAL root console Path'.split(' ');
-			for (var name in global){
-				if (!global.hasOwnProperty(name)) continue;
+			for (name in global){
 				if (def.indexOf(name) >= 0){
 					continue;
 				}
@@ -229,8 +228,7 @@
 						tar.constructor = obj.constructor;
 					}
 				}
-				for (var k in obj){
-					if (!obj.hasOwnProperty(k)) continue;
+				for (k in obj){
 					tar[k] = deep ? Hash.clone(obj[k], (deep || 1)-1) : obj[k];
 				}
 				return tar;
@@ -241,8 +239,7 @@
 		Hash.concat = function(obj){
 			for (var i=1, arg; i < arguments.length; i++){
 				arg = arguments[i];
-				for (var k in arg){
-					if (!arg.hasOwnProperty(k)) continue;
+				for (k in arg){
 					obj[k] = arg[k];
 				}
 			}
@@ -475,8 +472,7 @@
 			}
 			circular.push(data);
 			var list = [], str = '', array_mode = data.hasOwnProperty('length');
-			for (var k in data){
-				if (!data.hasOwnProperty(k)) continue;
+			for (k in data){
 				if (array_mode && /\d+/.test(k)){
 					list.push(Text.print(data[k], circular));
 				}else {
@@ -733,15 +729,16 @@
 	});
 	CreateModule("../src/argv.tea", function(module, exports){
 		var Argv = (function(){
-			function Argv(argv, opt, desc_text, root_file){
+			function Argv(argv, opt, desc_text){
 				this.___desc = {};
 				this.pathdata = {};
 				this.length = 0;
 				if (arguments.length){
-					this.parse(argv, opt, desc_text, root_file);
+					this.parse(argv, opt, desc_text);
 				}
 			}
-			Argv.prototype.parse = function (argv, opt, desc_text, root_file){
+			Argv.prototype.parse = function (argv, opt, desc_text){
+				var value;
 				if (desc_text){
 					var re = /^[\ \t]*(\-(?:\-[\w\-]+)?\w)\,?\ *(\-\-[\w\-]+)?\ *(\<[^\>]+\>)?\s*(.*)$/mg,
 						m,
@@ -762,27 +759,21 @@
 						}
 					}
 				}
-				var basename = Path.basename(root_file || __filename), b, _i = 0;
-				if (/node$/.test(argv[_i])){
-					_i++;
-				}
-				if (argv[_i].indexOf(basename) != -1){
-					_i++;
-				}
-				for (var i=_i, a; i < argv.length; i++){
-					a = argv[i];
-					if (a[0] == '-'){
-						b = argv[i+1];
-						if (!b || b[0] == '-'){
-							b = true;
+				var i = /node$/.test(argv[0]) ? 2 : 1;
+				for (var name; i < argv.length; i++){
+					name = argv[i];
+					if (name[0] == '-'){
+						value = argv[i+1];
+						if (!value || value[0] == '-'){
+							value = true;
 						}else {
 							i += 1;
 						}
-						this[a] = b;
+						this[name] = value;
 					}else if (!this['--file']){
-						this['--file'] = a;
+						this['--file'] = name;
 					}else {
-						this[this.length++] = a;
+						this[this.length++] = name;
 					}
 				}
 				return this.check();
@@ -846,9 +837,7 @@
 			}
 			Argv.prototype.copy = function (extend){
 				var argv = new Argv();
-				var i_ref = this;
-				for (var i in i_ref){
-					if (!i_ref.hasOwnProperty(i)) continue;
+				for (var i in this){
 					if (this[i] == null || i[0] == '_' && i[1] == '_'){
 						continue;
 					}
@@ -856,7 +845,6 @@
 				}
 				if (extend){
 					for (var i in extend){
-						if (!extend.hasOwnProperty(i)) continue;
 						argv[i] = extend[i];
 					}
 				}
@@ -1150,8 +1138,8 @@
 			}
 			Source.prototype.refresh = function (){
 				var target = this[this.index], a = 0, del_i = -1, del_len = 0;
-				for (var i_ref = this, i=i_ref.length-1, token; i >= 0; i--){
-					token = i_ref[i];
+				for (var i=this.length-1, token; i >= 0; i--){
+					token = this[i];
 					if (token){
 						if (del_len){
 							Splice.call(this, del_i, del_len);
@@ -1350,8 +1338,7 @@
 			var literal_re, tmp;
 			if (arguments.length == 1){
 				if (isJson(types)){
-					for (var i in types){
-						if (!types.hasOwnProperty(i)) continue;
+					for (i in types){
 						Tokens.define(i, types[i]);
 					}
 				}
@@ -1489,7 +1476,7 @@
 			'Keyword' : 'this  instanceof  in  extends  null  undefined  Infinity  true  false  '+'if  while  with  catch  for  switch  case  default  else  try  do  finally  '+'new  typeof  delete  void  return  break  continue  throw  var  function  '+'let  enum  const  import  export  debugger  super  yield  class',
 			'IdentifierTokn' : 'eval  arguments  extends  import  export  get  set  static  as  of  and  or  not  is  require  let  enum  const  debugger  super  yield  class',
 			'Restricted' : 'instanceof  in  Infinity  '+'if  while  with  catch  for  switch  case  default  else  try  do  finally  '+'new  typeof  delete  void  return  break  continue  throw',
-			'SymbolTokn' : ';  ,  .  :  ?  \\  [  ]  {  }  (  )  //  /*  */  #!  '+'=  +=  -=  *=  /=  %=  &=  >>=  <<=  >>>=  '+'>  <  >=  <=  !=  !==  ==  ===  ++  --  '+'!  ~  +  -  *  /  %  &  |  ^  >>  <<  >>>  &&  ||  '+'**  ::  |=  ?=  @  ->  <-  -->  <--  >>  <<  >>>  <<<  =>  <=  ==>  <==  ..  ...',
+			'SymbolTokn' : ';  ,  .  :  ?  \\  [  ]  {  }  (  )  //  /*  */  #!  '+'=  +=  -=  *=  /=  %=  &=  >>=  <<=  >>>=  '+'>  <  >=  <=  !=  !==  ==  ===  ++  --  '+'!  ~  +  -  *  /  %  &  |  ^  >>  <<  >>>  &&  ||  '+'**  ::  |=  ?=  @  ->  <-  >>  <<  >>>  <<<  =>  <=  ..  ...',
 			'SymbolTokn Quote' : '\'  "  """  \'\'\'  """"  \'\'\'\'  `',
 			'Controler' : 'if  while  with  catch  for  switch  case  default  else  try  do  finally',
 			'Declaration' : 'function  require  class  package  static  get  set  import  export',
@@ -1509,7 +1496,7 @@
 			'Close' : '}  ]  )',
 			'BlockBreakTokn BlockBreak' : ';  \n',
 			'BlockStart' : ':  {',
-			'Contextual' : 'Binary  Member  Comma  in  as  of  ->  <-  =>  <=  -->  <--  ==>  <==  ->?  <-?  =>?  <=?  -->?  <--?  ==>?  <==?  ...',
+			'Contextual' : 'Binary  Member  Comma  in  as  of  ->  <-  =>  <=  ...',
 			'EndTokn' : 'BlockBreakTokn  Close  /*  //',
 			'IGLF' : 'Unary  Binary  Ternary  Member  Assign  Comma  Open  Contextual'});
 		function indexOfRightPair(text, s1, s2){
@@ -1843,7 +1830,7 @@
 			}
 			Node.prototype.tokens = function (index){
 				var tokens = [];
-				for (var i_ref = this, i=0; i < i_ref.length; i++){
+				for (var i=0; i < this.length; i++){
 					if (this[i].istoken){
 						tokens.push(this[i]);
 					}else {
@@ -1860,7 +1847,7 @@
 			}
 			Node.prototype.clone = function (){
 				var node = new Node(this.type);
-				for (var i_ref = this, i=0; i < i_ref.length; i++){
+				for (var i=0; i < this.length; i++){
 					node[node.length++] = this[i];
 				}
 				node.parent = this.parent;
@@ -1884,8 +1871,7 @@
 			Node.define = function(types, names){
 				if (arguments.length == 1){
 					if (isJson(types)){
-						for (var i in types){
-							if (!types.hasOwnProperty(i)) continue;
+						for (i in types){
 							Node.define(i, types[i]);
 						}
 					}
@@ -2019,8 +2005,7 @@
 			}
 			Scope.prototype.get = function (type){
 				var variables = this.variables, list = [];
-				for (var name in variables){
-					if (!variables.hasOwnProperty(name)) continue;
+				for (name in variables){
 					if (variables[name] == type){
 						list.push(name);
 					}
@@ -3073,7 +3058,7 @@
 			if (!exp1 || exp1.type == 'Empty'){
 				throw tea.error(new Error(), 309, src[o_index]);
 			}
-			if (src.peek.eq('in', 'of', '=>', '<=', '->', '<-', '==>', '<==', '-->', '<--')){
+			if (src.peek.eq('in', 'of', '=>', '<=', '->', '<-')){
 				exp2 = src.next(1).current;
 				if (!(exp3 = Parser.CommaExpr(src.next(1), opt))){
 					throw tea.error(new Error(), 108, exp2);
@@ -4045,7 +4030,7 @@
 			script = Text.trimIndent(script).replace(/^/mg, tab_size).trim();
 			return "function("+(args.join(','))+"){\n\
 			    __write  = \'\';\n\
-			    _write   = function(){for(i => arguments){__write += arguments[i]}};\n\
+			    _write   = function(){for(i -> arguments){__write += arguments[i]}};\n\
 			    "+script+";\n\
 			    return __write;\n\
 			}";
@@ -4391,7 +4376,7 @@
 			}
 		};
 		Reader.prototype.CommDecl = function(node, __write){
-			if (!tea.argv['--clear']){
+			if (!tea.argv['--clear'] || node.text[0] == '#'){
 				__write.add(node);
 			}
 		};
@@ -4704,7 +4689,7 @@
 					if ($i.type != 'IdentifierTokn'){
 						tea.throw('for condition(3) statiment syntax error!', $i);
 					}
-					if (/--|==|of/.test($mark)){
+					if (/\=|of/.test($mark)){
 						$temp = $i, $i = null;
 					}
 				}
@@ -4718,8 +4703,8 @@
 			if (exp3.type == 'CommaExpr' && exp3.length == 1){
 				exp3 = exp3[0];
 			}
-			switch (exp3.is('ArrayExpr', 'JsonExpr', 'AccessorExpr', 'IdentifierExpr', 'NumTokn')){
-				case 'AccessorExpr':case 'IdentifierExpr':
+			switch (exp3.is('ArrayExpr', 'JsonExpr', 'AccessorExpr', 'IdentifierExpr', 'AtExpr', 'NumTokn')){
+				case 'AccessorExpr':case 'IdentifierExpr':case 'AtExpr':
 					$tar = exp3;
 					break;
 				case 'NumTokn':
@@ -4747,7 +4732,7 @@
 			scope.setLet('__target', $tar.text);
 			var cond_body = this.new('ConditionBody');
 			block_body = this.new('NodeStam');
-			if (/\-\>|\<\-|in|of/.test($mark)){
+			if (/in|of/.test($mark)){
 				cond_body.read($var ? 'var ' : '', $i, ' in ', $tar);
 				if ($tar_exp){
 					__write.read(this.VAR($tar_exp), ';\n');
@@ -5622,8 +5607,7 @@
 				}
 				if (key == 'sub' || key == 'letScope'){
 					var sub_text = [];
-					for (var k in item){
-						if (!item.hasOwnProperty(k)) continue;
+					for (k in item){
 						sub_text.push(k+' : '+scopePrinter(item[k]));
 					}
 					if (sub_text.length){
@@ -5743,9 +5727,7 @@
 		};
 		debug.disable = function(part){
 			debug_lv = parseDebugConf(part);
-			var name_ref = this.eventMap;
-			for (var name in name_ref){
-				if (!name_ref.hasOwnProperty(name)) continue;
+			for (name in this.eventMap){
 				if (debug[name] && (debug_lv&this.eventMap[name]) != this.eventMap[name]){
 					debug[name] = null;
 				}
@@ -5754,9 +5736,7 @@
 		debug.enable = function(part){
 			debug_lv = parseDebugConf(part);
 			var open_list = [];
-			var name_ref = this.eventMap;
-			for (var name in name_ref){
-				if (!name_ref.hasOwnProperty(name)) continue;
+			for (name in this.eventMap){
 				if (debug['__'+name]){
 					if ((debug_lv&this.eventMap[name]) == this.eventMap[name]){
 						debug[name] = debug['__'+name];
@@ -6156,7 +6136,7 @@ help_text = "r{** g{Tea} w{script help} ****************************************
     --nopp                             不进行预编译\n\
     --debug                            显示调试信息 log/prep/syntax/write/all";
 if (!module.parent){
-	tea.argv.parse(process.argv, null, help_text, __filename);
+	tea.argv.parse(process.argv, null, help_text);
 	if (tea.argv['--tab']){
 		tea.tabSize(tea.argv['--tab']);
 	}

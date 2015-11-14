@@ -35,7 +35,7 @@ global.isBlank = function(text):
 	return /^[\t \r]+$/.test(text);
 
 global.isValue = function():
-	for i, arg => arguments:
+	for i, arg -> arguments:
 		if arg != null:
 			return arg;
 	return arguments[arguments.length - 1];
@@ -62,7 +62,7 @@ global.isHas = function(obj, target):
 
 global.checkGlobalSpace = function():
 	var def = 'global process GLOBAL root console Path'.split(' ');
-	for name -> global:
+	for name in global:
 		if def.indexOf(name) >= 0:
 			continue;
 		if typeof global[name] == 'function':
@@ -80,7 +80,7 @@ global.Hash = function(arr, separator):
 		arr = arr.split(separator || ' ');
 
 	var name, val;
-	for i, v -> arr:
+	for i, v in arr:
 		if typeof v == 'string':
 			v = v.split(':');
 			if v.length > 1:
@@ -118,15 +118,15 @@ Hash.clone = function(obj, deep):
 				tar.prototype = obj.prototype;
 				tar.constructor = obj.constructor;
 			// tar.__proto__ = obj.__proto__;
-		for k -> obj:
+		for k in obj:
 			tar[k] = deep ? Hash.clone(obj[k], (deep||1) -1) : obj[k];
 		return tar;
 	else:
 		return obj;
 
 Hash.concat = function(obj):
-	for i=1, arg => arguments:
-		for k -> arg:
+	for i=1, arg -> arguments:
+		for k in arg:
 			obj[k] = arg[k];
 	return obj;
 
@@ -188,7 +188,7 @@ Text.split = function(text, separator, trim, del_esc):
 			break;
 
 	var ret = [];
-	for i, v => tmp:
+	for i, v -> tmp:
 		if trim:
 			v = v.trim();
 		if del_esc && v:
@@ -230,7 +230,7 @@ Text.indexPair = function(text, pos, s1, s2, check_ESC):
 
 Text.indexLine = function(text, pos):
 	var lines = text.split('\n'), shift = -1, num = 0, last = lines.length-1;
-	for i, line => lines:
+	for i, line -> lines:
 		if i < last:
 			line += '\n';
 		num += 1;
@@ -276,7 +276,7 @@ Text.indexOfReg = function(text, pos, re, ig_reg):
 
 Text.width = function(text, tab):
 	var tmp = text.replace(/\t/g, tab || '    ').split('\n'), w = 0, len;
-	for i => tmp:
+	for i -> tmp:
 		w = len if (len = tmp[i].length) > w;
 	return w;
 
@@ -288,7 +288,7 @@ Text.count = function(text, str):
 
 Text.toUnicode = function(text):
 	var str = [];
-	for i => text:
+	for i -> text:
 		u = text.charCodeAt(i);
 		str.push( u <= 0 ? text[i] : "\\u"+('0000'+u.toString(16)).slice(-4) ); 
 	return str.join('');
@@ -300,7 +300,7 @@ Text.trimIndent = function(text, tab):
 	var text = text.replace(/^(?:\s*?\n)+|\s*$/g, '').replace(/\t/g, tab || tab_size),
 		ls = text.split('\n'),
 		min = -1;
-	for i => ls:
+	for i -> ls:
 		indent = ls[i].match(/^\s*/)[0].length || 0;
 		min = indent if min == -1 || indent < min;
 	if min > 0:
@@ -329,7 +329,7 @@ Text.print = function(data, circular):
 		array_mode = 'length' in data;
 		
 	
-	for k -> data:
+	for k in data:
 		if array_mode && /\d+/.test(k):
 			list.push( Text.print( data[k], circular ));
 		else:
@@ -387,7 +387,7 @@ Path.scanAllPath = function(path, filter, level, out):
 	var dirList = Fs.readdirSync(path),
 		len = dirList.length;
 
-	for i, tmp => Fs.readdirSync(path):
+	for i, tmp -> Fs.readdirSync(path):
 		tmp = @.join(path, tmp);
 		if Fs.statSync(tmp).isDirectory():
 			if level:
@@ -439,11 +439,11 @@ Path.parseDir = function(text, path):
 	if @.isDir(text):
 		return [text];
 
-	for i, name => names:
+	for i, name -> names:
 		if re = @.parseRegExp(name):
 			if dirs.length:
 				tmp = [];
-				for d => dirs:
+				for d -> dirs:
 					tmp.push.apply(tmp, Path.scanDir(dirs[d], re).dirs );
 				dirs = tmp;
 			else:
@@ -451,7 +451,7 @@ Path.parseDir = function(text, path):
 		else:
 			if dirs.length:
 				tmp = [];
-				for d => dirs:
+				for d -> dirs:
 					if @.isDir( dirs[d] + name+'/' ):
 						tmp.push(dirs[d] + name+'/');
 				dirs = tmp;
@@ -469,7 +469,7 @@ Path.testFile = function(path, exts, name):
 	if name:
 		path = @.join(path, name);
 	if exts && exts.length:
-		for ext ==> exts:
+		for ext => exts:
 			if @.isFile( path+ext ):
 				return path+ext;
 	else if @.isFile( path ):
@@ -503,7 +503,7 @@ Path.parseFile = function(text, path, exts):
 	else:
 		var base_re = @.parseRegExp(data.base, 1),
 			tmp;
-		for d => dirs:
+		for d -> dirs:
 			if file = @.testFile( dirs[d] , exts, data.name ):
 				files.push(file);
 			else if base_re:

@@ -24,7 +24,7 @@ r{** g{Tea} w{script help} *****************************************************
 
 if !module.parent:
 
-	tea.argv.parse(process.argv, null, help_text, __filename);
+	tea.argv.parse(process.argv, null, help_text);
 	if tea.argv['--tab']:
 		tea.tabSize( tea.argv['--tab'] );
 
@@ -62,7 +62,7 @@ if !module.parent:
 			tea_log '* g{Building folder:} "'+tea.argv.dir+'"';
 			var file_list = Path.scanAllPath( tea.argv.dir, /\.js$|\.tea$/, 10).allfiles;
 			if file_list.length:
-				for i, file => file_list:
+				for i, file -> file_list:
 					tea_log '  * b{Compile:} d{"'+file+'"}';
 					ctx = tea.context( tea.argv.copy({file:file}));
 					ctx.echo();

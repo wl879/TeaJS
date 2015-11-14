@@ -19,7 +19,7 @@ class PreProcessor:
 	parse (src, not_compile):
 		if src as 'string':
 			src = Source.parse(src);
-		for i, token => src:
+		for i, token -> src:
 			if !token:
 				continue;
 			switch token.type:
@@ -45,7 +45,7 @@ class PreProcessor:
 		return src;
 
 	undef (name):
-		for type ==> ['macrofun', 'macro', 'statement', 'expression']:
+		for type => ['macrofun', 'macro', 'statement', 'expression']:
 			if (i = @[type].map.indexOf(name)) >= 0:
 				@[type].map.splice(i, 1);
 				delete @[type][name];
@@ -65,19 +65,19 @@ class PreProcessor:
 	get (key):
 		@.length || return;
 		var limits = arguments.length > 1 ? Hash.slice(arguments, 1) : ['macrofun', 'macro', 'statement', 'expression'];
-		for type ==> limits:
+		for type => limits:
 			if @[type].map.indexOf(key) != -1:
 				return @[type][key];
 
 	extends(extend):
-		for type ==> ['macrofun', 'macro', 'statement', 'expression']:
-			for key ==> extend[type].map:
+		for type => ['macrofun', 'macro', 'statement', 'expression']:
+			for key => extend[type].map:
 				@.add( extend[type][key] );
 
 	matchNode(type, src, opt):
 		@[type] || return;
 		var map = @[type].map, _index = src.index;
-		for i, name => map:
+		for i, name -> map:
 			src.index = _index;
 			if exp = @[type][name].parse(src, opt):
 				prep_log '[Prep '+type+': '+name+' matched]', src[_index];
@@ -136,7 +136,7 @@ class Macro:
 			insert.push([id, (val ? hash%2 ? '"'+val+'"' : val : '')]);
 			value = value.slice(0, m.index)+id+value.substr(re.lastIndex);
 			re.lastIndex = m.index+id.length;
-		for i => insert:
+		for i -> insert:
 			value = value.replace(insert[i][0], insert[i][1]);
 		return value;
 

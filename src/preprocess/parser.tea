@@ -124,7 +124,7 @@ Parser.undef          = function(src, index, token):
 	src.delete(line[0], line[1]);
 	if line_text:
 		var names = line_text.replace(/\s+/g, ' ').split(' ');
-		for i => names:
+		for i -> names:
 			@.undef(names[i]);
 		prep_log '[Prep undef: g{'+names.join(', ')+'}]', token;
 
@@ -145,7 +145,7 @@ Parser.include        = function(src, index, token):
 	src.delete(index, b);
 
 	var insert = [];
-	for i, file => files:
+	for i, file -> files:
 		if !IncludeCache[file]:
 			IncludeCache[file] = @.parse( file, true );
 			IncludeCache[file].trimIndent();
@@ -160,7 +160,7 @@ Parser.include        = function(src, index, token):
 
 Parser.control        = function(src, index, token):
 	var cache = [], nest = -1;
-	for i = index, token => src:
+	for i = index, token -> src:
 		if !token ||  ! /#(ifdef|if|elifdef|elif|else|endif|end)/.test(token.text):
 			continue
 		if token.text == '#ifdef' || token.text == '#if':
@@ -180,7 +180,7 @@ Parser.control        = function(src, index, token):
 		src._cachePrepData = {};
 
 	var type, cond, status, a, b, c;
-	for i, block => cache:
+	for i, block -> cache:
 		type = block[0], cond = block[1],  a = block[2], b = block[3], c = block[4];
 		if type == '#endif' || type == '#end':
 			src.delete(a, c);
