@@ -24,7 +24,7 @@ r{** g{Tea} w{script help} *****************************************************
 
 if !module.parent:
 
-	tea.argv.parse(process.argv, null, help_text, __filename);
+	tea.argv.parse(process.argv, null, help_text);
 	if tea.argv['--tab']:
 		tea.tabSize( tea.argv['--tab'] );
 

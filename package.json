@@ -1,6 +1,6 @@
 {
-	"name"        : "TeaJS",
-	"version"     : "0.0.9",
+	"name"        : "tea-js",
+	"version"     : "0.1.01",
 	"author"      : "Liang Wang",
 	"description" : "Unfancy JavaScript like coffeescript",
 	"keywords"    : ["javascript", "language", "teascript", "compiler" ],
@@ -20,7 +20,8 @@
 		"tea"     : "./lib/index.js"
 	},
 	"scripts"         : {
-		"build": "node ./lib/index.js -p ./src/ -d define.c -f index.tea -o ./bin/tea.js -j -v --clear"
+		"installstp" : "node ./plugin/install.js",
+		"build"      : "node ./lib/index.js -p ./src/ -d define.c -f index.tea -o ./bin/tea.js -j -v --clear"
 	},
 	"license"         : "MIT"
 }

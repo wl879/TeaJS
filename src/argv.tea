@@ -1,13 +1,13 @@
 
 class Argv:
-	constructor (argv, opt, desc_text, root_file):
+	constructor (argv, opt, desc_text):
 		@.___desc = {};
 		@.pathdata = {};
 		@.length = 0;
 		if arguments.length:
-			@.parse(argv, opt, desc_text, root_file)
+			@.parse(argv, opt, desc_text)
 
-	parse (argv, opt, desc_text, root_file):
+	parse (argv, opt, desc_text):
 		if desc_text:
 			var re = /^[\ \t]*(\-(?:\-[\w\-]+)?\w)\,?\ *(\-\-[\w\-]+)?\ *(\<[^\>]+\>)?\s*(.*)$/mg,
 				m, _opt = [];
@@ -22,24 +22,19 @@ class Argv:
 				if o.length > 2 && o[0] && o[1] && o[0][0] == '-' && o[1][0] == '-':
 					@.add(o[0], o[1], o[3]||o[2]||'');
 
-		var basename = Path.basename(root_file || __filename), b;
-		var _i = 0;
-		if /node$/.test(argv[_i]):
-			_i ++;
-		if argv[_i].indexOf(basename) != -1:
-			_i ++;
-		for i = _i, a => argv:
-			if a[0] == '-':
-				b = argv[i+1];
-				if !b || b[0] == '-':
-					b = true;
+		var i = /node$/.test(argv[0]) ? 2 : 1;
+		for i, name => argv:
+			if name[0] == '-':
+				value = argv[i+1];
+				if !value || value[0] == '-':
+					value = true;
 				else:
 					i += 1;
-				@[a] = b;
+				@[name] = value;
 			else if !@['--file']:
-				@['--file'] = a;
+				@['--file'] = name;
 			else:
-				@[@.length++] = a;
+				@[@.length++] = name;
 		return @.check();
 
 	check():
