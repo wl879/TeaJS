@@ -103,7 +103,7 @@ class Source:
 	insert(pos, list):
 		list = list.istoken ? [list] : Slice.call(list);
 		var indent =  @.lineIndent(pos);
-		for i, t <= list:
+		for i, t <- list:
 			if !t || t.type == 'EOT':
 				Splice.call(list, i, 1);
 			else indent > 0 && t.indent >= 0:
@@ -125,7 +125,7 @@ class Source:
 	refresh():
 		var target = @[@.index];
 		var a = 0, del_i = -1, del_len = 0;
-		for i, token <= @:
+		for i, token <- @:
 			if token:
 				if del_len:
 					Splice.call(@, del_i, del_len);

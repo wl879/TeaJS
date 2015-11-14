@@ -42,7 +42,7 @@ class Token extends NodeBase:
 	is():
 		var list = arguments.length > 1 ? arguments : arguments[0].split(' '),
 			types = @.types;
-		for i => list:
+		for i -> list:
 			if types.indexOf(list[i]) != -1:
 				return list[i];
 			else if isNode(types[0], list[i]):
@@ -52,7 +52,7 @@ class Token extends NodeBase:
 	eq():
 		var list = arguments.length > 1 ? arguments : arguments[0].split(' '),
 			text = @.text;
-		for i => list:
+		for i -> list:
 			if list[i] == text:
 				return text;
 		return false;

@@ -18,12 +18,12 @@ class Argv:
 			@.___desc._help_ = desc_text;
 
 		if opt && opt.length:
-			for i, o => opt:
+			for i, o -> opt:
 				if o.length > 2 && o[0] && o[1] && o[0][0] == '-' && o[1][0] == '-':
 					@.add(o[0], o[1], o[3]||o[2]||'');
 
 		var i = /node$/.test(argv[0]) ? 2 : 1;
-		for i, name => argv:
+		for i, name -> argv:
 			if name[0] == '-':
 				value = argv[i+1];
 				if !value || value[0] == '-':
@@ -88,12 +88,12 @@ class Argv:
 
 	copy(extend):
 		var argv = new Argv();
-		for i -> @:
+		for var i in @:
 			if @[i] == null || i[0] == '_' && i[1] == '_':
 				continue;
 			argv[i] = @[i];
 		if extend:
-			for i -> extend:
+			for var i in extend:
 				argv[i] = extend[i];
 		argv.parent = argv.parent || argv;
 		return argv;

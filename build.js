@@ -9,6 +9,7 @@ function Exec(cmd, callback){
 	child_process.exec(cmd, {"maxBuffer": 5000*1024}, function(err, stdout, stderr){
 		if (err){
 			print((err+'').replace(/^/mg, '|  # [err] '));
+			console.log(stdout);
 		}else {
 			print('----');
 			console.log(stdout);

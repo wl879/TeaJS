@@ -35,7 +35,7 @@ class Reader:
 		
 		else if node.isnode:
 			var write = @.new( node.type );
-			for i, item => node:
+			for i, item -> node:
 				write.read( item );
 			return write;
 
@@ -56,12 +56,12 @@ class Reader:
 			return;
 		write |= @.new( patt.name || node.type );
 		var patt_list = patt.list;
-		for i, chip => patt_list:
+		for i, chip -> patt_list:
 			if chip.ispattern:
 
 				if res = parsePatternAccessor.call(@, chip, node):
 					if res.type == write.type:
-						for j => res:
+						for j -> res:
 							write.read(res[j]);
 					else:
 						write.read(res);
@@ -72,9 +72,9 @@ class Reader:
 		return write;
 
 	static define(map):
-		for name, ptn -> map:
+		for name, ptn in map:
 			Reader.compilePattern(ptn);
-			for n ==> name.split(' '):
+			for n => name.split(' '):
 				pattern_map[n] = ptn;
 
 	static compilePattern(source):
@@ -82,7 +82,7 @@ class Reader:
 			return pattern_cache[source];
 		var chips = source.replace(/ ?\| ?/g, '|').split('|'),
 			patt = [];
-		for i, chip => chips:
+		for i, chip -> chips:
 			var ptn = {condition:'', list:[], name:'', source:chip};
 			if m = chip.match(/^\(\:(\w+)\)\ ?/):
 				ptn.name = m[1];
@@ -122,12 +122,12 @@ class Reader:
 
 	function getPattern(key, node):
 		var patt = Reader.compilePattern(key);
-		for i => patt:
+		for i -> patt:
 			if !patt[i].condition:
 				return patt[i];
 			var conds = patt[i].condition;
 			
-			for j, cond => conds:
+			for j, cond -> conds:
 				item = getNodeItem(node, cond.indexs, true);
 				if item && item[cond.fn].apply(item, cond.param):
 					if cond.logic != '&&':
@@ -138,7 +138,7 @@ class Reader:
 	function getNodeItem(node, indexs, strict):
 		var item = node;
 		if indexs:
-			for i ==> indexs:
+			for i => indexs:
 				if item[i]:
 					item = item[i];
 				else:
@@ -208,7 +208,7 @@ Reader::TestPatt = function(node, __write):
 		__write.add( node );
 
 Reader::CommDecl = function(node, __write):
-	if !tea.argv['--clear']:
+	if !tea.argv['--clear'] || node.text[0] == '#':
 		__write.add( node );
 
 Reader::IdentifierExpr = function (node, __write):
@@ -225,7 +225,7 @@ Reader::IdentifierExpr = function (node, __write):
 
 Reader::ComputeExpr = function (node, __write):
 	var list = [];
-	for i => node:
+	for i -> node:
 		switch node[i].istoken && node[i].text:
 			case '**':
 				list.push( 'Math.pow(', list.pop(), ', ', node[++i], ')' );
@@ -240,7 +240,7 @@ Reader::CompareExpr = function (node, __write):
 	if node.length == 5 && node[3].eq('<', '>', '>=', '<='):
 		return '#0 #1 #2 && #2 #3 #4';
 
-	for i => node:
+	for i -> node:
 		switch i%2 && node[i].text:
 			case 'as':
 				if node[i+1].type == 'StringTokn':
@@ -333,7 +333,7 @@ Reader::AssignmentExpr = function(node, __write):
 Reader::AssignmentDecl = Reader::AssignmentExpr;
 
 Reader::ParamsPatt = function(node, __write):
-	for i, item => node:
+	for i, item -> node:
 		if item.istoken && item.text == ',':
 			__write.add('null');
 		else:
@@ -390,10 +390,10 @@ Reader::SwitchStam = function(node, __write):
 		block_body = @.new('NodeStam'),
 		exp_cache = [], case_write, sub_block;
 
-	for item ==> block:
+	for item => block:
 		case_write |= @.new(item.type);
 		if item.type == 'CaseStam':
-			for key ==> item[1]:
+			for key => item[1]:
 				case_write.read( item[0], ' ', key, ':' );
 			sub_block = item[3];
 		else:
@@ -450,7 +450,7 @@ Reader::forCondition = function(node, __write):
 				$i = $i[0];
 			if $i.type != 'IdentifierTokn':
 				tea.throw 'for condition(3) statiment syntax error!', $i;
-			if /--|==|of/.test($mark):
+			if /\=|of/.test($mark):
 				$temp = $i, $i = null;
 	if !$i:
 		$var = true, $i = AllocateVarName(scope);
@@ -463,8 +463,8 @@ Reader::forCondition = function(node, __write):
 	if exp3.type =='CommaExpr' && exp3.length == 1:
 		exp3 = exp3[0]
 
-	switch exp3.is('ArrayExpr', 'JsonExpr', 'AccessorExpr', 'IdentifierExpr', 'NumTokn'):
-		case 'AccessorExpr', 'IdentifierExpr':
+	switch exp3.is('ArrayExpr', 'JsonExpr', 'AccessorExpr', 'IdentifierExpr', 'AtExpr', 'NumTokn'):
+		case 'AccessorExpr', 'IdentifierExpr', 'AtExpr':
 			$tar = exp3;
 		case 'NumTokn':
 			$len = @.new('NumTokn').read(exp3);
@@ -492,7 +492,7 @@ Reader::ForStam = function(node, __write):
 	var cond_body  = @.new('ConditionBody');
 		block_body = @.new('NodeStam');
 
-	if /\-\>|\<\-|in|of/.test($mark):
+	if /in|of/.test($mark):
 		cond_body.read( $var ? 'var ':'', $i, ' in ', $tar );
 		if $tar_exp:
 			__write.read( @.VAR( $tar_exp ), ';\n' );
@@ -524,7 +524,7 @@ Reader::PackageExpr = function(node, __write):
 		has_ass = false;
 	if node[1].length:
 		ResetDefineVariableDecl(node[1], node.scope, 'argument');
-		for i, item => node[1]:
+		for i, item -> node[1]:
 			if item.type == 'AssignmentDecl':
 				has_ass = true;
 				argus.read( item[0] );
@@ -669,7 +669,7 @@ Reader::StaticDecl = function(node, __write):
 		class_scope = class_scope.parent;
 	var exp = node[1];
 	if exp.type == 'ArgumentsDecl':
-		for i, item => exp:
+		for i, item -> exp:
 			if item.type == 'AssignmentDecl': 
 				__write.read('#0.#1 #2 #3;', [class_scope.name, item[0], item[1], item[2]]);
 			else:
@@ -686,7 +686,7 @@ Reader::ProtoDecl = function(node, __write):
 	var exp = node[1],
 		class_name = class_scope.name;
 	if exp.type == 'ArgumentsDecl':
-		for i, item => exp:
+		for i, item -> exp:
 			if item.type == 'AssignmentDecl': 
 				__write.read('#0.prototype.#1 #2 #3;', [class_name, item[0], item[1], item[2]]);
 			else:
@@ -703,7 +703,7 @@ Reader::InitDecl = function(node, __write):
 	var exp = node[1],
 		write = @.new('InitDecl');
 	if exp.type == 'ArgumentsDecl':
-		for i, item => exp:
+		for i, item -> exp:
 			if item.type == 'AssignmentDecl': 
 				write.read('this.#0 #1 #2;\n', item);
 			else:
@@ -738,7 +738,7 @@ Reader::RequireStam = function(node, __write):
 		write = __write;
 		format = '#0(#1)';
 
-	for i => params:
+	for i -> params:
 		_format = params[i].name ? format : '#0(#1)';
 		if params[i].file && root_scope:
 			write.read( @.new('RequireExpr', _format, ['__require', '"'+root_scope.joinRequire(params[i].file)+'"', params[i].name]) );
@@ -756,7 +756,7 @@ Reader::RequireStam = function(node, __write):
 Reader::NodeStam = function (node, __write):
 	__write |= @.new('NodeStam');
 	var len = node.length - 1;
-	for i, item => node:
+	for i, item -> node:
 		res = @.read(item);
 		if res && (res.istoken || res.length):
 			__write.add( res );
@@ -780,7 +780,7 @@ Reader::JOIN = function (write, separator):
 Reader::VAR = function ():
 
 	var list = [];
-	for i => arguments:
+	for i -> arguments:
 		if arguments[i]:
 			list.push( @.read(arguments[i]) );
 
@@ -804,21 +804,21 @@ function NodeStamUnDefined(node, __write):
 	var argus = scope.argumentsDefine;
 	if argus && argus.length:
 		var write = @.new('ArgumentsStam');
-		for i => argus:
+		for i -> argus:
 			write.read( 'if (#0 == null) #0 #1 #2;\n', argus[i] );
 		__write.insert(0, write);
 
 	var exts = scope.exports;
 	if exts && exts.length:
 		var write = @.new('ExportStam');
-		for i => exts:
+		for i -> exts:
 			write.add('\nmodule.exports.'+exts[i]+' = '+exts[i]+';');
 		__write.add(write);
 
 	// if !node.parent.is('ScopeNode'):
 	// 	var lets = scope.get('let');
 	// 	if lets && lets.length:		
-	// 		for i -> lets:
+	// 		for i in lets:
 	// 			lets[i] = scope.lets[lets[i]] || lets[i];
 	// 		var write = @.new('DeleteLetStam').read(lets, 'undefined');
 	// 		__write.read('\n', @.JOIN(write, ' = '), ';');
@@ -833,7 +833,7 @@ function AssignmentSlicePatt(__write, left, right, node):
 	
 function AssignmentArrayPatt(__write, left, right, node):
 	if right.type == 'ArrayExpr':
-		for i => left:
+		for i -> left:
 			if i > 0:
 				__write.add(', ')
 			if right[i]:
@@ -845,7 +845,7 @@ function AssignmentArrayPatt(__write, left, right, node):
 		if node.parent.parent.type == 'VarDecl':
 			node.scope.set('defined', ref, true);
 		__write.read( '#0 = #1', [ref, right] );
-		for i => left:
+		for i -> left:
 			__write.read( ', #0 #1 #2[#3]', [left[i], node[1], ref, i+''] );
 
 function AccessorSlicePatt(node, count_b):
@@ -875,11 +875,11 @@ function AccessorSlicePatt(node, count_b):
 	return [a, b];
 
 function ResetDefineVariableDecl(decl_list, scope, type, prefix):
-	for i, left => decl_list:
+	for i, left -> decl_list:
 		if left.type == 'AssignmentDecl':
 			left = left[0];
 		if left.type == 'ArrayPatt':
-			for item ==> left:
+			for item => left:
 				item.text = ResetDefine(scope, type, item.text, prefix);
 		else if left.istoken:
 			left.text = ResetDefine(scope, type, left.text, prefix);
@@ -896,7 +896,7 @@ function ResetDefine(scope, type, name, prefix):
 
 function AllocateVarName(scope):
 	var keymap = 'ijklmnopqrstuvwxyz';
-	for i => keymap:
+	for i -> keymap:
 		if !scope.isDefined('_'+keymap[i]):
 			var key = '_'+keymap[i];
 			scope.set('let', key);
@@ -926,7 +926,7 @@ function ParseRequireFile(node, join):
 	var list    = [],
 		tar_dir  = node.root.filePath || '';
 	// console.log(node.root.fileName, tea.countOutput(node.root.fileName));
-	for i, item => node:
+	for i, item -> node:
 		if item.is('StringTokn'):
 			if join && Path.isPathText(item.text):
 				var files = Path.parseFile(item.text, tar_dir, ['.js', '.tea']);
@@ -934,7 +934,7 @@ function ParseRequireFile(node, join):
 					if files.length == 1:
 						list.push( {name:RequireModuleName(file), expr: item, file:files[0]} );
 						continue;
-					for file ==> files:
+					for file => files:
 						list.push( {name:RequireModuleName(file), expr: item.clone('"'+file+'"'), file:file} );
 					continue;
 				tea_log '** [Require: Can not join file: '+item.text+']';

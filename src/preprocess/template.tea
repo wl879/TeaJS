@@ -29,7 +29,7 @@ Template.writeExprFunc = function(script, args):
 	return `
 	function(${args.join(',')}){
 		__write  = '';
-		_write   = function(){for(i => arguments){__write += arguments[i]}};
+		_write   = function(){for(i -> arguments){__write += arguments[i]}};
 		${script};
 		return __write;
 	}`;
@@ -105,7 +105,7 @@ Template.joinRequire = function(requires, main):
 					})();
 				""";
 		var modules = [];
-		for file, item -> requires:
+		for file, item in requires:
 			modules.push( 'CreateModule("'+item[0]+'", function(module, exports){\n'+item[2].text.replace(/^/mg, '\t\t')+'\n\t});');
 
 		return head+'\n\t'+modules.join('\n\t')+'\n'+foot+'\n'+main.text;

@@ -75,11 +75,11 @@
 
 ```c
 
-    #argv -name value
+    #argv --name value
 
 ```
  
- * `-test` 为参数名
+ * `--name` 为参数名
  * `value` 为参数值，默认为 `true`
  
 
@@ -336,12 +336,23 @@
     for i, item -> arr:          // for(var i, item; i<arr.lenght; i++){
                                  //    item = arr[i];
                                  // }
+                                 
     for i, item <- arr:          // for(var i=arr.length-1; i>=0; i--){
                                  //    item = arr[i];
                                  // }
+                                 
+    for item => arr:             // for(var _i=0, item; _i<arr.length; _i++){
+                                 //     item = arr[_i];
+                                 // }
+                                 
     for item of obj:             // for(var _k in obj){
-    for k, item => obj:          //    if(!obj.hasOwnProperty(_k)) continue;
-    for k, itme in obj:          //    item = obj[_k];
+                                 //    if(!obj.hasOwnProperty(_k)) continue;
+                                 //    item = obj[_k];
+                                 // }
+                                 
+    for key, item in obj         // for(var key in obj){
+                                 //    if(!obj.hasOwnProperty(key)) continue;
+                                 //    item = obj[key];
                                  // }
     
 ```

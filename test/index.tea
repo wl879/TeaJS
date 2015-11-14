@@ -1,6 +1,5 @@
 require "../lib/tea.js";
 
-
 var argv = process.argv.slice();
 while argv[0] && Path.basename( argv[0] ) != Path.basename(__filename):
 	argv.shift();
@@ -14,7 +13,7 @@ function start(file):
 	var ctx = tea.context( {file:file} ),
 		src = ctx.source;
 	var res = {}, last = src.length, is_split = false, n = 0;
-	for i <= src:
+	for i <- src:
 		if src[i].type == 'CommDecl':
 			is_split = true;
 			if m = src[i].text.match(/\/\/\s*#:(\w+)?/):
@@ -35,7 +34,7 @@ try:
 		case 'syntax':
 			debug.enable('log+syntax');
 			var res = start( Path.resolve('./test/tmp/source.js') );
-			for i, item -> res:
+			for i, item in res:
 				if i == 'all':
 					continue;
 				print item.title;
@@ -58,13 +57,13 @@ try:
 			// print ctx.rewriter;
 			debug.enable('log+syntax');
 			var res = start( Path.resolve('./test/tmp/source.js') );
-			for i, item -> res:
+			for i, item in res:
 				if i == 'all':
 					continue;
 				print item.title;
 				print.cellText item.src.join(), item.ctx.rewriter.text, ' --> ';
 				print item.ctx.ast;
-				break;
+				// break;
 catch e:
 	console.log(e.stack)
 

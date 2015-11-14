@@ -28,12 +28,13 @@ Tokens.location = function(file, source, code, start, end, line, column):
 Tokens.define = function(types, literals):
 	if arguments.length == 1:
 		if isJson(types):
-			for i -> types : Tokens.define(i, types[i]);
+			for i in types:
+				Tokens.define(i, types[i]);
 		return;
 	types    = isArray(types) ? types : types.split(' ');
 	literals = isArray(literals) ? literals : literals.split('  ');
 
-	for literal ==> literals:
+	for literal => literals:
 
 		if token_types.hasOwnProperty(literal) && /^[A-Z]\w+$/.test(literal):
 			Tokens.define(types, token_types[literal]);
@@ -44,13 +45,13 @@ Tokens.define = function(types, literals):
 			if token_complex.indexOf(literal_re) == -1:
 				token_complex.push(literal_re);
 
-		for type ==> types:
+		for type => types:
 			token_types[type] |= [];
 			if token_types[type].indexOf(literal) == -1:
 				token_types[type].push(literal);
 
 		if tmp = token_literals[literal]:
-			for type ==> types:
+			for type => types:
 				if tmp.indexOf(type) == -1:
 					tmp.push(type) 
 		else:
@@ -167,7 +168,7 @@ Tokens.define({
 						   		  '=  +=  -=  *=  /=  %=  &=  >>=  <<=  >>>=  '+
 								  '>  <  >=  <=  !=  !==  ==  ===  ++  --  '+
 								  '!  ~  +  -  *  /  %  &  |  ^  >>  <<  >>>  &&  ||  '+
-								  '**  ::  |=  ?=  @  ->  <-  -->  <--  >>  <<  >>>  <<<  =>  <=  ==>  <==  ..  ...',
+								  '**  ::  |=  ?=  @  ->  <-  >>  <<  >>>  <<<  =>  <=  ..  ...',
 		'SymbolTokn Quote'      : '\'  "  """  \'\'\'  """"  \'\'\'\'  `',
 
 		'Controler'             : 'if  while  with  catch  for  switch  case  default  else  try  do  finally',
@@ -189,7 +190,7 @@ Tokens.define({
 		'Close'                 : '}  ]  )',
 		'BlockBreakTokn BlockBreak'            : ';  \n',
 		'BlockStart'            : ':  {',
-		'Contextual'            : 'Binary  Member  Comma  in  as  of  ->  <-  =>  <=  -->  <--  ==>  <==  ->?  <-?  =>?  <=?  -->?  <--?  ==>?  <==?  ...',
+		'Contextual'            : 'Binary  Member  Comma  in  as  of  ->  <-  =>  <=  ...',
 
 		'EndTokn'               : 'BlockBreakTokn  Close  /*  //',
 		'IGLF'                  : 'Unary  Binary  Ternary  Member  Assign  Comma  Open  Contextual'

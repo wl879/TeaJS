@@ -99,7 +99,7 @@ function tokenPrinter(token, show_token):
 
 function sourcePrinter(src):
 	var texts = [];
-	for i, t => src:
+	for i, t -> src:
 		if !t:
 			continue;
 		if t.istoken:
@@ -120,7 +120,7 @@ function nodePrinter(node, text, _level, _indent):
 	if isBlock:
 		text += '\n'+print.strc('\t', _indent+1);
 
-	for i => node:
+	for i -> node:
 		!node[i] -> continue;
 		if i != 0:
 			text += ', ';
@@ -147,16 +147,16 @@ function macroPrinter(macro):
 
 function scopePrinter(scope):
 	var texts = [];
-	for key, item -> scope:
+	for key, item in scope:
 		if key == 'node' || key == 'top' || key == '_top_' || item == null:
 			continue;
 		if key == 'variables':
 			var v_types = {};
-			for name, type -> item:
+			for name, type in item:
 				v_types[type] |= [];
 				v_types[type].push( name );
 			var v_text = [];
-			for type, varbs -> v_types:
+			for type, varbs in v_types:
 				v_text.push( type+' : ["'+varbs.join('", "')+'"]' );
 			if v_text.length:
 				texts.push(key+' :\n'+v_text.join(',\n').replace(/^/mg, '\t'));
@@ -164,7 +164,7 @@ function scopePrinter(scope):
 
 		if key == 'argumentsDefine':
 			var sub_text = [];
-			for j => item:
+			for j -> item:
 				sub_text.push( print.toText(item[j]).replace(/^/mg, '\t') );
 			if sub_text.length:
 				texts.push(key+' : [\n'+sub_text.join(',\n')+']');
@@ -172,7 +172,7 @@ function scopePrinter(scope):
 
 		if key == 'sub' || key == 'letScope':
 			var sub_text = [];
-			for k -> item:
+			for k in item:
 				sub_text.push( k+' : '+scopePrinter(item[k]) );
 			if sub_text.length:
 				texts.push(key+' : [\n'+sub_text.join(',\n').replace(/^/mg, '\t')+']');
@@ -187,7 +187,7 @@ function writerPrinter(data, level, _circular_cache):
 		_circular_cache = [];
 	_circular_cache.push(data);
 	var texts = [];
-	for i, item => data:
+	for i, item -> data:
 		if item.istoken:
 			texts.push("'"+Text(item.text)+"'");
 		else if typeof item == 'string':
@@ -201,7 +201,7 @@ function writerPrinter(data, level, _circular_cache):
 
 function SyntaxPrinter( sre, __level ):
 	var text = [];
-	for i, r => sre:
+	for i, r -> sre:
 		if r.type == 'Or':
 			if text.length:
 				text.push( '|' )

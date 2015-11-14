@@ -53,14 +53,14 @@ debug.onEvent = function(part, fn):
 
 debug.disable = function(part):
 	debug_lv = parseDebugConf(part);
-	for name -> @.eventMap:
+	for name in @.eventMap:
 		if debug[name] && (debug_lv & @.eventMap[name]) != @.eventMap[name]:
 			debug[name] = null;
 
 debug.enable = function(part):
 	debug_lv = parseDebugConf(part);
 	var open_list = [];
-	for name -> @.eventMap:
+	for name in @.eventMap:
 		if debug['__'+name]:
 			if (debug_lv & @.eventMap[name]) == @.eventMap[name]:
 				debug[name] = debug['__'+name];
@@ -71,7 +71,7 @@ debug.enable = function(part):
 	if open_list.length:
 		print '* Debug enable: "'+open_list.join('", "')+'"';
 
-	for i, item <= debug_event_listener:
+	for i, item <- debug_event_listener:
 		if (debug_lv & item[0]) == item[0]:
 			item[1](argvj_debug_level);
 
@@ -91,7 +91,7 @@ debug.stacks = function(err, shift):
 	if err && err.name == 'Error':
 		while i < stacks.length && /at (.*Function.debug|.*Function.print|.*?TeaError|.*?tea\.throw)/i.test(stacks[i]):
 			i ++;
-	for i => stacks:
+	for i -> stacks:
 		if stacks[i].indexOf('anonymous') != -1:
 			continue;
 		if m = stacks[i].match(/at (.*?) \((.*?)\)$/):
@@ -106,7 +106,7 @@ debug.stacksToText = function(stacks, msg, name):
 	stacks = debug.stacks(stacks || new Error);
 
 	var text = msg === false ? [] : ['['+(name||'Tea error stack')+']'+(msg&&'\n'+msg||'')];
-	for i=0, stack => stacks:
+	for i=0, stack -> stacks:
 		if typeof stacks[i] == 'string':
 			text.push(stacks[i]);
 		else:
@@ -121,7 +121,7 @@ function parseDebugConf(part):
 	if typeof part == 'number':
 		e = part;
 	else if part:
-		for i, name => part.replace(/\W+/g, ' ').trim().split(' '):
+		for i, name -> part.replace(/\W+/g, ' ').trim().split(' '):
 			if debug.eventMap[name]:
 				e += debug.eventMap[name];
 	return e;
