@@ -258,17 +258,15 @@ class Scope:
 		if let_scope && let_scope.isDefined(id.text, 'let'):
 			return;
 		var forstam = let_scope && let_scope.type == 'ForStam' && /ForPConditionPatt|ForInConditionPatt/.test(expr.type);
-		var def = scope.isDefined( id.text );
 		if ass && idexpr.index == 0:
 			if forstam && ass.parent.index == 0:
 				let_scope.set('let', id.text);
 			else:
-				if !def:
-					scope.set('undefined', id.text);
-				else def == 'unknow':
+				if scope.isDefined( id.text, null, 1) == 'unknow':
 					scope.set('modfiy', id.text, true);
-
-		else if !def:
+				else if !/defined/.test( scope.isDefined( id.text ) ):
+					scope.set('undefined', id.text);
+		else if !scope.isDefined( id.text, null, 1 ):
 			if forstam && idexpr.parent.index == 0:
 				let_scope.set('let', id.text);
 			else:

@@ -893,6 +893,11 @@
 				}
 			}
 			var def_pre_processor;
+			Context.prototype.reinit = function (){
+				this._source = null;
+				this._ast = null;
+				this._rewriter = null;
+			}
 			Context.prototype.extends = function (){
 				for (var i=0, item; i < arguments.length; i++){
 					item = arguments[i];
@@ -900,6 +905,7 @@
 						this.preProcessor.extends(item.preProcessor || item);
 					}
 				}
+				this.reinit();
 			}
 			Context.prototype.__defineGetter__("source", function(){
 				if (!this._source){
@@ -927,35 +933,60 @@
 				return this.ast.scope;
 			});
 			Context.prototype.__defineGetter__("rewriter", function(){
-				return ReWriter.read(this.ast, this.preProcessor);
+				if (!this._rewriter){
+					this._rewriter = ReWriter.read(this.ast, this.preProcessor);
+				}
+				return this._rewriter;
 			});
 			Context.prototype.__defineGetter__("text", function(){
 				return this.writer.text;
 			});
 			Context.prototype.__defineGetter__("sourcemap", function(){
-				return '';
+				var map;
+				map = ReWriter.sourceMap();
+				map.file = this.argv.out || '';
+				map.sourceRoot = this.fileName;
+				map.parse(this.rewriter, this.source);
+				return map;
 			});
 			Context.prototype.__defineGetter__("requires", function(){
+				if (!this._rewriter){
+					this._rewriter = ReWriter.read(this.ast, this.preProcessor);
+				}
 				return this.scope.requires;
 			});
-			Context.prototype.echo = function (file){
-				if (!file) file = this.argv && this.argv.out;
-				var writer = this.rewriter, requires = this.requires, text;
-				if (requires.length){
-					requires = loadRequiresList(requires, {});
-					text = Prep.template.joinRequire(requires, writer);
-					var shell_comm = '';
+			Context.prototype.echo = function (output, outmap){
+				var sourcemap, shell_comm, requires, text;
+				if (!output) output = this.argv && this.argv.out;
+				if (outmap) sourcemap = this.sourcemap;
+				if (this.requires.length){
+					shell_comm = '';
+					requires = loadRequiresList(this.requires, {});
+					text = Prep.template.joinRequire(requires, this.rewriter);
+					if (sourcemap){
+						for (var _i=0, item; _i < requires.length; _i++){
+							item = requires[_i];
+							sourcemap.parse(item[2], item[1].source);
+						}
+					}
 					text = text.replace(/\n\s*(\#\!.*\n)/g, function($0, $1){
 						shell_comm = $1;
 						return '\n';
 					});
 					text = shell_comm+text;
 				}else {
-					text = writer.toText();
+					text = this.rewriter.toText();
 				}
-				Text.writeFile(text, file);
+				if (sourcemap){
+					if (!(typeof outmap == 'string')){
+						outmap = output.replace(/\.\w+$/, '.map');
+					}
+					Text.writeFile(sourcemap.text, outmap);
+					text += '\n//# sourceMappingURL='+Path.relative(Path.dirname(output), outmap);
+				}
+				Text.writeFile(text, output);
 			}
-			Context.definePreProcessor = function(){
+			Context.defaultPreprocessor = function(){
 				if (!def_pre_processor){
 					def_pre_processor = new Prep.new();
 				}
@@ -1185,7 +1216,7 @@
 				a = a < 0 ? this.length+a : (a || 0), b = b < 0 ? this.length-1+b : Math.min(b || Infinity, this.length-2);
 				var texts = [];
 				for (var i = a; i <= b; i++){
-					if (this[i]) texts.push(this[i].text);
+					if (this[i] && this[i].text != '\4') texts.push(this[i].text);
 				}
 				return texts.join('');
 			}
@@ -1508,7 +1539,7 @@
 			'Unary' : 'new  typeof  yield  delete  void  not  !  ~  -  +  ++  --',
 			'Prefix Postfix' : '++  --',
 			'Binary Compute' : '+  -  *  /  %  &  |  ^  >>  <<  >>>  **  \\',
-			'Binary Compare' : 'instanceof  in  of  as  extends  is  >  <  >=  <=  !=  !==  ==  ===  not is',
+			'Binary Compare' : 'instanceof  in  of  as  extends  is  not is  >  <  >=  <=  !=  !==  ==  ===',
 			'Binary Logic' : 'and  or  &&  ||',
 			'Binary Assign' : '=  +=  -=  *=  /=  %=  &=  |=  >>=  <<=  >>>=  ?=  |=',
 			'Ternary' : '?',
@@ -1551,7 +1582,7 @@
 				}
 				code = match[0];
 				while (code && token_types.SymbolTokn.indexOf(code) == -1){
-					code = code.slice(0, -1);
+					code = code.substr(1);
 				}
 				if (/'|"/.test(code)){
 					var str_rre = new RegExp(code+'(?:\\\\\\\\|'+code.replace(/(.)/g, '\\\\$1')+'|[\\s\\w\\W])*?'+code+'$');
@@ -2156,6 +2187,7 @@
 				return;
 			}
 			function checkArguments(expr_type, ass_expr, id, scope, let_scope){
+				var root;
 				switch (expr_type){
 					case 'LetDecl':
 						if (let_scope){
@@ -2247,19 +2279,18 @@
 				if (let_scope && let_scope.isDefined(id.text, 'let')){
 					return;
 				}
-				var forstam = let_scope && let_scope.type == 'ForStam' && /ForPConditionPatt|ForInConditionPatt/.test(expr.type),
-					def = scope.isDefined(id.text);
+				var forstam = let_scope && let_scope.type == 'ForStam' && /ForPConditionPatt|ForInConditionPatt/.test(expr.type);
 				if (ass && idexpr.index == 0){
 					if (forstam && ass.parent.index == 0){
 						let_scope.set('let', id.text);
 					}else {
-						if (!def){
-							scope.set('undefined', id.text);
-						}else if (def == 'unknow'){
+						if (scope.isDefined(id.text, null, 1) == 'unknow'){
 							scope.set('modfiy', id.text, true);
+						}else if (!/defined/.test(scope.isDefined(id.text))){
+							scope.set('undefined', id.text);
 						}
 					}
-				}else if (!def){
+				}else if (!scope.isDefined(id.text, null, 1)){
 					if (forstam && idexpr.parent.index == 0){
 						let_scope.set('let', id.text);
 					}else {
@@ -4052,12 +4083,7 @@
 			if (!args) args = [];
 			script = Template.parseWriteExp(script);
 			script = Text.trimIndent(script).replace(/^/mg, tab_size).trim();
-			return "function("+(args.join(','))+"){\n\
-			    __write  = \'\';\n\
-			    _write   = function(){for(i -> arguments){__write += arguments[i]}};\n\
-			    "+script+";\n\
-			    return __write;\n\
-			}";
+			return "function("+(args.join(','))+"){\n    __write  = '';\n    _write   = function(){for(i -> arguments){__write += arguments[i]}};\n    "+script+";\n    return __write;\n}";
 		};
 		Template.parseWriteExp = function(script, name){
 			name = name || '_write';
@@ -4147,11 +4173,150 @@
 		}
 	});
 	CreateModule("../src/rewriter/index.tea", function(module, exports){
-		var Reader = __require("../src/rewriter/reader.tea");
+		var Reader = __require("../src/rewriter/reader.tea"),
+			SourceMap = __require("../src/rewriter/sourcemap.tea");
 		exports.read = function(ast, preprocessor){
 			if (!preprocessor) preprocessor = ast.preProcessor;
-			return Reader(preprocessor).read(ast);
+			var write = Reader(preprocessor).read(ast);
+			return beautify(write);
 		};
+		exports.sourceMap = function(){
+			return new SourceMap();
+		};
+		function beautify(writer){
+			for (var i=0, item; i < writer.length; i++){
+				item = writer[i];
+				if (item == ','){
+					writer[i] = ', ';
+					continue;
+				}
+				switch (item.type){
+					case 'VarDecl':case 'LetDecl':
+						beautifyVarDecl(writer, i);
+						beautify(item);
+						break;
+					case 'NodeStam':
+						beautify(item);
+						if (item.length && writer.type != 'Root'){
+							beautifyIndent(item);
+							beautifyTrim(item).insert(0, '\n\t').add('\n');
+						}
+						break;
+					default:
+						if (item.iswriter){
+							beautify(item);
+						}
+						break;
+				}
+			}
+			if (/JsonExpr|ArrayExpr|VarDecl/.test(writer.type)){
+				var text = writer.text;
+				if (text.length > 80 || /\n/.test(text)){
+					beautifyWrap(writer);
+					beautifyIndent(writer);
+				}
+			}
+			return writer;
+		}
+		function beautifyVarDecl(writer, index){
+			var _b, var_writer = writer[index], b = index;
+			while (true){
+				_b = b+1;
+				while (typeof writer[_b] == 'string' && /^[;|\n|\s]+$/.test(writer[_b])){
+					_b += 1;
+				}
+				if (writer[_b] && /LetDecl|VarDecl/.test(writer[_b].type)){
+					beautifyTrim(writer[_b], /^(var\ |var\b|\ )/, /(;|\n)$/);
+					var_writer.add(',').add.apply(var_writer, Hash.slice(writer[_b]));
+					b = _b;
+					continue;
+				}
+				break;
+			}
+			if (b != index){
+				writer.delete(index+1, b);
+			}
+			return writer;
+		}
+		function beautifyIndent(writer){
+			for (var i=0, item; i < writer.length; i++){
+				item = writer[i];
+				if (item.iswriter){
+					beautifyIndent(item);
+				}else if (item.istoken){
+					if (item.type != 'StringTokn'){
+						item.text = item.text.replace(/\n/g, '\n\t');
+					}
+				}else {
+					writer[i] = item.replace(/\n/g, '\n\t');
+				}
+			}
+			return writer;
+		}
+		function beautifyWrap(writer){
+			for (var i=0, item; i < writer.length; i++){
+				item = writer[i];
+				if (item == ', '){
+					writer[i] = ',\n';
+				}else if (item.type == 'ArgumentsDecl'){
+					beautifyWrap(item);
+				}
+			}
+			return writer;
+		}
+		function beautifyTrim(writer, lre, rre){
+			if (lre == null) lre = /^\s+/;
+			if (rre == null) rre = /\s+$/;
+			if (lre){
+				beautifyTrimLeft(writer, lre);
+			}
+			if (rre){
+				beautifyTrimRight(writer, rre);
+			}
+			return writer;
+		}
+		function beautifyTrimLeft(writer, re){
+			if (re == null) re = /^\s+/;
+			var temp = writer;
+			while (temp[0]){
+				if (typeof temp[0] == 'string'){
+					if (re.test(temp[0]) && !(temp[0] = temp[0].replace(re, ''))){
+						temp.delete(0);
+						continue;
+					}
+				}else if (temp[0].istoken && re.test(temp[0].text)){
+					if (!(temp[0].text = temp[0].text.replace(re, ''))){
+						temp.delete(0);
+						continue;
+					}
+				}else if (temp[0].iswriter){
+					beautifyTrimLeft(temp[0], re);
+				}
+				break;
+			}
+			return writer;
+		}
+		function beautifyTrimRight(writer, re){
+			if (re == null) re = /\s+$/;
+			var last = writer.length-1, temp = writer;
+			while (temp[last]){
+				if (typeof temp[last] == 'string'){
+					if (re.test(temp[last]) && !(temp[last] = temp[last].replace(re, ''))){
+						last = temp.delete(last).length-1;
+						continue;
+					}
+				}else if (temp[last].istoken && re.test(temp[last].text)){
+					if (!(temp[last].text = temp[last].text.replace(re, ''))){
+						last = temp.delete(last).length-1;
+						continue;
+					}
+				}else if (temp[last].iswriter){
+					beautifyTrimRight(temp[last], re);
+				}
+				break;
+			}
+			return writer;
+		}
 	});
 	CreateModule("../src/rewriter/reader.tea", function(module, exports){
 		var Writer = __require("../src/rewriter/writer.tea");
@@ -5273,7 +5438,6 @@
 		module.exports = Reader;
 	});
 	CreateModule("../src/rewriter/writer.tea", function(module, exports){
-		var Echo = __require("../src/rewriter/echo.tea");
 		var Writer = (function(){
 			function Writer(reader, type){
 				this.length = 0;
@@ -5323,6 +5487,11 @@
 				}
 				return this;
 			}
+			Writer.prototype.delete = function (a, b){
+				if (b == null) b = a;
+				Array.prototype.splice.call(this, a, b-a+1);
+				return this;
+			}
 			Writer.prototype.read = function (test_patt){
 				if (typeof test_patt == 'string' && /#/.test(test_patt)){
 					this.reader.patt(test_patt, arguments[1], this);
@@ -5361,86 +5530,146 @@
 				return this.toText();
 			});
 			Writer.prototype.toText = function (){
-				var text = Echo.toText(this);
-				return text;
+				var texts = [];
+				for (var _i=0, item; _i < this.length; _i++){
+					item = this[_i];
+					if (!item) continue;
+					if (item.iswriter){
+						texts.push(item.toText());
+					}else if (item.istoken){
+						texts.push(item.text);
+					}else if (/string|number|undefined|boolean/.test(typeof (item))){
+						texts.push(item);
+					}else {
+						throw tea.error(new Error(), 'bad writer data!!'+isClass(item));
+					}
+				}
+				return texts.join('');
+			}
+			Writer.prototype.toList = function (){
+				var list = [];
+				for (var _i=0, item; _i < this.length; _i++){
+					item = this[_i];
+					if (!item) continue;
+					if (item.iswriter){
+						list.push.apply(list, item.toList());
+					}else {
+						list.push(item);
+					}
+				}
+				return list;
 			}
 			return Writer;
 		})();
 		module.exports = Writer;
 	});
-	CreateModule("../src/rewriter/echo.tea", function(module, exports){
-		function toText(write, comma_mark){
-			var texts = [], text;
-			for (var i=0, item; i < write.length; i++){
-				item = write[i];
-				if (!item){
-					continue;
-				}
-				if (item == ','){
-					texts.push(',\0');
-					continue;
-				}
-				if (typeof item == 'string' || typeof item == 'number'){
-					texts.push(item);
-					continue;
-				}
-				if (item.istoken){
-					texts.push(item.text);
-					continue;
-				}
-				if (!item.iswriter){
-					throw tea.error(new Error(), 'bad writer data!!'+isClass(item));
-				}
-				switch (item.type){
-					case 'VarDecl':case 'LetDecl':
-						var _ref;
-						_ref = concatVarDecl(write, i), text = _ref[0], i = _ref[1];
-						break;
-					default:
-						text = toText(item);
-						break;
-				}
-				text = beautify(item.type, text, write.type);
-				if (!comma_mark){
-					text = text.replace(/,\0/g, ', ');
-				}
-				texts.push(text);
+	CreateModule("../src/rewriter/sourcemap.tea", function(module, exports){
+		var SourceMap = (function(){
+			function SourceMap(){
+				this.version = 3;
+				this.file = '';
+				this.sourceRoot = '';
+				this.sources = [];
+				this.names = [];
+				this.mappings = [];
 			}
-			return texts.join('');
-		}
-		function concatVarDecl(parent, index){
-			var str, _i;
-			str = toText(parent[index], true);
-			while (true){
-				_i = index+1;
-				while (typeof parent[_i] == 'string' && /^[;|\n|\s]+$/.test(parent[_i])){
-					_i += 1;
+			var VLQ_SHIFT, VLQ_CONTINUATION_BIT, VLQ_VALUE_MASK, BASE64_CHARS;
+			VLQ_SHIFT = 5;
+			VLQ_CONTINUATION_BIT = 1<<VLQ_SHIFT;
+			VLQ_VALUE_MASK = VLQ_CONTINUATION_BIT-1;
+			BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+			SourceMap.prototype.addSource = function (file){
+				var i = this.sources.indexOf(file);
+				if (i == -1){
+					return this.sources.push(file)-1;
 				}
-				if (parent[_i] && /LetDecl|VarDecl/.test(parent[_i].type)){
-					str += ',\0'+toText(parent[_i], true).replace(/^var\s*/, '');
-					index = _i;
-					continue;
-				}
-				break;
+				return i;
 			}
-			return [str, index];
-		}
-		function beautify(type, text, parent_type){
-			switch (type){
-				case 'NodeStam':
-					if (parent_type != 'Root' && text){
-						text = '\n\t'+text.replace(/^/mg, '\t').trim()+'\n';
+			SourceMap.prototype.addName = function (name){
+				var i = this.names.indexOf(name);
+				if (i == -1){
+					return this.names.push(name)-1;
+				}
+				return i;
+			}
+			SourceMap.prototype.parse = function (writer, src){
+				var loc,
+					vlq,
+					m,
+					line = '',
+					line_num = 1,
+					add_comma,
+					last_vlq,
+					last_col = 0,
+					last_loc_line = 1,
+					last_loc_col = 0;
+				for (var i_ref = writer.toList(), i=0, item; i < i_ref.length; i++){
+					item = i_ref[i];
+					if (item.istoken){
+						if (item.location && item.location.fileName){
+							loc = item.location;
+							vlq = SourceMap.encodeVlq(line.length-last_col, this.addSource(loc.fileName), loc.lineNumber-last_loc_line, loc.columnNumber-last_loc_col);
+							if (add_comma) this.mappings.push(','); else add_comma = true;
+							this.mappings.push(vlq);
+							last_vlq = vlq;
+							last_col = line.length;
+							last_loc_line = loc.lineNumber;
+							last_loc_col = loc.columnNumber;
+						}
+						item = item.text;
 					}
-					break;
-				case 'JsonExpr':case 'ArrayExpr':case 'VarDecl':
-					if (text.length > 80 || /\n/.test(text)){
-						text = text.replace(/,\0/g, ',\n').replace(/^/mg, '\t').trim();
+					if (/\n/.test(item)){
+						while (m = item.match(/\n/)){
+							this.mappings.push(';');
+							line_num++;
+							line = item = item.substr(m.index+1);
+						}
+						add_comma = last_col = 0;
+					}else {
+						line += item;
 					}
-					break;
+				}
+				return this;
 			}
-			return text;
-		}
-		exports.toText = toText;
+			SourceMap.prototype.__defineGetter__("data", function(){
+				return {"version": 3,
+					"file": this.file || '',
+					"sourceRoot": this.sourceRoot || '',
+					"sources": this.sources,
+					"names": this.names,
+					"mappings": this.mappings.join('')};
+			});
+			SourceMap.prototype.__defineGetter__("text", function(){
+				return Text(this.data);
+			});
+			SourceMap.encodeVlq = function(){
+				var signBit, valueToEncode, answer, nextChunk, vlq = '';
+				for (var _i=0, value; _i < arguments.length; _i++){
+					value = arguments[_i];
+					signBit = value < 0 ? 1 : 0;
+					valueToEncode = (Math.abs(value)<<1)+signBit;
+					answer = '';
+					while (valueToEncode || !answer){
+						nextChunk = valueToEncode&VLQ_VALUE_MASK;
+						valueToEncode = valueToEncode>>VLQ_SHIFT;
+						if (valueToEncode){
+							nextChunk = nextChunk|VLQ_CONTINUATION_BIT;
+						}
+						answer += this.encodeBase64(nextChunk);
+					}
+					vlq += answer;
+				}
+				return vlq;
+			};
+			SourceMap.encodeBase64 = function(value){
+				if (BASE64_CHARS[value]){
+					return BASE64_CHARS[value];
+				}
+				throw tea.error(new Error(), "Cannot Base64 encode value: "+value);
+			};
+			return SourceMap;
+		})();
+		module.exports = SourceMap;
 	});
 	CreateModule("../src/tools/helper.tea", function(module, exports){
 		__require("../src/tools/debug.tea");
@@ -6151,6 +6380,7 @@ help_text = "r{** g{Tea} w{script help} ****************************************
     -o,--out   <output>                输出文件 或 目标目录\n\
     -e,--eval  <tea script snippet>    编译一段 tea script 文本\n\
     -j,--join                          合并 require 文件\n\
+    -m,--map                           生成 source map 文件\n\
     -h,--help                          显示帮助\n\
     -v,--verbose                       显示编译信息\n\
     -r,--run                           执行输入件\n\
@@ -6182,7 +6412,7 @@ if (!module.parent){
 			print('* g{Cant find define file as r{"'+tea.argv['--define']+'"}!!}');
 			tea.exit();
 		}
-		tea.context.definePreProcessor(define_file);
+		tea.context.defaultPreprocessor(define_file);
 	}
 	if (tea.argv['--debug']){
 		debug.enable(tea.argv['--debug'] === true ? 'all' : tea.argv['--debug']);
@@ -6240,9 +6470,16 @@ if (!module.parent){
 		tea.exit();
 	}
 	if (tea.argv['--out']){
-		ctx.echo(tea.argv.out);
-		if (debug.log){
-			debug.log('* g{Output to} : "'+tea.argv.out+'"');
+		if (tea.argv['--map']){
+			ctx.echo(tea.argv.out, tea.argv['--map']);
+			if (debug.log){
+				debug.log('* g{Output and source map to} : "'+tea.argv.out+'"');
+			}
+		}else {
+			ctx.echo(tea.argv.out);
+			if (debug.log){
+				debug.log('* g{Output to} : "'+tea.argv.out+'"');
+			}
 		}
 	}
 	if (tea.argv['--test']){
@@ -6258,9 +6495,9 @@ if (!module.parent){
 			cmds = cmds.concat(tea.argv['--test'].split(' '));
 		}
 		print('** r{Test exec}: g{'+cmds.join(' '))+'}';
-		ChildProcess.exec(cmds.join(' '), {"maxBuffer": 5000*1024}, function(err, stdout, stderr){
-			var out = (stderr || stdout)+'';
-			console.log(print.border(out).replace(/^/mg, '  '));
+		ChildProcess.exec(cmds.join(' '), {"maxBuffer": 50000*1024}, function(err, stdout, stderr){
+			var out = stdout+''+stderr;
+			console.log(out.replace(/^/mg, '  | '));
 			if (temp_file){
 				ChildProcess.execSync('rm -rf '+temp_file);
 			}

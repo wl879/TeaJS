@@ -90,7 +90,8 @@ Tokens.parse = function(source, pos):
 	code = match[0];
 	while code && token_types.SymbolTokn.indexOf(code) == -1:
 		code = code.slice(0, -1);
-		
+	
+
 	switch code:
 		case '"','"""','""""','`', "'","'''","''''":
 			if (b = indexOfRightPair(text, code, code)) === false:
@@ -123,6 +124,7 @@ Tokens.parse = function(source, pos):
 			if match = text.substr(b+1).match(/^[gimy]+/):
 				b = b+ match[0].length;
 			code = text.slice(0, b+1);
+
 			return new Token(code, /\n/.test(code) ? ['RegExpDecl', 'ConstTokn', 'MultiLineRegExp'] : ['RegExpDecl', 'ConstTokn']);
 
 	if code in token_literals:
@@ -180,7 +182,7 @@ Tokens.define({
 		'Unary'                 : 'new  typeof  yield  delete  void  not  !  ~  -  +  ++  --',
 		'Prefix Postfix'        : '++  --',
 		'Binary Compute'        : '+  -  *  /  %  &  |  ^  >>  <<  >>>  **  \\',
-		'Binary Compare'        : 'instanceof  in  of  as  extends  is  >  <  >=  <=  !=  !==  ==  ===  not is',
+		'Binary Compare'        : 'instanceof  in  of  as  extends  is  not is  >  <  >=  <=  !=  !==  ==  ===',
 		'Binary Logic'          : 'and  or  &&  ||',
 		'Binary Assign'         : '=  +=  -=  *=  /=  %=  &=  |=  >>=  <<=  >>>=  ?=  |=',
 		'Ternary'               : '?',
@@ -204,6 +206,7 @@ function rtokenize(source, pos, ig_blank, ig_comm):
 	text = pos && source.slice(0, pos+1) || source;
 
 	while text:
+
 		if match = text.match(/\s+$/):
 			if !ig_blank:
 				return [match[0], match.index];
@@ -221,10 +224,10 @@ function rtokenize(source, pos, ig_blank, ig_comm):
 
 		if not match = text.match(/[^\w\_\s]+$/):
 			return 'reverse tokenize parse error! unexpected token like as "'+text.slice(-5)+'"';
-
+		
 		code = match[0];
 		while code && token_types.SymbolTokn.indexOf(code) == -1:
-			code = code.slice(0, -1);
+			code = code.substr(1);
 
 		if /'|"/.test(code):
 			var str_rre = new RegExp(code+'(?:\\\\\\\\|'+code.replace(/(.)/g, '\\\\$1')+'|[\\s\\w\\W])*?'+code+'$');
@@ -233,41 +236,5 @@ function rtokenize(source, pos, ig_blank, ig_comm):
 			else:
 				text = text.slice(0, -code.length);
 				continue;
+
 		return [code, match.index];
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

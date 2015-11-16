@@ -14,11 +14,16 @@ class Context:
 		@.preProcessor  = Prep.new( def_pre_processor );
 		if extend:
 			@.extends(  argv && argv['preprocess'], extend);
+	reinit():
+		@._source   = null;
+		@._ast      = null;
+		@._rewriter = null;
 
 	extends():
 		for i, item -> arguments:
 			if item:
 				@.preProcessor.extends( item.preProcessor || item );
+		@.reinit();
 
 	get source:
 		if !@._source:
@@ -43,36 +48,53 @@ class Context:
 		return @.ast.scope;
 
 	get rewriter:
-		return ReWriter.read(@.ast, @.preProcessor);
+		if !@._rewriter:
+			@._rewriter = ReWriter.read(@.ast, @.preProcessor);
+		return @._rewriter;
 
 	get text:
 		return @.writer.text;
 
 	get sourcemap:
-		return '';
+		map = ReWriter.sourceMap();
+		map.file = @.argv.out || '';
+		map.sourceRoot = @.fileName;
+		map.parse( @.rewriter, @.source );
+		return map;
 
 	get requires:
+		if !@._rewriter:
+			@._rewriter = ReWriter.read(@.ast, @.preProcessor);
 		return @.scope.requires;
 
-	echo ( file ):
-		file |= @.argv && @.argv.out;
-		var writer = @.rewriter;
-		var requires = @.requires;
-		var text;
-		if requires.length:
-			requires = loadRequiresList( requires, {} );
-			text = Prep.template.joinRequire(requires, writer);
-			var shell_comm = '';
+	echo ( output, outmap ):
+		output |= @.argv && @.argv.out;
+		outmap && sourcemap = @.sourcemap;
+		if @.requires.length:
+			shell_comm = '';
+			requires = loadRequiresList( @.requires, {} );
+			text = Prep.template.joinRequire( requires, @.rewriter );
+			if sourcemap:
+				for item => requires:
+					sourcemap.parse( item[2], item[1].source );
 			text = text.replace(/\n\s*(\#\!.*\n)/g, function($0, $1){
 				shell_comm = $1;
 				return '\n';
 			});
 			text = shell_comm+text;
 		else:
-			text = writer.toText();
-		Text.writeFile( text, file );
+			text = @.rewriter.toText();
+		
+		if sourcemap:
+			if not outmap as 'string':
+				outmap = output.replace(/\.\w+$/, '.map');
+			Text.writeFile( sourcemap.text, outmap );
+			text += '\n//# sourceMappingURL='+Path.relative(Path.dirname(output), outmap);
 
-	static definePreProcessor():
+		Text.writeFile( text, output );
+
+
+	static defaultPreprocessor():
 		if !def_pre_processor:
 			def_pre_processor = new Prep.new();
 		for i, item -> arguments:

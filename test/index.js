@@ -50,7 +50,7 @@ try {
 				print(item.ctx.ast);
 				print(item.ctx.scope);
 				console.log(item.ctx.rewriter.text);
-				break;
+				// break;
 			}
 			break;
 		case 'prepp':case 'token':
@@ -74,11 +74,13 @@ try {
 					continue;
 				}
 				print(item.title);
+				// print item.src;
 				print.cellText(item.src.join(), item.ctx.rewriter.text, ' --> ');
 				print(item.ctx.ast);
-				// break;
+				break;
 			}
 			break;
+		
 	}
 }catch (e) {
 	console.log(e.stack);

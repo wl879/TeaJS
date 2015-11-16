@@ -29,6 +29,7 @@
 	-o,--out   <out file>              输出文件 或 目标目录
 	-e,--eval  <tea script snippet>    编译一段 tea script 文本
 	-j,--join                          合并 require 文件
+	-m,--map                           生成 source map 文件
 	-h,--help                          显示帮助
 	-v,--verbose                       显示编译信息
 	-r,--run                           执行输入件

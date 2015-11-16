@@ -95,7 +95,7 @@ class Source:
 	indexOf():
 		return IndexOf.apply(@, arguments);
 
-	delete(a, b = a):
+	delete (a, b = a):
 		for var i=a; i <= b; i++:
 			@[i] = null;
 		return @;
@@ -146,7 +146,7 @@ class Source:
 		b = b < 0 ? @.length - 1 + b : Math.min(b||Infinity, @.length-2);
 		var texts = [];
 		for var i=a; i <= b; i++:
-			@[i] -> texts.push( @[i].text );
+			@[i] && @[i].text != '\4' -> texts.push( @[i].text );
 		return texts.join('');
 
 

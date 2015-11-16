@@ -3,7 +3,7 @@ var child_process, binVers, binIndex;
 require("./lib/tools/utils.js");
 require("./lib/tools/printer.js");
 child_process = require('child_process');
-binVers = [['0.9.9', './bin/tea.js'], ['lib', './lib/index.js']];
+binVers = [['lib', './lib/index.js'], ['beta', './bin/tea.js'], ['0.1.12', './bin/tea.v0.1.12.js']];
 binIndex = 0;
 function Exec(cmd, callback){
 	child_process.exec(cmd, {"maxBuffer": 5000*1024}, function(err, stdout, stderr){

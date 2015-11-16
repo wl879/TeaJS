@@ -9,6 +9,7 @@ r{** g{Tea} w{script help} *****************************************************
 	-o,--out   <output>                输出文件 或 目标目录
 	-e,--eval  <tea script snippet>    编译一段 tea script 文本
 	-j,--join                          合并 require 文件
+	-m,--map                           生成 source map 文件
 	-h,--help                          显示帮助
 	-v,--verbose                       显示编译信息
 	-r,--run                           执行输入件
@@ -42,7 +43,7 @@ if !module.parent:
 		if !define_file:
 			print '* g{Cant find define file as r{"'+tea.argv['--define']+'"}!!}';
 			tea.exit();
-		tea.context.definePreProcessor(define_file);
+		tea.context.defaultPreprocessor(define_file);
 
 	if tea.argv['--debug']:
 		debug.enable( tea.argv['--debug'] === true ? 'all' : tea.argv['--debug'] );
@@ -92,8 +93,12 @@ if !module.parent:
 	// --------------------------------------------------------
 
 	if tea.argv['--out']:
-		ctx.echo( tea.argv.out );
-		tea_log '* g{Output to} : "'+ tea.argv.out+'"';
+		if tea.argv['--map']:
+			ctx.echo( tea.argv.out, tea.argv['--map'] );
+			tea_log '* g{Output and source map to} : "'+ tea.argv.out+'"';
+		else:
+			ctx.echo( tea.argv.out );
+			tea_log '* g{Output to} : "'+ tea.argv.out+'"';
 		
 	if tea.argv['--test']:
 		var cmds = [], cmd, temp_file;
@@ -107,9 +112,9 @@ if !module.parent:
 			cmds = cmds.concat( tea.argv['--test'].split(' ') );
 
 		print('** r{Test exec}: g{'+cmds.join(' '))+'}';
-		ChildProcess.exec( cmds.join(' '), {maxBuffer: 5000*1024}, function(err, stdout, stderr):
-			var out = (stderr||stdout)+'';
-			console.log( print.border(out).replace(/^/mg, '  ') );
+		ChildProcess.exec( cmds.join(' '), {maxBuffer: 50000*1024}, function(err, stdout, stderr):
+			var out = stdout+''+stderr;
+			console.log(out.replace(/^/mg, '  | '));
 			if temp_file:
 				ChildProcess.execSync('rm -rf '+temp_file);
 			tea.exit();

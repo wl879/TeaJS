@@ -1,4 +1,4 @@
-var Echo = require "./echo.js";
+
 class Writer:
 
 	constructor(reader, type):
@@ -37,6 +37,10 @@ class Writer:
 				@[@.length++] = item;
 		return @;
 
+	delete (a, b = a):
+		Array::splice.call(@, a, b-a+1);
+		return @;
+
 	read (test_patt):
 		if test_patt as 'string' && /#/.test(test_patt):
 			@.reader.patt(test_patt, arguments[1], @);
@@ -67,7 +71,27 @@ class Writer:
 		return @.toText();
 
 	toText( ):
-		var text = Echo.toText(@);
-		return text;
+		var texts = [];
+		for item => @:
+			!item -> continue;
+			if item.iswriter:
+				texts.push( item.toText());
+			else if item.istoken:
+				texts.push( item.text );
+			else if /string|number|undefined|boolean/.test(typeof(item)):
+				texts.push( item );
+			else:
+				Err 'bad writer data!!'+isClass(item);
+		return texts.join('');
+
+	toList( ):
+		var list = [];
+		for item => @:
+			!item -> continue;
+			if item.iswriter:
+				list.push.apply(list, item.toList());
+			else:
+				list.push(item);
+		return list;
 
 module.exports = Writer;

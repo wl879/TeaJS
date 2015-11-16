@@ -26,13 +26,13 @@ Template.writeExprFunc = function(script, args):
 	args |= [];
 	script = Template.parseWriteExp(script);
 	script = Text.trimIndent(script).replace(/^/mg, tab_size).trim();
-	return `
+	return "
 	function(${args.join(',')}){
 		__write  = '';
 		_write   = function(){for(i -> arguments){__write += arguments[i]}};
 		${script};
 		return __write;
-	}`;
+	}";
 
 Template.parseWriteExp = function(script, name):
 	name = name || '_write';

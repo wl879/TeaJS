@@ -42,7 +42,7 @@ try:
 				print item.ctx.ast;
 				print item.ctx.scope;
 				console.log item.ctx.rewriter.text;
-				break;
+				// break;
 		case 'prepp':
 		case 'token':
 			debug.enable('log+prep')
@@ -61,9 +61,10 @@ try:
 				if i == 'all':
 					continue;
 				print item.title;
+				// print item.src;
 				print.cellText item.src.join(), item.ctx.rewriter.text, ' --> ';
 				print item.ctx.ast;
-				// break;
+				break;
 catch e:
 	console.log(e.stack)
 
