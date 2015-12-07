@@ -38,6 +38,7 @@ try {
 			break;
 		case 'syntax':
 			debug.enable('log+syntax');
+			tea.argv['--reg'] = true;
 			var res = start(Path.resolve('./test/tmp/source.js'));
 			for (var i in res){
 				if (!res.hasOwnProperty(i)) continue;
@@ -50,15 +51,15 @@ try {
 				print(item.ctx.ast);
 				print(item.ctx.scope);
 				console.log(item.ctx.rewriter.text);
-				// break;
+				break;
 			}
 			break;
 		case 'prepp':case 'token':
 			debug.enable('log+prep');
 			var res = start(Path.resolve('./test/tmp/prepp.js'));
-			print(res.all.src);
-			print('====');
-			console.log(res.all.ctx.rewriter.text);
+			// print res.all.src;
+			// print '====';
+			// console.log( res.all.ctx.rewriter.text );
 			break;
 		case 'writer':
 			debug.enable('log+write');
@@ -80,7 +81,6 @@ try {
 				break;
 			}
 			break;
-		
 	}
 }catch (e) {
 	console.log(e.stack);

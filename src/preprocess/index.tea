@@ -1,34 +1,10 @@
 
-var Source       = require "./source.js";
-var PreProcessor = require "./preprocessor.js";
-var Template     = require "./template.js";
+var Context = require "./context.js";
 
-exports.new = function(extend):
-	var prepor = new PreProcessor();
-	for i -> arguments:
-		if arguments[i]:
-			prepor.extends(arguments[i]);
-	return prepor;
+export context(argv, extend):
+	return new Context( argv, extend );
 
-exports.source = function(text, file, prepor):
-	var src = Source.parse(text, file);
-	prepor = exports.parse(src, prepor);
-	src.preProcessor = prepor;
-	return src;
-
-exports.parse = function(src, prepor):
-	prepor ?= new PreProcessor();
-	prepor.parse(src);
-	return prepor;
-
-exports.parseByFile = function(file, prepor):
-	var src = Source.parse(null, file);
-	prepor ?= new PreProcessor();
-	prepor.parse( src, true )
-	return prepor;
-
-exports.template = Template;
-
-
+export setDefault():
+	Context.defaultProcessor.apply(Context, arguments);
 
 

@@ -1,0 +1,59 @@
+
+var Context = require "./context.js";
+
+export join(requires, main):
+	var reader = main.reader;
+	var modules = [];
+	for file, item in requires:
+		var key = item[0], ctx = item[1];
+		var module_write = reader.new('ModuleReg').read("Module.register('#0', '#1', function(exports, require, module, __filename, __dirname){#2});", [file, key, reader.new('NodeStam', ctx.rewriter)] );
+		modules.push(module_write);
+	modules = reader.new('ModulePackage', requireTemplate(), reader.new('NodeStam', modules));
+	main.insert(0, modules);
+	return main;
+
+export load( files, cache = {} ):
+	for file, key in files:
+		if file == 'length' || file in cache:
+			continue;
+		tea_log '** require file: '+file;
+		
+		var ctx = new Context( {file: file} );
+
+		cache[file] = [key, ctx];
+		if ctx.requires.length:
+			load( ctx.requires, cache );
+	return cache;
+
+function requireTemplate():
+	format = function():
+		if !global && typeof(window) != 'undefined':
+			global = window;
+		_require = require;
+		require = function (key):
+			var mod = __modules[key];
+			if mod:
+				if mod.loaded:
+					return mod.exports;
+				return mod.load();
+			else:
+				return module.require(key);
+		__modules = {};
+		Module = function(filename, creater):
+			@.id       = filename;
+			@.exports  = {};
+			@.filename = filename;
+			@.loaded   = false;
+			@.creater  = creater;
+			@.require  = require;
+
+		Module::load = function():
+			@.loaded = true;
+			@.creater( @.exports, require, @, @.filename, @.filename.replace(/\/.+$/g, '') );
+			module.._cache[@.filename] = @;
+			return @.exports;
+
+		Module.register = function (filename, key, creater):
+			if not key in __modules:
+				__modules[key] = new Module(filename, creater);
+	return '('+format.toString().replace(/^\t|^ {4}/mg, '').replace(/\s*\}\s*$/, '#}')+')();\n\n';

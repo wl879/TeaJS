@@ -1,8 +1,6 @@
 var Parser = module.exports;
 var Node   = require "./node.js";
 var SyntaxReg    = require "./regexp.js";
-
-var level = 0, ttimes = 0;
 	
 Parser.define = function(name, pattern, callback):
 	if pattern as 'string':
@@ -132,13 +130,21 @@ Parser.define('ClassStatStam',         'Declaration(classStatement) | StatementS
 Parser.define('StatementPatt',         '(is(CommDecl) | is?(IdentifierTokn) LabelStam | StatementStam){lf} is?(EndTokn){err:215}');
 Parser.define('ClassStatementPatt',    '(is(CommDecl) | is?(IdentifierTokn) LabelStam | Declaration(classStatement) | StatementStam){lf} is?(EndTokn){err:215}');
 
-
+Parser.RegExpDecl = function(src, param):
+	[a, b] = src.indexPair('/', '/', src.index);
+	while src[b+1] && /^[gimy]+/.test(src[b+1].text):
+		b += 1;
+	src.current.text = src.join(a, b);
+	src.current.types = ['RegExpDecl', 'ConstTokn'];
+	src.delete(a+1, b);
+	return src.current;
 
 Parser.DataPatt = function(src, param):
 	switch src.text:
 		case '(': return Parser.CompelExpr(src, param);
 		case '[': return Parser.ArrayExpr(src, param);
 		case '{': return Parser.JsonExpr(src, param);
+		case '/': return Parser.RegExpDecl(src, param);
 	switch src.current.is('Unary', 'IdentifierTokn', 'ConstTokn'):
 		case 'Unary': return Parser.UnaryExpr(src, param);
 		case 'IdentifierTokn': return new Node('IdentifierExpr', src.current);
@@ -246,7 +252,7 @@ Parser.Expression = function(src, opt):
 		case 'super': return Parser.SuperExpr(src, opt);
 		case 'this': return Parser.ThisExpr(src, opt);
 		case '@': return Parser.AtExpr(src, opt);
-	if src.preProcessor && ( exp = src.preProcessor.matchNode('expression', src, opt) ):
+	if src.context && ( exp = src.context.processor.matchNode('expression', src, opt) ):
 		return exp;
 	return false;
 
@@ -321,7 +327,7 @@ Parser.ControlClauses = function(src, opt):
 	return false;
 
 Parser.Statement = function(src, opt):
-	if src.preProcessor && ( exp = src.preProcessor.matchNode('statement', src, opt) ):
+	if src.context && ( exp = src.context.processor.matchNode('statement', src, opt) ):
 		return exp;
 	return false;
 
@@ -333,8 +339,7 @@ Parser.LineBlockStam = function(src, opt):
 		not_emtpy;
 
 	var end = opt.end ? opt.end.split(',') : [];
-		end.push('\n', ';', '}', ']', ']');
-
+		end.push('\n', ';', '}', ']', ']', 'else', 'while', 'catch', 'finally', 'case', 'default');
 	while src.index < src.length:
 		if src.current.text == ';':
 			not_emtpy = true;
@@ -368,7 +373,6 @@ Parser.IndentBlockStam = function(src, opt):
 		line_indent, a, b, c, not_emtpy;
 
 	node.indent = the_indent;
-
 	if src[b_index].text == ':':
 		b_index = src.nextIndex(b_index);
 		if src[b_index].type != 'LF':
@@ -465,8 +469,11 @@ Parser.BlockStam = function(src, opt):
 	return false;
 
 Parser.StamBlockStam = function(src, opt):
+
 	var stamfn = src.isClassBlock || opt.classStatement ? 'ClassStatStam' : 'StatementStam';
 	if sta = Parser[stamfn](src, opt):
+		if src.peek.text == ';':
+			src.next(1);
 		return new Node('StamBlockStam', sta);
 
 Parser.Block = function(src, opt):

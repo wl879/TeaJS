@@ -1,0 +1,144 @@
+
+function Beautify(writer):
+	var shell_comm = [];
+	var list = Beautify.start(writer, null, shell_comm);
+	if shell_comm.length:
+		list.unshift(shell_comm[0], '\n');
+	return list;
+
+Beautify.start = function(writer, not_concat, shell_comm):
+	var w_list = [];
+	for i, item -> writer:
+		switch item.type:
+			case 'CommDecl':
+				if item[0]:
+					item = item[0];
+				if item.is('ShellComm'):
+					if shell_comm:
+						shell_comm.push(item);
+					if writer[i+1] == '\n':
+						i++;
+					continue;
+			case 'VarDecl', 'LetDecl':
+				item = @.varList(item);
+				i = @.concatVarList( writer, i, item);
+				item = @.wrapList(item, writer..listToText(item));
+
+			case 'JsonExpr', 'ArrayExpr':
+				item = @.start(item, true, shell_comm);
+				item = @.wrapList(item, writer..listToText(item));
+
+			case 'NodeStam':
+				item = @.start(item, null, shell_comm);
+				if item.length && writer.type != 'Root':
+					@.indentList(item);
+					@.trimList(item).unshift('\n\t');
+					item.push('\n');
+
+			default:
+				if item.iswriter:
+					item = @.start(item, null, shell_comm);
+				else if item == ',':
+					item = ', ';
+		w_list.push( item );
+
+	if not_concat:
+		return w_list;
+	return @.concatList(w_list);
+
+Beautify.indentList = function(list):
+	for i, item -> list:
+		if item.istoken:
+			if item.type != 'StringTokn':
+				item.text = item.text.replace(/\n/g, '\n\t');
+		else if item as 'string':
+			list[i] = item.replace(/\n/g, '\n\t');
+	return list;
+
+Beautify.wrapList = function(list, text):
+	if text.length > 80 || /\n/.test(text):
+		for i, item -> list:
+			if /^\s*,\s*$/.test(item):
+				list[i] = ',\n';
+		list = @.concatList( list );
+		@.indentList(list);
+	return list;
+
+Beautify.varList = function(writer):
+	var list = [];
+	for i, item -> writer:
+		if item.type == 'ArgumentsDecl':
+			list.push.apply(list, @.start(item, true));
+		else if item.iswriter:
+			list.push( @.start(item) );
+		else if item == ',':
+			list.push(', ');
+		else:
+			list.push(item);
+	return list;
+
+Beautify.concatVarList = function(writer, index, list):
+	var b = index;
+	while true:
+		_b = b+1;
+		while writer[_b] as 'string' && /^[;|\n|\s]+$/.test(writer[_b]):
+			_b += 1;
+		if writer[_b] && /LetDecl|VarDecl/.test(writer[_b].type):
+			list.push(', ');
+			list.push.apply(list, @.trimList( @.varList(writer[_b]), /^(var\ |var\b|\ )/, /(;|\n)$/ ));
+			b = _b;
+			continue;
+		break;
+	return b;
+
+Beautify.concatList = function(list):
+	var res_list = [];
+	for item => list:
+		if isArray(item):
+			res_list.push.apply(res_list, item);
+		else:
+			res_list.push(item);
+	return res_list;
+
+Beautify.trimList = function(list, left = /^\s+/, right = /\s+$/):
+	if left:
+		@.trimLeft(list, left);
+	if right:
+		@.trimRight(list, right);
+	return list;
+
+Beautify.trimLeft = function(list, re = /^\s+/):
+	while list[0]:
+		if list[0].istoken:
+			if not list[0].text = list[0].text.replace(re, ''):
+				list.shift();
+				continue;
+		else if list[0] as 'string'
+			if not list[0] = list[0].replace(re, ''):
+				list.shift();
+				continue;
+		else if 'length' in list:
+			if @.trimLeft(list[0], re).length == 0:
+				list.shift();
+				continue;
+		break;
+	return list;
+
+Beautify.trimRight = function(list, re = /\s+$/):
+	while list[last = list.length-1]:
+		if list[last].istoken:
+			if not list[last].text = list[last].text.replace(re, ''):
+				list.pop();
+				continue;
+		else if list[last] as 'string':
+			if not list[last] = list[last].replace(re, ''):
+				list.pop();
+				continue;
+		else if 'length' in list:
+			if @.trimRight(list[last], re).length == 0:
+				list.pop();
+				continue;
+		break;
+	return list;
+
+module.exports = Beautify;

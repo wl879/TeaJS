@@ -1,35 +1,39 @@
 
-var Syntax = module.exports;
 var Node = require "./node.js";
 var Scope = require "./scope.js";
 var Parser = require "./parser.js";
 var SyntaxReg = require "./regexp.js";
-		
-Syntax.parse = function(src, preprocessor):
+
+export token = require "./token.js";
+
+export location = require "./location.js";
+
+export source = require "./source.js";
+
+export parse(src, ctx):
 	var ast = new Node('Root');
-	ast.preProcessor = null;
+	ast.context = null;
+	ast.source = src;
 	ast.fileName = src.fileName;
-	ast.filePath = Path.dirname(ast.fileName);
+	ast.filePath = Path.dirname( ast.fileName );
 	src.index = 0;
 	src.refresh();
-	var old_preprocessor = src.preProcessor;
-	if preprocessor:
-		src.preProcessor = preprocessor;
+	var old_por = src.context;
+	if ctx:
+		src.context = ctx;
 	ast.add( Parser.Node( src ) );
 	Scope.parse( ast );
-	ast.preProcessor = src.preProcessor;
-	src.preProcessor = old_preprocessor;
+	ast.context = src.context;
+	src.context = old_por;
 	return ast;
 
-Syntax.regexp    = SyntaxReg.compile;
+export regexp    = SyntaxReg.compile;
 
-Syntax.match     = function(stx_re, src, opt):
+export match     = function(stx_re, src, opt):
 	if stx_re as 'string':
 		if stx_re in Parser:
 			return Parser[stx_re](src, opt);
 		stx_re = Syntax.regexp(stx_re);
 	return SyntaxReg.match(stx_re, src)
 
-Syntax.matchNode = SyntaxReg.matchNode;
-
-Syntax.isNode    = Node.isNode;
+export matchNode = SyntaxReg.matchNode;

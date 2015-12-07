@@ -1,0 +1,116 @@
+var NodeBase = require "./base.js";
+
+class Token extends NodeBase:
+	
+	tokenmap         = require("./map.js").token;
+	token_literals   = tokenmap.literals;
+	token_symbol     = tokenmap.types.SymbolTokn;
+	token_complex_re = tokenmap.complexre;
+
+	constructor(text, types, indent, location):
+
+		if @.constructor != Token:
+			if arguments.length == 1 || types as 'number':
+				return Token.parse(text, types);
+			return new Token(text, types, indent, location);
+
+		if !types:
+			if text == '\4':
+				types = ['EOT', 'BlockBreakTokn', 'BlockBreak', 'EndTokn'];
+			else if text in token_literals:
+				types = token_literals[text];
+			else if text:
+				types = ['Character'];
+			else:
+				types = ['EMPTY'];
+
+		@.text     = text;
+		@.types    = Hash.slice(types);
+		@.indent   = indent if indent != null;
+		@.location = location || null;
+		@.istoken  = true;
+	
+	get types:
+		return @._types;
+
+	set types(types):
+		@.type = types[0];
+		@._types = types;
+		return @._types;
+
+	set indent(num):
+		@._indent       = num ? -1;
+		var i = @.types.indexOf('LineHead');
+		if @._indent >= 0:
+			@.types.push('LineHead') <- i == -1;
+		else if i >= 0:
+			@.types.splice(i, 1);
+
+	get indent:
+		return @._indent;
+
+	get fileName:
+		return @.location && @.location.fileName;
+
+	get start:
+		return @.location && @.location.start;
+
+	get end:
+		return @.location && @.location.end;
+
+	clone(text, types):
+		var token = new Token(text || @.text, types || @.types, @.indent, @.location);
+		token.parent = @.parent;
+		return token;
+
+	static types = tokenmap.types;
+
+	static define(types, literals):
+		return tokenmap.define(types, literals);
+
+	static parse(text, index = 0):
+
+		if not text = text.substr(index):
+			return;
+
+		if token_complex_re && (match = text.match(token_complex_re)):
+			if match[0] in token_literals:
+				return new Token(match[0], token_literals[match[0]]);
+
+		if match = text.match(/^\n/):
+			return new Token(match[0], token_literals[match[0]]);
+
+		if match = text.match(/^[\r\t\f\ ]+/):
+			return new Token(match[0], ['BlankTokn']);
+
+		if match = text.match(/^(0[xX][0-9a-fA-F]+|(?:\.\d+|\d+(?:\.\d+)?)(?:e\-?\d+)?)/):
+			return new Token(match[0], ['NumTokn', 'ConstTokn']);
+
+		if match = text.match(/^([\$a-zA-Z_][\w\$]*)/):
+			if match[0] in token_literals:
+				return new Token(match[0], token_literals[match[0]]);
+			return new Token(match[0], ['IdentifierTokn']);
+
+		if not match = text.match(/^[^\w\_\s]+/):
+			return {error:'tokenize parse error! unexpected token like as "'+text.slice(0, 5)+'"'};
+
+		code = match[0];
+		while code && token_symbol.indexOf(code) == -1:
+			code = code.slice(0, -1);
+
+		if !code:
+			return new Token(match[0]);
+
+		if code in token_literals:
+			return new Token(code, token_literals[code]);
+
+		return {error:'tokenize parse error! undefined token "'+code+'"'};
+
+	static tokenize(text, index = 0, opt):
+		list = [];
+		while tk = @.parse(text, index):
+			list.push( opt == 'code list' ? tk.text : tk);
+			index += tk.text.length;
+		return list;
+
+module.exports = Token;

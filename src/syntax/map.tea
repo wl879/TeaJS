@@ -1,0 +1,153 @@
+var token_map =
+{
+		'LF'                           : '\n',
+		'BlankTokn'                    : '\r  \t  \f  \ ',
+		'CommDecl'                     : '//  /*  */  #!',
+		'SymbolTokn Instruction'       : '#',
+		'ConstTokn Boolean'            : 'true  false',
+		'ConstTokn Null'               : 'null  undefined  Infinity',
+		'Keyword'                      : 'this  instanceof  in  extends  null  undefined  Infinity  true  false  '+
+								         'if  while  with  catch  for  switch  case  default  else  try  do  finally  '+
+								         'new  typeof  delete  void  return  break  continue  throw  var  function  '+
+								         'let  enum  const  import  export  debugger  super  yield  class',
+      
+		'IdentifierTokn'               : 'eval  arguments  extends  import  export  get  set  static  as  of  and  or  not  is  require  let  enum  const  debugger  super  yield  class',
+		'Restricted'                   : 'instanceof  in  Infinity  '+
+								         'if  while  with  catch  for  switch  case  default  else  try  do  finally  '+
+								         'new  typeof  delete  void  return  break  continue  throw',
+      
+		'SymbolTokn'                   : ';  ,  .  :  ?  \\  [  ]  {  }  (  )  //  /*  */  #!  '+
+						   		         '=  +=  -=  *=  /=  %=  &=  >>=  <<=  >>>=  '+
+								         '>  <  >=  <=  !=  !==  ==  ===  ++  --  '+
+								         '!  ~  +  -  *  /  %  &  |  ^  >>  <<  >>>  &&  ||  '+
+								         '**  ::  |=  ?=  @  ->  <-  >>  <<  >>>  <<<  =>  <=  ..  ...',
+		'SymbolTokn Quote'             : '\'  "  """  \'\'\'  """"  \'\'\'\'  `',
+       
+		'Controler'                    : 'if  while  with  catch  for  switch  case  default  else  try  do  finally',
+		'Declaration'                  : 'function  require  class  package  static  get  set  import  export',
+		'Clauses'                      : 'let  enum  const  var  return  break  continue  throw  debugger',
+		'Expression IdentifierTokn'    : 'super  this  @',
+
+		'ClassRestricted'              : 'static  get  set  extends',
+		'Unary'                        : 'new  typeof  yield  delete  void  not  !  ~  -  +  ++  --',
+		'Prefix Postfix'               : '++  --',
+		'Binary Compute'               : '+  -  *  /  %  &  |  ^  >>  <<  >>>  **  \\',
+		'Binary Compare'               : 'instanceof  in  of  as  extends  is  not is  >  <  >=  <=  !=  !==  ==  ===',
+		'Binary Logic'                 : 'and  or  &&  ||',
+		'Binary Assign'                : '=  +=  -=  *=  /=  %=  &=  |=  >>=  <<=  >>>=  ?=  |=',
+		'Ternary'                      : '?',
+		'Member'                       : '.  ::  ..  [',
+		'Comma'                        : ',',
+		'Open'                         : '{  (  [',
+		'Close'                        : '}  ]  )',
+		'BlockBreakTokn BlockBreak'    : ';  \n',
+		'BlockStart'                   : ':  {',
+		'Contextual'                   : 'Binary  Member  Comma  in  as  of  ->  <-  =>  <=  ...',
+
+		'EndTokn'                      : 'BlockBreakTokn  Close  /*  //',
+		'IGLF'                         : 'Unary  Binary  Ternary  Member  Assign  Comma  Open  Contextual'
+};
+var node_map = 
+{
+		'Token'            : 'ConstTokn IdentifierTokn NumTokn StringTokn RegexpTokn SymbolTokn TmlTokn BlockBreakTokn',
+		'DataPatt'        : 'Token ArrayExpr JsonExpr UnaryExpr IdentifierExpr PrefixExpr PostfixExpr NotExpr',
+		'AccessorExpr'    : 'DataPatt CompelExpr',
+		'ValueExpr'       : 'AccessorExpr CallExpr',
+		// Expr
+		'LogicExpr'       : 'CompareExpr ComputeExpr ValueExpr',
+		'BinaryExpr'      : 'LogicExpr',
+		'FunctionExpr'    : 'FunctionDecl ClassExpr GetterDecl SetterDecl MethodDecl PackageExpr LambdaExpr',
+		'ExprStam'        : 'SuperExpr ThisExpr AtExpr TernaryExpr Ternary2.5Expr BinaryExpr FunctionExpr RequireStam CommDecl ImportExpr ExtendsExpr',
+		// Stam
+		'ClausesStam'     : 'LetDecl ConstDecl VarDecl ReturnStam BreakStam ContinueStam ThrowStam DebuggerStam ExportDecl',
+		'ControlStam'     : 'IfPatt ElseIfPatt ElsePatt WhileStam DoWhileStam WithStam ForStam SwitchStam CaseStam DefaultStam TryPatt CatchPatt FinallyPatt',
+		'ConditionPatt'   : 'ForPConditionPatt ForPConditionPatt ForPConditionPatt',
+		'BlockStam'       : 'LineBlockStam IndentBlockStam StamBlockStam',
+		'StatementStam'   : 'ControlStam ClausesStam AssignmentExpr CommaExpr SeleteStam BlockStam ExprStam',
+		'NodeStam'        : 'BlockStam',
+		// mark
+		'ScopeNode'       : 'Root FunctionExpr',
+		'IgSemicolon'     : 'LabelStam IfStam ElseIfStam ElseStam WhileStam WithStam ForStam WitchStam TryStam CatchStam FinallyStam FunctionExpr GetterDecl SetterDecl ClassExpr MethodDecl ExportDecl StaticDecl PackageExpr CommDecl BlockBreakTokn'
+};
+
+export token = {
+	types     : {},
+	
+	literals  : {},
+	
+	complexs  : [],
+	
+	complexre : null,
+
+	define : function(types, literals):
+		if arguments.length == 1:
+			if isJson(types):
+				for i in types:
+					@.define(i, types[i]);
+			return;
+		types    = isArray(types) ? types : types.split(' ');
+		literals = isArray(literals) ? literals : literals.split('  ');
+
+		for literal => literals:
+
+			if @.types.hasOwnProperty(literal) && /^[A-Z]\w+$/.test(literal):
+				@.define(types, @.types[literal]);
+				continue;
+
+			if /\w\W|\W\w/.test(literal):
+				literal_re = literal.replace(/(\W)/g, '\\$1');
+				if @.complexs.indexOf(literal_re) == -1:
+					@.complexs.push(literal_re);
+
+			for type => types:
+				@.types[type] |= [];
+				if @.types[type].indexOf(literal) == -1:
+					@.types[type].push(literal);
+
+			if tmp = @.literals[literal]:
+				for type => types:
+					if tmp.indexOf(type) == -1:
+						tmp.push(type) 
+			else:
+				@.literals[literal] = types.slice();
+
+		if @.complexs.length:
+			@.complexs.sort( (a, b) -> b.length - a.length );
+			@.complexre = new RegExp('^(?:'+@.complexs.join('|')+')(?!\\w)', 'g');
+}
+
+export node = {
+	map    : {},
+
+	all    : [],
+
+	test   : function(name, type):
+		if !type:
+			if @.map['Expr'].indexOf(name) != -1:
+				return 'Expr';
+			if @.map['Decl'].indexOf(name) != -1:
+				return 'Decl';
+			if @.map['Stam'].indexOf(name) != -1:
+				return 'Stam';
+			return false;
+		return name == type || @.map[type] && @.map[type].indexOf(name) != -1;
+
+	define : function(types, names):
+		if arguments.length == 1:
+			if isJson(types):
+				for i in types:
+					@.define(i, types[i]);
+			return;
+		types = isArray(types) ? types : types.split(' ');
+		names = isArray(names) ? names : names.split(' ');
+		for name => names:
+			if @.map.hasOwnProperty(name):
+				@.define(types, @.map[name]);
+			for type => types:
+				@.map[type] |= [];
+				@.map[type].push(name) if @.map[type].indexOf(name) == -1;
+				@.all.push(name) if @.all.indexOf(name) == -1;
+}
+
+token.define( token_map );
+node.define( node_map );

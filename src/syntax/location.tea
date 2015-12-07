@@ -29,8 +29,8 @@ class Location:
 		var data = source_cache[@.__source_id];
 		return data && data[@.lineNumber-1][3] || '';
 
-	fission(code, start):
-		return new Location(@.__file_id, @.__source_id, code, start);
+	fission(code, start, end):
+		return new Location(@.__file_id, @.__source_id, code, start, end);
 
 	function CountLineNumber(loc, start):
 		if data = source_cache[loc.__source_id]:

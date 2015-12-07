@@ -169,8 +169,8 @@
 > ##### 定义语法糖
 
 ```c
-    #expr name `grammar pattern` writer
-    #stat name `grammar pattern` writer
+    #expr name /grammar pattern/ writer
+    #stat name /grammar pattern/ writer
 
 ```
 

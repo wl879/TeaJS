@@ -122,7 +122,7 @@ class Scope:
 			scope.isLetScope = true;
 		return scope;
 
-	joinRequire(file):
+	addRequire(file):
 		if !Path.isFile(file):
 			Err 'join the "'+file+'" file not exist';
 		if file in @.requires:
@@ -142,6 +142,7 @@ class Scope:
 				__let_scope = (__let_scope||__scope).create(node, 'let');
 			default:
 				node.scope = __let_scope || __scope;
+
 		for i, item -> node:
 			item.scope = __let_scope || __scope;
 			if item.type == 'IdentifierTokn':
@@ -156,11 +157,14 @@ class Scope:
 		return scope;
 	
 	function checkIdentifier(parent, id, scope, let_scope):
-		var idexpr, ass_expr, argu_expr, expr;
+		var idexpr, ass_expr, argu_expr, arr_patt, expr;
 		var p = parent;
 		do:
 			if p.type == 'IdentifierExpr':
 				idexpr = p;
+				continue;
+			if p.type == 'ArrayPatt':
+				arr_patt = p;
 				continue;
 			if p.type == 'AssignmentDecl' || p.type == 'AssignmentExpr':
 				ass_expr = p;
@@ -168,7 +172,7 @@ class Scope:
 			if p.type == 'ArgumentsDecl' || p.type == 'ArgumentsExpr':
 				argu_expr = p;
 				continue;
-			if  p.type == 'CommaExpr' ||  p.type == 'CommaStam' || p.type == 'NodeStam' || p.type == 'ArrayPatt':
+			if  p.type == 'CommaExpr' ||  p.type == 'CommaStam' || p.type == 'NodeStam':
 				continue;
 			expr = p;
 			break;
@@ -182,9 +186,32 @@ class Scope:
 					checkArguments(expr.type, ass_expr, id, scope, let_scope);
 			else if expr.is('FunctionDecl', 'GetterDecl', 'SetterDecl', 'MethodDecl', 'ClassExpr', 'ClassExpr'):
 				checkFunctionName(parent, id, scope);
+			else if ass_expr && arr_patt:
+				checkIdentifierExpr(expr, ass_expr, arr_patt, id, scope, let_scope);
+
+			else if /AtExpr/.test(parent.parent.type) && parent.index == 1:
+				checkAt(parent.parent, id);
+			
 		else:
 			checkIdentifierExpr(expr, ass_expr, idexpr, id, scope, let_scope)
 		return;
+
+	function checkAt(parent, id):
+		if parent.length == 2 && parent.parent.type == 'AssignmentExpr':
+			scope =  parent.offsetScope;
+			if scope.type == 'ClassExpr':
+				scope.set( 'statics', id.text );
+				scope.set( 'static', id.text );
+				return;
+			top_scope = scope.parent;
+			if top_scope.type == 'ClassExpr':
+				if top_scope.protos.indexOf(scope.name) != -1:
+					top_scope.set('protos', id.text);
+					top_scope.set('proto', id.text, true);
+				else if top_scope.statics.indexOf(scope.name) != -1:
+					top_scope.set( 'statics', id.text );
+					top_scope.set( 'static', id.text );
+				
 
 	function checkArguments(expr_type, ass_expr, id, scope, let_scope):
 		switch expr_type:
@@ -209,7 +236,7 @@ class Scope:
 
 			case 'ProtoDecl', 'InitDecl':
 				scope.set('protos', id.text);
-				scope.set('proto', id.text);
+				scope.set('proto', id.text, true);
 
 			case 'StaticDecl':
 				scope.set('statics', id.text);

@@ -3,40 +3,39 @@ global.ff = function(re):
 	return '"'+Text(re.replace(/\n\s*/g, '').slice(1, -1), '"')+'"';
 global.ll = function(name):
 	return '"'+name+'"';
-	
-#endrun
+#end
 
 #define START(N) "N": [{
 #define COMMENT() },{
 #define END }],
 #define MARK(ST, EN)
 """"
-#script
+{{
 write '"begin": '+ff(ST)+', "end": '+ff(EN)+',';
-#end
+}}
 """"
 #define TOKEN()
 """"
-#script
+{{
 var list = [], _i = 0, type = 'captures';
 if /captures/i.test(arguments[0]):
 	type = arguments[0], _i = 1;
-for i=_i, name => arguments:
+for i=_i, name -> arguments:
 	list.push('"'+(i+1-_i)+'": {"name": '+ll(name)+'}' );
 write '"'+type+'":{'+list.join(',')+'},';
-#end
+}}
 """"
 #define MATCH(RE, N)
 """"
-#script
+{{
 write '"match": '+ff(RE)+', "name": '+ll(N)+''
-#end
+}}
 """"
 #define NAME(N)
 """"
-#script
+{{
 write '"name": '+ll(N)+','
-#end
+}}
 """"
 
 #define ID [\\$a-zA-Z_]\\w*
@@ -50,9 +49,6 @@ write '"name": '+ll(N)+','
 
 	#START patterns
 		MATCH "\'{3,}|\"{3,}|`{1,}", storage.type.template
-
-	#COMMENT patterns
-		MATCH "\$\{.*?\}", constant.character.escape.js
 
 	#COMMENT 预处理语法部分
 		#define PPR (?:(?:[^,;\\s\\\\]+(?:\\\\ )*)+)
@@ -98,12 +94,12 @@ write '"name": '+ll(N)+','
 			MATCH "(err:\d+)|\\(x\h{2}|[0-2][0-7]{,2}|3[0-6][0-7]?|37[0-7]?|[4-7][0-7]?|.)", constant.character.escape.js
 		#END
 
-	#COMMENT string
+	#COMMENT 字符串
 		NAME string.quoted.double.js
 		MARK "\"", "\""
 		#START patterns
-			TOKEN storage
-			MATCH "(err:\d+)|\\(x\h{2}|[0-2][0-7]{,2}|3[0-6][0-7]|37[0-7]?|[4-7][0-7]?|.)|\$\{.*?\}", constant.character.escape.js
+			TOKEN storage, comment
+			MATCH "(err:\d+)|\{\{(.*?)\}\}|\\(x\h{2}|[0-2][0-7]{,2}|3[0-6][0-7]|37[0-7]?|[4-7][0-7]?|.)", constant.character.escape.js
 		#END
 
 	#COMMENT 数字
@@ -149,8 +145,8 @@ write '"name": '+ll(N)+','
 		#define SK as|in|of|not\\ is|not|is|and|or|typeof|new|instanceof|extends
 		TOKEN storage, storage.type, constant.character
 		MATCH "#{H}\b(?:(#{SK})|
-						(exports)|
-						(global|console|eval))\b"
+						(exports|console)|
+						(global|eval))\b"
 
 	#COMMENT 常用命名方法
 		TOKEN constant.character, storage.type

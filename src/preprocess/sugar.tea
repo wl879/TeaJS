@@ -1,0 +1,26 @@
+class Sugar:
+
+	var Syntax     = require "../syntax";
+	
+	constructor(type, name, pattern, writer, parser):
+		@.type  = type;
+		@.name  = name;
+		@.stxre = Syntax.regexp(pattern);
+		@.parser = parser;
+		@.writer = writer;
+
+	parse (src, opt):
+		var node = Syntax.matchNode(@.name, @.stxre, src, 'ret node');
+		if node && @.parser:
+			return @.parser.call(@, node, src, opt);
+		return node;
+
+	read (reader, node):
+		var write = reader.new(@.name);
+		if @.writer as 'string':
+			write.read(@.writer, node);
+		else:
+			write = @.writer(node, write) || write;
+		return write;
+
+module.exports = Sugar;

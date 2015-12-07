@@ -132,83 +132,12 @@ package($=jQurey):
   require "a_file", "b_file";
 
 // #: test scope
-var a = {}, b, [c, d] = [f, g];
-function h(i=0, j, k=9):
-	@.aa = {}, @.bb = {};
-	for var l = m => n:
-		n[l];
-	for o = 9, p => q:
-		q[o];
-		if true:
-			o;
-			zzz;
-	o = 0;
-	for w => x:
-		xxx;
-// #: test scope
-var Prep   = require "./preprocess";
-var Tokens = require "./tokens";
-var Syntax = require "./syntax";
-var ReWriter = require "./rewriter";
-
-class Context:
-
-	var def_pre_processor;
-
-
-
-	get source:
-		if !@._source:
-			if @.argv.source:
-				@._source = @.argv.source;
-			else if @.argv.text || @.argv.file:
-				@._source = Prep.source(@.argv.text, @.argv.file, @.preProcessor);
-		return @._source;
-
-	get rewriter:
-		if !@._rewriter:
-			@._rewriter = ReWriter.read(@.ast, @.preProcessor);
-		return @._rewriter;
-
-	get text:
-		return @.writer.text;
-
-	get sourcemap:
-		var map = ReWriter.sourceMap();
-		map.file = @.argv.out || '';
-		map.sourceRoot = @.fileName;
-		map.parse( @.rewriter, @.source );
-		return map;
-
-	get requires:
-		if !@._rewriter:
-			@._rewriter = ReWriter.read(@.ast, @.preProcessor);
-		return @.scope.requires;
-
-	echo ( output, outmap ):
-		sb;
-		output |= @.argv && @.argv.out;
-		outmap && sourcemap = @.sourcemap;
-		sb = 1;
-		if @.requires.length:
-			var shell_comm = '';
-			var requires = loadRequiresList( @.requires, {} );
-			text = Prep.template.joinRequire( requires, @.rewriter );
-			if sourcemap:
-				for item => requires:
-					sourcemap.parse( item[2], item[1].source );
-			text = text.replace(/\n\s*(\#\!.*\n)/g, function($0, $1){
-				shell_comm = $1;
-				return '\n';
-			});
-			text = shell_comm+text;
-		else:
-			text = @.rewriter.toText();
-		
-		if sourcemap:
-			if not outmap as 'string':
-				outmap = output.replace(/\.\w+$/, '.map');
-			Text.writeFile( sourcemap.text, outmap );
-			text += '\n//# sourceMappingURL='+Path.relative(Path.dirname(output), outmap);
-
-		Text.writeFile( text, output );
+class ABBB:
+	var a =10;
+	ccc = 100;
+	require "abc";
+	static a;
+	constructor():
+		@.a = 1;
+		@.b = 2;
+		@.c.d;

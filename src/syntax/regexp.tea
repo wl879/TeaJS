@@ -1,4 +1,5 @@
-var Tokens = require "../tokens";
+
+var Token = require "./token.js";
 var Node   = require "./node.js";
 var Parser = require "./parser.js";
 
@@ -128,7 +129,7 @@ class SyntaxReg:
 			ptn.type = 'ALL';
 			ptn.key = text;
 
-		else if text in Tokens.types:
+		else if text in Token.types:
 			ptn.type = 'Tokn';
 			ptn.key = text;
 
@@ -151,7 +152,7 @@ class SyntaxReg:
 
 		else:
 			text = compileVal(text);
-			var token_list = Tokens.tokenize(text, 'code list');
+			var token_list = Token.tokenize(text, 0, 'code list');
 			if token_list.length == 1:
 				ptn.type = 'Code';
 				ptn.key = text;

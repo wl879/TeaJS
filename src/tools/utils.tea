@@ -145,7 +145,8 @@ global.Text = function(something, qq):
 		cache = null; // Enable garbage collection
 	else:
 		var text = Util.format([something]).replace(/^\s*\[\s*(\"|\')?|(\"|\')?\s*\]\s*$/g, '');
-	return qq == '"' ? text.replace(/"/g, '\\"').replace(/\\'/g, "'") : text;
+	
+	return qq == '"' ? text.replace(/"/g, '\\\"').replace(/([^\\])\\'/g, '$1\'') : text;
 
 Text.isESC = function(text, pos):
 	pos <= 0 && return false;
@@ -176,7 +177,7 @@ Text.split = function(text, separator, trim, del_esc):
 				continue;
 			_pair_re.lastIndex = a;
 			if m = _pair_re.exec( text ):
-				if (p = @.indexPair(text, a+m.index, m[0], _pair_token[m[0]], true)) && b > p[0] && b < p[1]:
+				if (p = @.indexPair(text, m.index, m[0], _pair_token[m[0]], true)) && b > p[0]:
 					a = p[1]+1;
 					continue;
 			a = b;
@@ -194,6 +195,8 @@ Text.split = function(text, separator, trim, del_esc):
 			v = v.replace(/\\(.)/g, '$1');
 		v && ret.push(v);
 	return ret;
+
+
 
 Text.indexPair = function(text, pos, s1, s2, check_ESC):
 	if typeof s2 == 'number':
@@ -561,4 +564,3 @@ Path.countPath = function(file, path, out):
 	if data.out:
 		data.out = data.out.replace(/\.tea\b/, '.js');
 	return data;
-

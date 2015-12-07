@@ -27,12 +27,6 @@
 			<string>storage.type.template</string>
 		</dict>
 		<dict>
-			<key>match</key>
-			<string>\$\{.*?\}</string>
-			<key>name</key>
-			<string>constant.character.escape.js</string>
-		</dict>
-		<dict>
 			<key>begin</key>
 			<string>#(include)</string>
 			<key>captures</key>
@@ -219,9 +213,14 @@
 							<key>name</key>
 							<string>storage</string>
 						</dict>
+						<key>2</key>
+						<dict>
+							<key>name</key>
+							<string>comment</string>
+						</dict>
 					</dict>
 					<key>match</key>
-					<string>(err:\d+)|\\(x\h{2}|[0-2][0-7]{,2}|3[0-6][0-7]|37[0-7]?|[4-7][0-7]?|.)|\$\{.*?\}</string>
+					<string>(err:\d+)|\{\{(.*?)\}\}|\\(x\h{2}|[0-2][0-7]{,2}|3[0-6][0-7]|37[0-7]?|[4-7][0-7]?|.)</string>
 					<key>name</key>
 					<string>constant.character.escape.js</string>
 				</dict>
@@ -421,7 +420,7 @@
 				</dict>
 			</dict>
 			<key>match</key>
-			<string>(?:(?:[,;]\s*|^\s*)?)\b(?:(as|in|of|not\ is|not|is|and|or|typeof|new|instanceof|extends)|(exports)|(global|console|eval))\b</string>
+			<string>(?:(?:[,;]\s*|^\s*)?)\b(?:(as|in|of|not\ is|not|is|and|or|typeof|new|instanceof|extends)|(exports|console)|(global|eval))\b</string>
 			<key>name</key>
 			<string>undefined</string>
 		</dict>

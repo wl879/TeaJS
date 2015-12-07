@@ -1,0 +1,58 @@
+class Macro:
+	
+	var Template      = require "./template.js";
+	
+	constructor(name, params, body, parent):
+		@.name   = name;
+		@.type   = params ? 'macrofun' : 'macro';
+		if params:
+			if params as 'string':
+				@.params = Text.split(params, ',', true);
+			else:
+				@.params = params;
+		else:
+			 @.params = [];
+		@.body   = body;
+		@.parent = parent;
+		if Template.test(body):
+			try:
+				@.script = Template.func( body, params, true);
+			catch e:
+				@.error = e;
+
+	getValue(params, ret_src):
+		if params as 'string':
+			params = Text.split( params.replace(/^\((.*)\)$/g, '$1') , ',', 'trim');
+		if @.script:
+			value = @.script.apply( @.parent, params || [] );
+		else:
+			value = @.body;
+		value = replaceParam(value, @.params, params||[]);
+		value = Text.trimIndent(value);
+		val_src = @.parent.parse(value);
+		if ret_src:
+			return val_src;
+		return val_src.join();
+
+	function replaceParam(value, keys, params):
+		var keys_join = keys.join('|');
+		var re = new RegExp('(#*?)('+(keys_join ? '\\b(?:'+keys_join+')\\b|' : '')+'#(\\d+)|\\bARGR\\.\\.\\.)(##)?', 'g');
+		var m, hash, unhash, key, num, arg, val, insert = [], id;
+
+		while m = re.exec(value):
+			hash = m[1], key = m[2], num = m[3], unhash = m[4];
+			num = num || keys.indexOf(key);
+			if key == 'ARGR...':
+				val = params.slice(keys.length).join(', ');
+			else if params[num]:
+				val = params[num];
+
+			id = '$$$'+ID()+'$$$';
+			insert.push([id, (val ? hash%2 ? '"'+val+'"' : val : '')]);
+			value = value.slice(0, m.index)+id+value.substr(re.lastIndex);
+			re.lastIndex = m.index+id.length;
+		for i -> insert:
+			value = value.replace(insert[i][0], insert[i][1]);
+		return value;
+
+module.exports = Macro;

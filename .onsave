@@ -6,22 +6,23 @@ testp: $ROOT/test
 plugin: $ROOT/plugin
 tml: TeaJS.tmLanguage
 teabin: /usr/local/bin/node $ROOT/bin/tea.js
+tealib: /usr/local/bin/node $ROOT/lib/index.js
 
 [cmd]
 # plugin
-cmd: ${betaVer} -f $FILE -o ${plugin}/${tml}.json -v && plutil -convert xml1 ${plugin}/${tml}.json -o ${plugin}/${tml} && cat ${plugin}/${tml} > ${plugin}/ln.${tml}
+cmd: ${tealib} -f $FILE -o ${plugin}/${tml}.json --debug log && plutil -convert xml1 ${plugin}/${tml}.json -o ${plugin}/${tml} && cat ${plugin}/${tml} > ${plugin}/ln.${tml}
 watch: plugin\/.*\.tea
 
 [cmd]
 cmd: ${build} lib $FILE
-watch: src\/.*[^(?build)]+\.(js|tea)
+watch: src\/.*(?!build|define)\.(js|tea)
 
 [cmd]
 cmd: ${teabin} -f $FILE -o $ROOT -v
 watch: build\.tea
 
 [cmd]
-cmd: ${teabin} -f $FILE -o $FILEDIR
+cmd: ${tealib} -f $FILE -o $FILEDIR
 watch: test\/.*\.tea
 
 [cmd]
@@ -38,4 +39,8 @@ watch: src\/(syntax)\/.*\.tea
 
 [cmd]
 cmd: ${build} test writer
-watch: src\/(rewriter)\/.*\.tea
+watch: src\/(rewriter)\/(?!sourcemap).*\.tea
+
+[cmd]
+cmd: ${tealib} -f $ROOT/test/test_map.tea -o $ROOT/test/test_map.js -j -v -m
+watch: src\/rewriter\/sourcemap\.tea|test\/test_map\.tea

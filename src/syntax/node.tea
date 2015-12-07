@@ -1,68 +1,7 @@
-var Scope = require "./scope.js";
 
-class NodeBase:
-	constructor():
-
-	get root:
-		var root = @;
-		while root.parent:
-			root = root.parent;
-		return root;
-
-	get offsetParent:
-		var parent = @.parent;
-		while parent && (['ArgumentsDecl', 'NodeStam', 'CommaExpr'].indexOf(parent.type) != -1 ):
-			parent = parent.parent;
-		return parent;
-
-	get scopeParent:
-		if @.type == 'Root':
-			return @;
-		var parent = @.parent;
-		while parent && !parent.is('ScopeNode'):
-			parent = parent.parent;
-		return parent;
-
-	get parent:
-		return @._parent;
-
-	set parent(parent):
-		@._scope = null;
-		return @._parent = parent;
-
-	get nextSibling:
-		var index = @.index;
-		if index >= 0:
-			return @.parent[ index+1 ];
-			
-	get prevSibling:
-		var index = @.index;
-		if index - 1 >= 0:
-			return @.parent[ index - 1 ];
-
-	get index:
-		return !@.parent ? -1 : Array.prototype.indexOf.call(@.parent, @);
-
-	get scope:
-		if !@._scope:
-			if @.parent:
-				@._scope = @.parent.scope;
-			else:
-				@._scope = new Scope(@);
-		return @._scope;
-
-	set scope(scope):
-		return @._scope = scope;
-
-	queryParent( type ):
-		var p = @.parent;
-		while p && p.type != type:
-			p = p.parent;
-		return p;
-
+var NodeBase = require "./base.js";
 
 class Node extends NodeBase:
-	var NodeMap = { all: [] };
 
 	constructor(type):
 		@.type   = type;
@@ -73,19 +12,12 @@ class Node extends NodeBase:
 		if arguments.length > 1:
 			@.add.apply( @, Array.prototype.slice.call(arguments, 1) );
 
-	is ():
-		var list = arguments.length > 1 ? Hash.slice(arguments) : arguments[0].split(' ');
-		if list.indexOf( @.type ) != -1:
-			return @.type;
-		for i -> list:
-			if Node.isNode( @.type, list[i] ):
-				return list[i];
-		return false;
-
-	eq ():
-		if @.length == 1 && @[0].istoken:
-			return @[0].eq.apply(@[0], arguments);
-		return false;
+	get text():
+		tokens = @.tokens;
+		texts = [];
+		for tk => tokens:
+			texts.push(tk.text);
+		return texts.join('');
 
 	add ():
 		for i, node -> arguments:
@@ -120,58 +52,4 @@ class Node extends NodeBase:
 		node.parent = @.parent;
 		return node;
 
-
-	static isNode(name, type):
-		if !type:
-			if NodeMap['Expr'].indexOf(name) != -1:
-				return 'Expr';
-			if NodeMap['Decl'].indexOf(name) != -1:
-				return 'Decl';
-			if NodeMap['Stam'].indexOf(name) != -1:
-				return 'Stam';
-			return false;
-		return name == type || NodeMap[type] && NodeMap[type].indexOf(name) != -1;
-
-	static define(types, names):
-		if arguments.length == 1:
-			if isJson(types):
-				for i in types:
-					Node.define(i, types[i]);
-			return;
-		types = isArray(types) ? types : types.split(' ');
-		names = isArray(names) ? names : names.split(' ');
-
-		for name => names:
-
-			if NodeMap.hasOwnProperty(name):
-				Node.define(types, NodeMap[name]);
-				// NodeMap[name].top = (NodeMap[name].top||[]).concat(types);
-
-			for type => types:
-				NodeMap[type] |= [];
-				NodeMap[type].push(name) if NodeMap[type].indexOf(name) == -1;
-				NodeMap['all'].push(name) if NodeMap['all'].indexOf(name) == -1;
-
-	Node.define({
-		'Token'            : 'ConstTokn IdentifierTokn NumTokn StringTokn RegexpTokn SymbolTokn TmlTokn BlockBreakTokn',
-		'DataPatt'        : 'Token ArrayExpr JsonExpr UnaryExpr IdentifierExpr PrefixExpr PostfixExpr NotExpr',
-		'AccessorExpr'    : 'DataPatt CompelExpr',
-		'ValueExpr'       : 'AccessorExpr CallExpr',
-		// Expr
-		'LogicExpr'       : 'CompareExpr ComputeExpr ValueExpr',
-		'BinaryExpr'      : 'LogicExpr',
-		'FunctionExpr'    : 'FunctionDecl ClassExpr GetterDecl SetterDecl MethodDecl PackageExpr LambdaExpr',
-		'ExprStam'        : 'SuperExpr ThisExpr AtExpr TernaryExpr Ternary2.5Expr BinaryExpr FunctionExpr RequireStam CommDecl ImportExpr ExtendsExpr',
-		// Stam
-		'ClausesStam'     : 'LetDecl ConstDecl VarDecl ReturnStam BreakStam ContinueStam ThrowStam DebuggerStam ExportDecl',
-		'ControlStam'     : 'IfPatt ElseIfPatt ElsePatt WhileStam DoWhileStam WithStam ForStam SwitchStam CaseStam DefaultStam TryPatt CatchPatt FinallyPatt',
-		'ConditionPatt'   : 'ForPConditionPatt ForPConditionPatt ForPConditionPatt',
-		'BlockStam'       : 'LineBlockStam IndentBlockStam StamBlockStam',
-		'StatementStam'   : 'ControlStam ClausesStam AssignmentExpr CommaExpr SeleteStam BlockStam ExprStam',
-		'NodeStam'        : 'BlockStam',
-		// mark
-		'ScopeNode'       : 'Root FunctionExpr',
-		'IgSemicolon'     : 'LabelStam IfStam ElseIfStam ElseStam WhileStam WithStam ForStam WitchStam TryStam CatchStam FinallyStam FunctionExpr GetterDecl SetterDecl ClassExpr MethodDecl ExportDecl StaticDecl PackageExpr CommDecl BlockBreakTokn'
-	});
 module.exports = Node;
-module.exports.NodeBase = NodeBase;

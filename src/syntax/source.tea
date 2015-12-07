@@ -1,17 +1,76 @@
-var Tokens   = require "../tokens";
 
 class Source:
 
-	var Splice    = Array.prototype.splice,
-		Slice     = Array.prototype.slice,
-		IndexOf   = Array.prototype.indexOf;
+	var Splice  = Array.prototype.splice,
+		Slice   = Array.prototype.slice,
+		IndexOf = Array.prototype.indexOf;
 
-	constructor(source, file):
+	var Token = require "./token.js";
+	var Location = require "./location.js";
+	var PreProcess = require "../preprocess";
+
+	constructor(source, file, ctx):
+		if @.constructor != Source:
+			return new Source(source, file, ctx);
+
 		@.index    = 0;
 		@.length   = 0;
-		@.source   = source;
-		@.fileName = file;
-		@.preProcessor = null;
+		@.source   = null;
+		@.fileName = null;
+		@.context = ctx || PreProcess.context();
+		if arguments.length:
+			@.parse( source, file, @.context, true).clean();
+		
+
+	parse(text, file, ctx = @.context, init):
+
+		if !file && ! /^["']/.test(text) && Path.isPathText(text):
+			file = text, text = null;
+		loc           = new Location( file, text );
+		text          = loc.source;
+		file          = loc.fileName;
+		i             = 0;
+		control_cache = {};
+		if init || !@.source:
+			@.source   = text;
+			@.fileName = file;
+	
+		while i < text.length && (token = Token(text, i)):
+
+			if token.error:
+				Err token.error, [text, i, text[i], file];
+
+
+			token.location = loc.fission(token.text, i);
+			if @.length && @[-1].is('LF'):
+				token.indent = token.type == 'BlankTokn' ? token.text.replace(/\t/g, tab_size).length : 0;
+			
+			switch code = token.text:
+				case '"','"""','""""','`', "'", "'''", "''''":
+					token = ctx.processor.string(@, text, i, token);
+
+				case '/*', '#!', '//':
+					token = ctx.processor.comm(@, text, i, token);
+
+				case '/':
+					token = ctx.processor.regexp(@, text, i, token);
+
+				case '#':
+					token = ctx.processor.pound(@, text, i, token, control_cache);
+					
+				default:
+					if token.type == 'IdentifierTokn':
+						token = ctx.processor.macro(@, text, i, token);
+			
+			if token as 'number':
+				if token < 0: break;
+				i = token;
+			else:
+				i = token.location.end + 1;
+				@.add( token );
+	
+		return @;
+
 
 	get text:
 		return @.current.text;
@@ -34,13 +93,14 @@ class Source:
 	eq():
 		return @.current.eq.apply(@[@.index], arguments);
 
-	get (index):
+	get(index):
 		return @[index] || {};
 
-	add (tok):
+	add(tok):
 		if !tok || !tok.istoken:
 			Err 'Add the wrong parameters('+isClass(tok)+'), Only to can add Lexeme object';
 		@[@.length++] = tok;
+		return @;
 
 	back( opt, catch_comm ):
 		while opt > 1:
@@ -60,11 +120,9 @@ class Source:
 	prevIndex(index, ig_lf, catch_comm):
 		return GoIndex(-1, @, index, ig_lf, catch_comm);
 
-	// ----
-
-	indexPair(s1, s2, index, reverse, not_throw_error):
+	indexPair(s1, s2, index, not_throw_error):
 		index = index ? @.index;
-		var ab = IndexPair(@, s1, s2, index, reverse);
+		var ab = IndexPair(@, s1, s2, index);
 		if !ab && !not_throw_error:
 			Err 'Source index pair miss "'+s2+'" token', @[index], 'Source error'
 		return ab;
@@ -90,10 +148,20 @@ class Source:
 		@.length && TrimIndent(@, a, b);
 		return @;
 
-	// ----
-
 	indexOf():
 		return IndexOf.apply(@, arguments);
+
+	matchOf( re, index = 0):
+		var a, b;
+		if m = @.source.match(re):
+			for i = index, tk -> @:
+				if !tk: continue;
+				if tk.start == m.index && tk.fileName == @.fileName:
+					a = i;
+				if tk.end == m.index+m[0].length && tk.fileName == @.fileName
+					b = i;
+				if a != null && b != null:
+					return [a, b]
 
 	delete (a, b = a):
 		for var i=a; i <= b; i++:
@@ -101,6 +169,8 @@ class Source:
 		return @;
 
 	insert(pos, list):
+		if arguments.length == 1:
+			list = pos, pos = @.length;
 		list = list.istoken ? [list] : Slice.call(list);
 		var indent =  @.lineIndent(pos);
 		for i, t <- list:
@@ -119,12 +189,31 @@ class Source:
 		for var i = a; i < b; i++:
 			if @[i]:
 				src.add(@[i]);
-		src.add(Tokens.endToken);
+		if b != @.length:
+			src.add(@[-1]);
 		return src;
+
+	clean():
+		a = -1;
+		for i, token -> @:
+			if !token: continue;
+			if token.type == 'EOT':
+				@[i] = null;
+			if token.is('LineHead'):
+				a = i;
+			if token.is('LF'):
+				if a != -1:
+					@.delete(a, i);
+				a = -1;
+				continue;
+			if !token.is('BlankTokn'):
+				a = -1;
+		return @.refresh().add( Token('\4') );
 
 	refresh():
 		var target = @[@.index];
 		var a = 0, del_i = -1, del_len = 0;
+
 		for i, token <- @:
 			if token:
 				if del_len:
@@ -143,49 +232,11 @@ class Source:
 		if isArray(a):
 			b = a[1], a = a[0];
 		a = a < 0 ? @.length + a : (a || 0),
-		b = b < 0 ? @.length - 1 + b : Math.min(b||Infinity, @.length-2);
+		b = b < 0 ? @.length + b : Math.min(b||Infinity, @.length);
 		var texts = [];
 		for var i=a; i <= b; i++:
 			@[i] && @[i].text != '\4' -> texts.push( @[i].text );
 		return texts.join('');
-
-
-	static parse(text, file):
-		if !file && ! /^["']/.test(text) && Path.isPathText(text):
-			file = text, text = null;
-
-		var loc = Tokens.location(file, text);
-		var src = new Source(loc.source, loc.fileName);
-		var i = 0;
-		var token_re = /#token\s*(\w+(?:\s*,\s*\w+)*)\s*(.*?)(?:\n|$)/mg;
-
-		file = src.fileName;
-		text = src.source;
-		while i < text.length && token = Tokens.parse(text, i):
-			if token as 'string':
-				Err token, [text, i, text[i], file];
-
-			if token.text == '#token':
-				token_re.lastIndex = i;
-				if (m = token_re.exec(text)) && i == m.index :
-					var types = Text.split(m[1], ',', true),
-						symbols = Text.split(m[2], ',', true);
-					Tokens.define(types, symbols);
-					i += m[0].length;
-					prep_log '[Prep define token: g{"'+symbols.join('","')+'"}]', token;
-					continue;
-				else:
-					token.location = loc.fission(token.text, i);
-					Err 501, token;
-
-			token.location = loc.fission(token.text, i);
-			if token.location.columnNumber === 0:
-				token.indent = token.type == 'BlankTokn' ? token.text.replace(/\t/g, tab_size).length : 0;
-			i = token.location.end + 1;
-			src.add( token );
-
-		src.add( Tokens.endToken );
-		return src;
 
 	function TrimIndent(src, a = 0, b = src.length-1):
 		var _a = a, _b = b;
@@ -232,36 +283,24 @@ class Source:
 			return index > len ? len : index;
 		return index < 0 ? 0 : index;
 
-	function IndexPair(src, s1, s2, index, reverse):
+	function IndexPair(src, s1, s2, index):
 		var s1_re = new RegExp('^'+s1.replace(/([^\w\|])/g, '\\$1')+'$'),
 			s2_re = new RegExp('^'+s2.replace(/([^\w\|])/g, '\\$1')+'$');
-		if reverse:
-			var b = -1, jump = 0;
-			while index >= 0:
-				if s2_re.test( src[index].text ):
-					if b == -1:
-						b = index;
-					else if s1 == s2:
-						return [index, b];
-					else:
-						jump += 1;
-				else if s1_re.test( src[index].text ) && b != -1:
-					jump == 0 && return [index, b];
-					jump -= 1;
-				index -= 1;
-		else:
-			var len = src.length, a =- 1, jump = 0;
-			while index < len:
-				if s1_re.test( src[index].text ):
-					if a == -1:
-						a = index;
-					else if s1 == s2:
-						return [a, index];
-					else:
-						jump += 1;
-				else if s2_re.test( src[index].text ) && a != -1:
-					jump == 0 && return [a, index];
-					jump -= 1;
-				index += 1;
+		var len = src.length, a =- 1, jump = 0;
+		while index < len:
+			if src[index].text == '\\':
+				index += 2;
+				continue;
+			if s1_re.test( src[index].text ):
+				if a == -1:
+					a = index;
+				else if s1 == s2:
+					return [a, index];
+				else:
+					jump += 1;
+			else if s2_re.test( src[index].text ) && a != -1:
+				jump == 0 && return [a, index];
+				jump -= 1;
+			index += 1;
 
 module.exports = Source;

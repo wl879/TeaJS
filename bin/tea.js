@@ -1,33 +1,55 @@
 #!/usr/bin/env node
-(function(){
-    var _r = {};
-    function __require(nm){
-        var md = _r[nm];
-        return !md ? {} : (md.init === true ? md.exports : md.init());
-    }
-    function RegisterModule(){
-        for(var i=0, len=arguments.length; i<len; i++) if(!_r[arguments[i]]) _r[arguments[i]] = {'exports':{}};
-    }
-    function CreateModule(nm, creater){
-        if(!_r[nm]) _r[nm] = {'exports':{}};
-        _r[nm].init = function(){ return this.init = true, creater(this, this.exports), this.exports; };
-        return _r[nm].exports;
-    }
-	CreateModule("../src/tea.tea", function(module, exports){
-		__require("../src/tools/utils.tea");
+(function (){
+	var _require, __modules, Module;
+	if (!global && typeof (window) != 'undefined'){
+		global = window;
+	}
+	_require = require;
+	require = function(key){
+		var mod = __modules[key];
+		if (mod){
+			if (mod.loaded){
+				return mod.exports;
+			}
+			return mod.load();
+		}else {
+			return module.require(key);
+		}
+	};
+	__modules = {};
+	Module = function(filename, creater){
+		this.id = filename;
+		this.exports = {};
+		this.filename = filename;
+		this.loaded = false;
+		this.creater = creater;
+		this.require = require;
+	};
+	Module.prototype.load = function(){
+		this.loaded = true;
+		this.creater(this.exports, require, this, this.filename, this.filename.replace(/\/.+$/g, ''));
+		module.constructor._cache[this.filename] = this;
+		return this.exports;
+	};
+	Module.register = function(filename, key, creater){
+		if (!(__modules.hasOwnProperty(key))){
+			__modules[key] = new Module(filename, creater);
+		}
+	};
+	Module.register('/Users/wl/Sites/TeaJS/src/tea.tea', '../src/tea.tea', function(exports, require, module, __filename, __dirname){
+		require("../src/tools/utils.tea");
 		global.tab_size = '    ';
 		global.tea = module.exports;
-		var Argv = __require("../src/argv.tea");
-		tea.argv = new Argv();
-		tea.context = __require("../src/context.tea");
 		tea.teapath = Path.dirname(__filename);
-		tea.helper = __require("../src/tools/helper.tea");
-		tea.error = __require("../src/error.tea");
-		tea.tokens = __require("../src/tokens/index.tea");
-		tea.preprocess = __require("../src/preprocess/index.tea");
-		tea.source = tea.preprocess.source;
-		tea.syntax = __require("../src/syntax/index.tea");
-		tea.rewriter = __require("../src/rewriter/index.tea");
+		tea.argv = require("../src/argv.tea");
+		tea.helper = require("../src/tools/helper.tea");
+		tea.error = require("../src/error.tea");
+		tea.preprocess = require("../src/preprocess/index.tea");
+		tea.syntax = require("../src/syntax/index.tea");
+		tea.rewriter = require("../src/rewriter/index.tea");
+		tea.context = tea.preprocess.context;
+		tea.source = tea.syntax.source;
+		tea.defineToken = tea.syntax.token.define;
 		tea.tabSize = function(size){
 			global.tab_size = print.strc(' ', parseInt(size));
 		};
@@ -50,14 +72,14 @@
 			}
 			return t;
 		};
-		tea.compile = function(src, preprocessor){
+		tea.compile = function(src, por){
 			var ast, write;
 			if (typeof src == 'string'){
-				src = tea.source(src, null, preprocessor);
+				src = tea.source(src, null, por);
 			}
 			if (src){
-				if (ast = tea.syntax.parse(src, preprocessor)){
-					if (write = tea.rewriter.read(ast, preprocessor)){
+				if (ast = tea.syntax.parse(src, por)){
+					if (write = tea.rewriter.read(ast, por)){
 						return write.text;
 					}
 				}
@@ -88,8 +110,7 @@
 			return pathdata.out;
 		};
 		var RunTimeAtLoaded = Date.now();
-	});
-	CreateModule("../src/tools/utils.tea", function(module, exports){
+	});Module.register('/Users/wl/Sites/TeaJS/src/tools/utils.tea', '../src/tools/utils.tea', function(exports, require, module, __filename, __dirname){
 		var Fs = require('fs');
 		var Path = require('path');
 		var Util = require('util');
@@ -267,7 +288,7 @@
 			}else {
 				var text = Util.format([something]).replace(/^\s*\[\s*(\"|\')?|(\"|\')?\s*\]\s*$/g, '');
 			}
-			return qq == '"' ? text.replace(/"/g, '\"').replace(/\\'/g, "'") : text;
+			return qq == '"' ? text.replace(/"/g, '\\"').replace(/([^\\])\\'/g, '$1\'') : text;
 		};
 		Text.isESC = function(text, pos){
 			if (pos <= 0) return false;
@@ -302,7 +323,7 @@
 					}
 					_pair_re.lastIndex = a;
 					if (m = _pair_re.exec(text)){
-						if ((p = this.indexPair(text, a+m.index, m[0], _pair_token[m[0]], true)) && b > p[0] && b < p[1]){
+						if ((p = this.indexPair(text, m.index, m[0], _pair_token[m[0]], true)) && b > p[0]){
 							a = p[1]+1;
 							continue;
 						}
@@ -736,8 +757,7 @@
 			}
 			return data;
 		};
-	});
-	CreateModule("../src/argv.tea", function(module, exports){
+	});Module.register('/Users/wl/Sites/TeaJS/src/argv.tea', '../src/argv.tea', function(exports, require, module, __filename, __dirname){
 		var Argv = (function(){
 			function Argv(argv, opt, desc_text){
 				this.___desc = {};
@@ -769,24 +789,26 @@
 						}
 					}
 				}
-				var i = /node$/.test(argv[0]) ? 2 : 1;
-				for (var name; i < argv.length; i++){
-					name = argv[i];
-					if (name[0] == '-'){
-						value = argv[i+1];
-						if (!value || value[0] == '-'){
-							value = true;
+				if (argv){
+					var i = /node$/.test(argv[0]) ? 2 : 1;
+					for (var name; i < argv.length; i++){
+						name = argv[i];
+						if (name[0] == '-'){
+							value = argv[i+1];
+							if (!value || value[0] == '-'){
+								value = true;
+							}else {
+								i += 1;
+							}
+							this[name] = value;
+						}else if (!this['--file']){
+							this['--file'] = name;
 						}else {
-							i += 1;
+							this[this.length++] = name;
 						}
-						this[name] = value;
-					}else if (!this['--file']){
-						this['--file'] = name;
-					}else {
-						this[this.length++] = name;
 					}
+					return this.check();
 				}
-				return this.check();
 			}
 			Argv.prototype.check = function (){
 				this.pathdata = Path.countPath(this['--file'], this['--path'], this['--out']);
@@ -874,45 +896,759 @@
 			}
 			return Argv;
 		})();
-		module.exports = Argv;
-	});
-	CreateModule("../src/context.tea", function(module, exports){
-		var Prep = __require("../src/preprocess/index.tea"),
-			Tokens = __require("../src/tokens/index.tea"),
-			Syntax = __require("../src/syntax/index.tea"),
-			ReWriter = __require("../src/rewriter/index.tea");
-		var Context = (function(){
-			function Context(argv, extend){
-				if (this.constructor != Context){
-					return new Context(argv, extend);
+		module.exports = new Argv(null, null, "r{** g{Tea} 0.1.20 w{script help} *************************************************************}\n\
+  # parameter:\n\
+    -f,--file  <file>                  输入文件\n\
+    -p,--path  <project dir>           项目目录\n\
+    -o,--out   <output>                输出文件 或 目标目录\n\
+    -e,--eval  <tea script snippet>    编译一段 tea script 文本\n\
+    -j,--join                          合并 require 文件\n\
+    -m,--map                           生成 source map 文件\n\
+    -h,--help                          显示帮助\n\
+    -v,--verbose                       显示编译信息\n\
+    -r,--run                           执行输入件\n\
+    -d,--define                        宏定义文件\n\
+    -s,--safe                          只编译，不会对变量自动声名等\n\
+    --clear                            清理注释\n\
+    --tab <number>                     设置 tab size\n\
+    --token                            输出编译的 token 解析\n\
+    --ast                              输出 ast 结构\n\
+    --nopp                             不进行预编译\n\
+    --debug                            显示调试信息 [log prep syntax write all]");
+	});Module.register('/Users/wl/Sites/TeaJS/src/tools/helper.tea', '../src/tools/helper.tea', function(exports, require, module, __filename, __dirname){
+		require("../src/tools/debug.tea");
+		var Helpter = module.exports;
+		Helpter.getLocation = function(something){
+			switch (isClass(something)){
+				case 'Ast':
+					return this.getLocation(something.tokens(0));
+				case 'Node':
+					return this.getLocation(something.tokens(0));
+				case 'Source':
+					return this.getLocation(something.current);
+				case 'Token':
+					return this.getLocation(something.location);
+				case 'Location':
+					return something;
+			}
+		};
+		Helpter.errorPot = function(something){
+			switch (isClass(something)){
+				case 'Ast':case 'Node':case 'Source':case 'Token':
+					if (!(something = this.getLocation(something))){
+						break;
+					}
+				case 'Location':
+					var text = something.source,
+						pos = something.start,
+						code = text.slice(something.start, something.end+1),
+						file = something.fileName;
+					return this.errorPotByText(text, pos, code, file);
+				case 'Array':
+					return this.errorPotByText.apply(this, something);
+				case 'String':
+					if (arguments.length > 1){
+						return this.errorPotByText.apply(this, arguments);
+					}
+					return something;
+			}
+		};
+		Helpter.errorPotByText = function(text, pos, code, file){
+			if (pos == -1 && code){
+				pos = text.indexOf(code);
+			}
+			var line = Text.indexLine(text, pos),
+				line_text = line[0],
+				num = line[1],
+				col = line[2];
+			if (code){
+				code = code.replace(/\n/, '\\n');
+			}
+			var pot_num = num+' | ',
+				pot_shift = (pot_num+line_text.substr(0, col)).replace(/[^\s]/g, ' ')+code.replace(/./g, '^'),
+				pot_line = (line_text.substr(0, col)+print.color('#r{'+code+'}')+line_text.substr(col+code.length)).replace(/\n/, '\\n'),
+				qq_mark = (/(?:[^\\]|^)"/).test(line_text) ? "'" : '"',
+				pot_echo = qq_mark+pot_num+pot_line+'\n'+qq_mark+pot_shift;
+			if (file){
+				pot_echo = (Path.isPathText(file) ? 'At ' : 'From ')+file+':'+num+':'+col+'\n'+pot_echo.replace(/^(\'|\")/mg, '$1\t');
+			}
+			return pot_echo;
+		};
+		Helpter.atFile = function(something){
+			var location;
+			if (location = Helpter.getLocation(something)){
+				return 'at '+location.fileName+':'+location.lineNumber+':'+location.columnNumber;
+			}
+			return '';
+		};
+		Helpter.atFileByText = function(file, text, pos){
+			var line = Text.indexLine(text, pos), num = line[1], col = line[2];
+			return (Path.isPathText(file) ? 'At ' : 'From ')+file+':'+num+':'+col;
+		};
+		debug.addEvent('log', function(){
+			debug.echo(print.toString(arguments));
+		});
+		debug.addEvent('prep', function(msg, token){
+			if (token && token.istoken){
+				token = ' <--> '+Helpter.atFile(token);
+			}
+			debug.echo(print.toString(arguments).replace(/^(\s+)/mg, ' ·$1'));
+		});
+		debug.addEvent('syntax', function(){
+			debug.echo(print.toString(arguments));
+		});
+		debug.addEvent('write', function(){
+			debug.echo(print.toString(arguments));
+		});
+		debug.addEvent('token', function(){
+			debug.echo(print.toString(arguments));
+		});
+		function tokenPrinter(token, show_token){
+			if (show_token || show_token == null){
+				var type = token.types.join(',');
+				if (show_token == 'shot'){
+					type = type.replace(/[a-z]+/g, '');
 				}
-				this.argv = argv;
-				this.preProcessor = Prep.new(def_pre_processor);
-				if (extend){
-					this.extends(argv && argv['preprocess'], extend);
+				return '['+(token.indent >= 0 ? '*' : '')+'('+(type)+') g{\''+Text(token.text)+'\'}]';
+			}
+			return '[(TOKEN) '+token.text+']';
+		}
+		function sourcePrinter(src){
+			var texts = [];
+			for (var i=0, t; i < src.length; i++){
+				t = src[i];
+				if (!t){
+					continue;
+				}
+				if (t.istoken){
+					texts.push((i && t.is('LineHead') ? '\n' : '')+tokenPrinter(t, 'shot'));
+				}else {
+					texts.push(lexemePrinter(src[i], 'shot')+(src[i].isToken('LF') ? '\n' : ''));
 				}
 			}
-			var def_pre_processor;
-			Context.prototype.reinit = function (){
-				this._source = null;
-				this._ast = null;
-				this._rewriter = null;
+			return texts.join(', ');
+		}
+		function nodePrinter(node, text, _level, _indent){
+			if (!_level) _level = 0;
+			if (!_indent) _indent = 0;
+			var O = _level%2 ? 'r{[}' : '[',
+				C = _level%2 ? 'r{]}' : ']',
+				isBlock = /BLOCK/.test(node.type) && node.length,
+				isNode = /node|block/i.test(node.type);
+			if (!text) text = '';
+			text += O+'(g{'+node.type+'}) ';
+			if (isBlock){
+				text += '\n'+print.strc('\t', _indent+1);
 			}
-			Context.prototype.extends = function (){
-				for (var i=0, item; i < arguments.length; i++){
-					item = arguments[i];
-					if (item){
-						this.preProcessor.extends(item.preProcessor || item);
+			for (var i=0; i < node.length; i++){
+				if (!node[i]) continue;
+				if (i != 0){
+					text += ', ';
+				}
+				if (isNode){
+					text += '\n'+print.strc('\t', _indent+1);
+				}
+				if (node[i].length >= 0){
+					text = nodePrinter(node[i], text, (_level || 0)+1, isBlock || isNode ? _indent+1 : _indent);
+				}else if (node[i].text){
+					text += "'"+Text(node[i].text)+"'";
+				}
+			}
+			text += (isBlock || isNode ? '\n'+print.strc('\t', _indent)+C : C);
+			if (_level == 0){
+				text = text.replace(/^(\s+)((?:\*\*\*\ \]\ \*\*\*|\])+\,)\s*/mg, '$1$2\n$1');
+			}
+			return text;
+		}
+		function macroPrinter(macro){
+			var text;
+			text = '[(Macro - '+macro.type+') '+macro.name+(macro.params ? '('+macro.params.join(',')+')' : '')+' "'+Text(macro.body.length > 30 ? macro.body.substr(0, 30)+'...' : macro.body)+'"'+']';
+			return text;
+		}
+		function scopePrinter(scope){
+			var temp, texts = [];
+			for (var key in scope){
+				if (!scope.hasOwnProperty(key)) continue;
+				var item = scope[key];
+				if (key == 'node' || key == 'top' || key == '_top_' || item == null){
+					continue;
+				}
+				if (key == 'variables'){
+					var v_types = {};
+					for (var name in item){
+						if (!item.hasOwnProperty(name)) continue;
+						var type = item[name];
+						if (!v_types[type]) v_types[type] = [];
+						v_types[type].push(name);
+					}
+					var v_text = [];
+					for (var type in v_types){
+						if (!v_types.hasOwnProperty(type)) continue;
+						var varbs = v_types[type];
+						v_text.push(type+' : ["'+varbs.join('", "')+'"]');
+					}
+					if (v_text.length){
+						texts.push(key+' :\n'+v_text.join(',\n').replace(/^/mg, '\t'));
+					}
+					continue;
+				}
+				if (key == 'argumentsDefine'){
+					var sub_text = [];
+					for (var j=0; j < item.length; j++){
+						sub_text.push(print.toText(item[j]).replace(/^/mg, '\t'));
+					}
+					if (sub_text.length){
+						texts.push(key+' : [\n'+sub_text.join(',\n')+']');
+					}
+					continue;
+				}
+				if (key == 'sub' || key == 'letScope'){
+					var sub_text = [];
+					for (var k in item){
+						if (!item.hasOwnProperty(k)) continue;
+						sub_text.push(k+' : '+scopePrinter(item[k]));
+					}
+					if (sub_text.length){
+						texts.push(key+' : [\n'+sub_text.join(',\n').replace(/^/mg, '\t')+']');
+					}
+					continue;
+				}
+				if (temp = print.toString([item])){
+					if (temp.length > 2){
+						texts.push(key+' : '+temp);
 					}
 				}
-				this.reinit();
 			}
+			return '[\n'+texts.join('\n').replace(/^/mg, '\t')+']';
+		}
+		function writerPrinter(data, level, _circular_cache){
+			if (!_circular_cache){
+				_circular_cache = [];
+			}
+			_circular_cache.push(data);
+			var texts = [];
+			for (var i=0, item; i < data.length; i++){
+				item = data[i];
+				if (item.istoken){
+					texts.push("'"+Text(item.text)+"'");
+				}else if (typeof item == 'string'){
+					texts.push("'"+Text(item)+"'");
+				}else {
+					if (_circular_cache.indexOf(item) != -1){
+						return '[Circular]';
+					}
+					texts.push(writerPrinter(item, (level || 0)+1, _circular_cache));
+				}
+			}
+			var text = '[('+data.type+') '+texts.join('·')+']';
+			return text;
+		}
+		function SyntaxPrinter(sre, __level){
+			var text = [];
+			for (var i=0, r; i < sre.length; i++){
+				r = sre[i];
+				if (r.type == 'Or'){
+					if (text.length){
+						text.push('|');
+					}
+					text.push((__level%2 ? 'd{' : 'w{')+SyntaxPrinter(r, (__level || 0))+'}');
+				}else if (r.type == 'Sub'){
+					text.push("("+(r.assertion)+SyntaxPrinter(r.key, (__level || 0)+1)+')');
+				}else {
+					text.push("[("+(r.type)+")"+(r.key)+r.quantifier+"]");
+				}
+			}
+			return text.join(' ');
+		}
+		print.register('Token', tokenPrinter);
+		print.register('Source', sourcePrinter);
+		print.register('Node', nodePrinter);
+		print.register('Ast', nodePrinter);
+		print.register('Macro', macroPrinter);
+		print.register('Scope', scopePrinter);
+		print.register('Writer', writerPrinter);
+		print.register('SyntaxReg', SyntaxPrinter);
+	});Module.register('/Users/wl/Sites/TeaJS/src/tools/debug.tea', '../src/tools/debug.tea', function(exports, require, module, __filename, __dirname){
+		require("../src/tools/printer.tea");
+		var debug_lv = 0, debug_event_listener = [];
+		global.debug = function(e){
+			var text;
+			if (arguments.length == 0 || e instanceof Error){
+				text = debug.stacksToText(e);
+			}else {
+				text = print.toString(arguments, '~ ');
+			}
+			debug.echo(text, new Error(), true);
+		};
+		debug.echo = function(text, error, show_line_info){
+			if (show_line_info || (debug_lv&64) == 64){
+				var at_line = debug.line(error || new Error(), true);
+				text = text.replace(/(\n|$)/, '<-->'+at_line+'$1');
+			}
+			print(text);
+		};
+		debug.line = function(err, ret_str){
+			var stacks = debug.stacks(err || (new Error)), stack = stacks[0];
+			if (ret_str){
+				return stacks[0].filetext;
+			}
+			if (debug.log){
+				debug.log(stacks[0].filetext);
+			}
+		};
+		debug.eventMap = {"all" : 0};
+		debug.addEvent = function(name, shot_name, func){
+			if (typeof shot_name == 'function'){
+				func = shot_name, shot_name = null;
+			}
+			var num = this.eventMap.all+1;
+			this.eventMap.all += num;
+			this.eventMap[name] = num;
+			if (shot_name){
+				this.eventMap[shot_name] = num;
+			}
+			this['__'+name] = func;
+		};
+		debug.onEvent = function(part, fn){
+			if (fn){
+				var lv = parseDebugConf(part);
+				if ((debug_lv&lv) == lv){
+					fn(debug_lv);
+				}else {
+					debug_event_listener.push([lv, fn]);
+				}
+			}else {
+				var lv = typeof part == 'number' ? part : this.eventMap[part];
+				return (debug_lv&(lv || 0)) == lv;
+			}
+		};
+		debug.disable = function(part){
+			debug_lv = parseDebugConf(part);
+			for (var name in this.eventMap){
+				if (!this.eventMap.hasOwnProperty(name)) continue;
+				if (debug[name] && (debug_lv&this.eventMap[name]) != this.eventMap[name]){
+					debug[name] = null;
+				}
+			}
+		};
+		debug.enable = function(part){
+			debug_lv = parseDebugConf(part);
+			var open_list = [];
+			for (var name in this.eventMap){
+				if (!this.eventMap.hasOwnProperty(name)) continue;
+				if (debug['__'+name]){
+					if ((debug_lv&this.eventMap[name]) == this.eventMap[name]){
+						debug[name] = debug['__'+name];
+						open_list.push(name);
+					}else {
+						debug[name] = null;
+					}
+				}
+			}
+			if (open_list.length){
+				print('* Debug enable: "'+open_list.join('", "')+'"');
+			}
+			for (var i=debug_event_listener.length-1, item; i >= 0; i--){
+				item = debug_event_listener[i];
+				if ((debug_lv&item[0]) == item[0]){
+					item[1](argvj_debug_level);
+				}
+			}
+		};
+		debug.stacks = function(err, shift){
+			var stacks;
+			if (isArray(err)) return err;
+			if (typeof err == 'number'){
+				shift = err, err = null;
+			}
+			if (typeof err == 'string'){
+				stacks = err.split('\n');
+			}else {
+				err = err || new Error();
+				stacks = err.stack.split('\n');
+			}
+			var i = 1, ret = [], m, tmp;
+			if (err && err.name == 'Error'){
+				while (i < stacks.length && /at (.*Function.debug|.*Function.print|.*?TeaError|.*?tea\.throw)/i.test(stacks[i])){
+					i++;
+				}
+			}
+			for (; i < stacks.length; i++){
+				if (stacks[i].indexOf('anonymous') != -1){
+					continue;
+				}
+				if (m = stacks[i].match(/at (.*?) \((.*?)\)$/)){
+					tmp = m[2].split(':');
+					ret.push({"fileName": tmp[0],
+						"lineNumber": tmp[1],
+						"columnNumber": tmp[2],
+						"code": m[1],
+						"source": stacks[i],
+						"filetext": m[2]});
+				}
+			}
+			if (shift){
+				ret = ret.slice(shift);
+			}
+			ret.message = stacks[0];
+			return ret;
+		};
+		debug.stacksToText = function(stacks, msg, name){
+			stacks = debug.stacks(stacks || new Error);
+			var text = msg === false ? [] : ['['+(name || 'Tea error stack')+']'+(msg && '\n'+msg || '')];
+			for (var i=0, stack; i < stacks.length; i++){
+				stack = stacks[i];
+				if (typeof stacks[i] == 'string'){
+					text.push(stacks[i]);
+				}else {
+					text.push(" · "+(stack.code)+" <-> File \""+(stack.fileName)+"\", <->line "+(stack.lineNumber));
+				}
+			}
+			text = text.join('\n');
+			return print.toText(text);
+		};
+		debug.__defineGetter__('level', function(){return debug_lv});
+		function parseDebugConf(part){
+			var e = debug_lv;
+			if (typeof part == 'number'){
+				e = part;
+			}else if (part){
+				for (var i_ref = part.replace(/\W+/g, ' ').trim().split(' '), i=0, name; i < i_ref.length; i++){
+					name = i_ref[i];
+					if (debug.eventMap[name]){
+						e += debug.eventMap[name];
+					}
+				}
+			}
+			return e;
+		}
+	});Module.register('/Users/wl/Sites/TeaJS/src/tools/printer.tea', '../src/tools/printer.tea', function(exports, require, module, __filename, __dirname){
+		require("../src/tools/utils.tea");
+		var std_width = process.stdout.columns,
+			is_terminal = !!std_width,
+			max_print_width = 0,
+			register_printer = {};
+		global.print = function(){
+			if (!print.stdout.apply(print, arguments)){
+				process.stdout.write("\n");
+			}
+		};
+		print.stdout = function(){
+			process.stdout.write(this.toText.apply(this, arguments));
+		};
+		print.toText = function(){
+			var text;
+			text = this.toString(Array.prototype.slice.call(arguments));
+			text = text.replace(/(.|\n)\u0008/g, '');
+			text = this.color(text);
+			text = this.flex(text);
+			text = text.replace(/\((.*) x(\d+)\)/g, function($0, $1, $2){return print.strc($1, parseInt($2))});
+			text = text.replace(/\[border\:(.*?)(\:end\]|$)/g, function($0, $1){return print.border($1)});
+			max_print_width = Math.max(max_print_width, Text.width(text) || 4);
+			text = this.line(text);
+			return text;
+		};
+		print.toString = function(args, prefix, postfix){
+			var text = classToString(Hash.slice(args));
+			if (prefix) text = text.replace(/^/mg, prefix);
+			if (postfix) text = text.replace(/$/mg, postfix);
+			return text;
+		};
+		print.line = function(text){
+			if (/^([\W\ x]){4}$/mg.test(text)){
+				var the_width = std_width || max_print_width;
+				text = text.replace(/^([\W\ x])\1{3}$/mg, function($0, $1){return print.strc($1, the_width)});
+			}
+			return text;
+		};
+		print.flex = function(text, min_width){
+			var col_width, mark;
+			while (/^(.*?)(?:<-{1,2}>)(.*)$/mg.test(text)){
+				col_width = min_width || 80, mark = false;
+				text = text.replace(/^(.*?)(<-{1,2}>|$)/mg, function($0, $1, $2){
+					mark = mark || $2 && $2.length == 4;
+					if (col_width < $1.length && ($2 || mark)){
+						col_width = $1.length;
+					}
+					return $0;
+				});
+				text = text.replace(/^(.*?)(?:<-{1,2}>)(.*)$/mg, function($0, $1, $2){return $1+print.strc(' ', col_width-$1.length)+$2});
+			}
+			return text;
+		};
+		print.border = function(){
+			var text = print.toText.apply(this, arguments).replace(/\t/g, '    '),
+				text_width = Text.width(text),
+				lines = text.split('\n'),
+				c = is_terminal ? '\033[96m' : '',
+				e = is_terminal ? '\033[0m' : '';
+			for (var i=0; i < lines.length; i++){
+				lines[i] = c+'|  '+e+lines[i]+print.strc(' ', text_width-lines[i].length)+c+'  |'+e;
+			}
+			lines.unshift(c+print.strc('-', text_width+6)+e);
+			lines.push(c+print.strc('-', text_width+6)+e);
+			return lines.join('\n');
+		};
+		print.cellText = function(text1, text2, separator, ret_str){
+			var texts1 = text1.replace(/\t/g, tab_size).split('\n'),
+				text1_w = Text.width(text1),
+				texts2 = text2.replace(/\t/g, tab_size).split('\n'),
+				len = Math.max(texts1.length, texts2.length),
+				echos = [];
+			separator = separator || '    ';
+			for (var i = 0; i < len; i++){
+				var t1 = texts1[i] || '', t2 = texts2[i] || '';
+				echos.push((t1+print.strc(' ', text1_w-t1.length))+separator+t2);
+			}
+			if (ret_str){
+				return echos.join('\n');
+			}
+			console.log(echos.join('\n'));
+		};
+		print.strc = function(str, num){
+			var tmp = [];
+			num = Math.max(num || 0, 0);
+			while (num--){
+				tmp.push(str);
+			}
+			return tmp.join('');
+		};
+		print.color = function(text){
+			if (!/\b[rbgcwd]\{/.test(text)){
+				return text;
+			}
+			var m,
+				tmp = [],
+				cc,
+				cc_order = [],
+				cc_table = {"r": '\033[91m',
+					"b": '\033[96m',
+					"g": '\033[92m',
+					"c": '\033[36m',
+					"d": '\033[90m',
+					"w": '\033[37m'};
+			while (m = text.match(/(?:\b|\#)([rbgcwd])\{|([^\\])\}/)){
+				tmp.push(text.substr(0, m.index+(m[2] ? 1 : 0)));
+				if (is_terminal){
+					if (m[2]){
+						if (cc_order.length){
+							tmp.push('\033[0m');
+							cc_order.pop();
+							if (cc_order.length){
+								tmp.push(cc_order[cc_order.length-1]);
+							}
+						}
+					}else {
+						cc = cc_table[m[1]] || '';
+						tmp.push(cc);
+						cc_order.push(cc);
+					}
+				}
+				text = text.substr(m.index+m[0].length);
+			}
+			if (text){
+				tmp.push(text);
+			}
+			if (cc_order.length){
+				tmp.push('\033[0m');
+			}
+			return tmp.join('');
+		};
+		print.register = function(name, printer){
+			if (printer){
+				register_printer[name] = printer;
+			}
+		};
+		function classToString(obj, igArray){
+			var type;
+			switch (type = isClass(obj)){
+				case 'String':case 'Number':case 'Boolean':case 'Undefined':
+					return obj;
+				case 'Array':
+					if (!igArray){
+						var text = [];
+						for (var i=0; i < obj.length; i++){
+							text.push(classToString(obj[i], true));
+						}
+						return text.join(' ');
+					}
+					break;
+				case 'Object':case 'Function':
+					if (!obj) return 'null';
+					break;
+				default:
+					if (register_printer.hasOwnProperty(type)){
+						return register_printer[type](obj);
+					}
+					break;
+			}
+			return Text(obj);
+		}
+	});Module.register('/Users/wl/Sites/TeaJS/src/error.tea', '../src/error.tea', function(exports, require, module, __filename, __dirname){
+		var helper = require("../src/tools/helper.tea");
+		var TeaError = (function(){
+			var err_code = {101 : 'Array expression miss right "]" token!',
+					102 : 'Json expression miss right "}" token!',
+					103 : 'Compel expression miss right ")" token!',
+					104 : 'member expression miss right "]" token',
+					105 : 'params expression miss right ")" token',
+					106 : 'switch expression miss right "}" token',
+					107 : 'for expression miss right "}" token',
+					108 : 'for expression miss right expression',
+					109 : 'export expression right expression syntax error',
+					110 : 'block statement miss right "}" token',
+					201 : 'unexpected dot expression',
+					202 : 'unexpected params expression',
+					203 : 'unexpected json expression assign',
+					204 : 'unexpected assignment declaration expression',
+					208 : 'unexpected assignment expression',
+					205 : 'unexpected comma expression',
+					206 : 'unexpected selete right pattern expression',
+					207 : 'unexpected selete left pattern expression',
+					208 : 'unexpected control Clauses',
+					209 : 'unexpected token ILLEGAL',
+					210 : 'unexpected break expression',
+					211 : 'unexpected continue expression',
+					212 : 'unexpected token ILLEGAL',
+					213 : 'unexpected for condition expression left token',
+					214 : 'unexpected compel expression',
+					215 : 'unexpected expression',
+					301 : 'getter or setter statement syntax error',
+					302 : 'method statement syntax error',
+					303 : 'if statement syntax error',
+					304 : 'while statement syntax error',
+					305 : 'with statement syntax error',
+					306 : 'do while statement syntax error',
+					307 : 'try while statement syntax error',
+					308 : 'switch while statement syntax error',
+					309 : 'for statement syntax error',
+					311 : 'condition statement syntax error',
+					312 : 'switch case or default statement syntax error',
+					313 : 'case or default expression syntax error',
+					314 : 'extends expression syntax error',
+					315 : 'array pattern assignment declaration syntax error',
+					316 : 'var declaration statement syntax error',
+					317 : 'let declaration statement syntax error',
+					318 : 'const declaration statement syntax error',
+					319 : 'arguments statement syntax error',
+					320 : 'indent illegal',
+					321 : 'class declaration statement syntax error! miss name',
+					322 : 'get declaration statement illegal',
+					323 : 'set declaration statement illegal',
+					324 : 'static declaration statement illegal',
+					325 : '*proto declaration statement illegal',
+					326 : '*init declaration statement illegal',
+					402 : 'block statement illegal',
+					401 : 'const declaration not supported',
+					403 : 'yield declaration not supported',
+					501 : 'define token statement illegal'};
+			function TeaError(err, msg, target, name, err_shift){
+				var sub, stacks;
+				if (msg instanceof Error){
+					err = msg, msg = target, target = name, name = err_shift, err_shift = arguments[5];
+				}
+				if (!(err instanceof Error)){
+					name = target, target = msg, msg = err, err = new Error(), err_shift = 2;
+				}
+				if (err.type == 'TeaError'){
+					sub = err, err = new Error(), err_shift = 2;
+				}
+				if (typeof msg == 'object'){
+					err_shift = name, name = target, target = msg, msg = '';
+				}
+				stacks = debug.stacks(err, err_shift);
+				name = '['+(name && name[0].toUpperCase()+name.substr(1) || 'Tea error')+']';
+				if (typeof msg == 'number') msg = err_code[msg];
+				msg = msg ? msg[0].toUpperCase()+msg.substr(1) : stacks.message;
+				var error = new Error(msg);
+				error.type = 'TeaError';
+				error.name = print.toText(name);
+				error.target = target;
+				error.stacks = stacks;
+				error.__defineGetter__('text', toString);
+				error.__defineGetter__('stack', printError);
+				if (sub){
+					sub.top = error;
+					return sub;
+				}
+				return error;
+			}
+			TeaError.code = err_code;
+			function toString(){
+				var texts = [], stacks = [];
+				texts.push(this.name);
+				stacks.push(debug.stacksToText(this.stacks));
+				if (this.target){
+					var bug_pot = helper.errorPot(this.target);
+					texts.push(('\n'+bug_pot+'\n->  '+this.message+'\n').replace(/^/mg, '\t'));
+				}else {
+					texts.push(this.message);
+				}
+				var top = this.top, top_texts = [];
+				while (top){
+					top_texts.push('   '+top.name);
+					if (top.target){
+						var bug_pot = helper.errorPot(top.target);
+						top_texts.push((bug_pot+'\n->  '+top.message).replace(/^/mg, '\t'));
+					}else {
+						top_texts.push(top.message);
+					}
+					texts.push(top_texts.join('\n'));
+					stacks.push(debug.stacksToText(top.stacks, false));
+					top = top.top;
+				}
+				texts.push('----', stacks.join('\n'));
+				return texts.join('\n');
+			}
+			function printError(){
+				print(this.text);
+				process.exit(1);
+			}
+			return TeaError;
+		})();
+		module.exports = TeaError;
+	});Module.register('/Users/wl/Sites/TeaJS/src/preprocess/index.tea', '../src/preprocess/index.tea', function(exports, require, module, __filename, __dirname){
+		var Context = require("../src/preprocess/context.tea");
+		function context(argv, extend){
+			return new Context(argv, extend);
+		};
+		function setDefault(){
+			Context.defaultProcessor.apply(Context, arguments);
+		};
+		module.exports.context = context;
+		module.exports.setDefault = setDefault;
+	});Module.register('/Users/wl/Sites/TeaJS/src/preprocess/context.tea', '../src/preprocess/context.tea', function(exports, require, module, __filename, __dirname){
+		var Context = (function(){
+			var Processor = require("../src/preprocess/processor.tea");
+			var Macro = require("../src/preprocess/macro.tea");
+			var Sugar = require("../src/preprocess/sugar.tea");
+			var DefPor, Syntax, Require, ReWriter;
+			function Context(argv, extend){
+				if (!Syntax) Syntax = require("../src/syntax/index.tea");
+				if (!Require) Require = require("../src/preprocess/require.tea");
+				if (!ReWriter) ReWriter = require("../src/rewriter/index.tea");
+				this.macro = {"map": []};
+				this.macrofun = {"map": []};
+				this.statement = {"map": []};
+				this.expression = {"map": []};
+				this.argv = argv || {};
+				this.processor = new Processor(this);
+				if (DefPor){
+					this.extends(DefPor);
+				}
+				if (extend){
+					this.extends(extend);
+				}
+			}
+			Context.prototype.__defineGetter__("length", function(){
+				return this.macro.map.length+this.macrofun.map.length+this.statement.map.length+this.expression.map.length;
+			});
 			Context.prototype.__defineGetter__("source", function(){
 				if (!this._source){
 					if (this.argv.source){
 						this._source = this.argv.source;
 					}else if (this.argv.text || this.argv.file){
-						this._source = Prep.source(this.argv.text, this.argv.file, this.preProcessor);
+						this._source = this.parse(this.argv.text, this.argv.file);
 					}
 				}
 				return this._source;
@@ -925,7 +1661,7 @@
 			});
 			Context.prototype.__defineGetter__("ast", function(){
 				if (!this._ast){
-					this._ast = Syntax.parse(this.source, this.preProcessor);
+					this._ast = Syntax.parse(this.source, this);
 				}
 				return this._ast;
 			});
@@ -934,12 +1670,12 @@
 			});
 			Context.prototype.__defineGetter__("rewriter", function(){
 				if (!this._rewriter){
-					this._rewriter = ReWriter.read(this.ast, this.preProcessor);
+					this._rewriter = ReWriter.read(this.ast, this);
 				}
 				return this._rewriter;
 			});
 			Context.prototype.__defineGetter__("text", function(){
-				return this.writer.text;
+				return this.rewriter.text;
 			});
 			Context.prototype.__defineGetter__("sourcemap", function(){
 				var map;
@@ -951,55 +1687,102 @@
 			});
 			Context.prototype.__defineGetter__("requires", function(){
 				if (!this._rewriter){
-					this._rewriter = ReWriter.read(this.ast, this.preProcessor);
+					this._rewriter = ReWriter.read(this.ast, this);
 				}
 				return this.scope.requires;
 			});
-			Context.prototype.echo = function (output, outmap){
-				var sourcemap, shell_comm, requires, text;
-				if (!output) output = this.argv && this.argv.out;
-				if (outmap) sourcemap = this.sourcemap;
-				if (this.requires.length){
-					shell_comm = '';
-					requires = loadRequiresList(this.requires, {});
-					text = Prep.template.joinRequire(requires, this.rewriter);
-					if (sourcemap){
-						for (var _i=0, item; _i < requires.length; _i++){
-							item = requires[_i];
-							sourcemap.parse(item[2], item[1].source);
-						}
-					}
-					text = text.replace(/\n\s*(\#\!.*\n)/g, function($0, $1){
-						shell_comm = $1;
-						return '\n';
-					});
-					text = shell_comm+text;
-				}else {
-					text = this.rewriter.toText();
-				}
-				if (sourcemap){
-					if (!(typeof outmap == 'string')){
-						outmap = output.replace(/\.\w+$/, '.map');
-					}
-					Text.writeFile(sourcemap.text, outmap);
-					text += '\n//# sourceMappingURL='+Path.relative(Path.dirname(output), outmap);
-				}
-				Text.writeFile(text, output);
+			Context.prototype.parse = function (text, file){
+				return Syntax.source(text, file, this);
 			}
-			Context.defaultPreprocessor = function(){
-				if (!def_pre_processor){
-					def_pre_processor = new Prep.new();
+			Context.prototype.clone = function (argv, extend){
+				var ctx;
+				ctx = new Context(argv, extend);
+				ctx.extend(this);
+				return ctx;
+			}
+			Context.prototype.undef = function (name){
+				var i;
+				for (var _i_ref = ['macrofun', 'macro', 'statement', 'expression'], _i=0, type; _i < _i_ref.length; _i++){
+					type = _i_ref[_i];
+					if ((i = this[type].map.indexOf(name)) >= 0){
+						this[type].map.splice(i, 1);
+						delete this[type][name];
+					}
 				}
+			}
+			Context.prototype.add = function (something){
+				if (typeof something == 'string'){
+					if (something == 'expression' || something == 'statement'){
+						something = new Sugar(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], this);
+					}else {
+						something = new Macro(arguments[0], arguments[1], arguments[2], this);
+					}
+				}
+				var key = something.name, type = something.type;
+				this[type][key] = something;
+				if (this[type].map.indexOf(key) == -1){
+					this[type].map.push(key);
+				}
+				return something;
+			}
+			Context.prototype.get = function (key){
+				if (!(this.length)) return;
+				var limits = arguments.length > 1 ? Hash.slice(arguments, 1) : ['macrofun', 'macro', 'statement', 'expression'];
+				for (var _i=0, type; _i < limits.length; _i++){
+					type = limits[_i];
+					if (this[type].map.indexOf(key) != -1){
+						return this[type][key];
+					}
+				}
+			}
+			Context.prototype.extends = function (extend){
+				for (var _i_ref = ['macrofun', 'macro', 'statement', 'expression'], _i=0, type; _i < _i_ref.length; _i++){
+					type = _i_ref[_i];
+					for (var _j=0, key; _j < extend[type].map.length; _j++){
+						key = extend[type].map[_j];
+						this.add(extend[type][key]);
+					}
+				}
+			}
+			Context.prototype.reinit = function (){
+				this._source = null;
+				this._ast = null;
+				this._rewriter = null;
+			}
+			Context.prototype.echo = function (output, outmap){
+				var requires, text, sourcemap;
+				if (!output) output = this.argv && this.argv.out;
+				if (this.requires.length){
+					requires = Require.load(this.requires);
+					Require.join(requires, this.rewriter);
+				}
+				text = this.rewriter.text;
+				if (output){
+					if (outmap){
+						sourcemap = this.sourcemap;
+						if (!(typeof outmap == 'string')){
+							outmap = output.replace(/\.\w+$/, '.map');
+						}
+						Text.writeFile(sourcemap.text, outmap);
+						text += '\n//# sourceMappingURL='+Path.relative(Path.dirname(output), outmap);
+					}
+					Text.writeFile(text, output);
+				}
+				return text;
+			}
+			Context.defaultProcessor = function(){
+				if (!DefPor) DefPor = new Context();
 				for (var i=0, item; i < arguments.length; i++){
 					item = arguments[i];
 					if (item){
-						if (typeof item == 'string'){
-							def_pre_processor.extends(Prep.parseByFile(item));
-						}else {
-							def_pre_processor.extends(item);
-						}
+						DefPor.extends(typeof item == 'string' ? Context.parseByFile(item) : item);
 					}
 				}
+			};
+			Context.parseByFile = function(file, ctx){
+				if (ctx == null) ctx = new Context();
+				ctx.parse(file);
+				return ctx;
 			};
 			function loadRequiresList(list, cache){
 				for (var file in list){
@@ -1022,747 +1805,857 @@
 			return Context;
 		})();
 		module.exports = Context;
-	});
-	CreateModule("../src/preprocess/index.tea", function(module, exports){
-		var Source = __require("../src/preprocess/source.tea"),
-			PreProcessor = __require("../src/preprocess/preprocessor.tea"),
-			Template = __require("../src/preprocess/template.tea");
-		exports.new = function(extend){
-			var prepor = new PreProcessor();
-			for (var i=0; i < arguments.length; i++){
-				if (arguments[i]){
-					prepor.extends(arguments[i]);
-				}
+	});Module.register('/Users/wl/Sites/TeaJS/src/preprocess/processor.tea', '../src/preprocess/processor.tea', function(exports, require, module, __filename, __dirname){
+		var Processor = (function(){
+			var include_cache = {}, Template = require("../src/preprocess/template.tea");
+			function Processor(ctx){
+				this.context = ctx;
 			}
-			return prepor;
-		};
-		exports.source = function(text, file, prepor){
-			var src = Source.parse(text, file);
-			prepor = exports.parse(src, prepor);
-			src.preProcessor = prepor;
-			return src;
-		};
-		exports.parse = function(src, prepor){
-			if (prepor == null) prepor = new PreProcessor();
-			prepor.parse(src);
-			return prepor;
-		};
-		exports.parseByFile = function(file, prepor){
-			var src = Source.parse(null, file);
-			if (prepor == null) prepor = new PreProcessor();
-			prepor.parse(src, true);
-			return prepor;
-		};
-		exports.template = Template;
-	});
-	CreateModule("../src/preprocess/source.tea", function(module, exports){
-		var Tokens = __require("../src/tokens/index.tea");
-		var Source = (function(){
-			function Source(source, file){
-				this.index = 0;
-				this.length = 0;
-				this.source = source;
-				this.fileName = file;
-				this.preProcessor = null;
+			Processor.prototype.string = function (src, text, i, token){
+				return Processor.string(this.context, src, text, i, token);
 			}
-			var Splice = Array.prototype.splice,
-				Slice = Array.prototype.slice,
-				IndexOf = Array.prototype.indexOf;
-			Source.prototype.__defineGetter__("text", function(){
-				return this.current.text;
-			});
-			Source.prototype.__defineGetter__("type", function(){
-				return this.current.type;
-			});
-			Source.prototype.__defineGetter__("current", function(){
-				return this.get(this.index);
-			});
-			Source.prototype.__defineGetter__("peek", function(){
-				return this.get(this.nextIndex(this.index, true));
-			});
-			Source.prototype.__defineGetter__("prev", function(){
-				return this.get(this.prevIndex(this.index, true));
-			});
-			Source.prototype.is = function (){
-				return this.current.is.apply(this[this.index], arguments);
+			Processor.prototype.comm = function (src, text, i, token){
+				return Processor.comm(this.context, src, text, i, token);
 			}
-			Source.prototype.eq = function (){
-				return this.current.eq.apply(this[this.index], arguments);
+			Processor.prototype.regexp = function (src, text, i, token){
+				return Processor.regexp(this.context, src, text, i, token);
 			}
-			Source.prototype.get = function (index){
-				return this[index] || {};
+			Processor.prototype.pound = function (src, text, i, token, control_cache){
+				return Processor.pound(this.context, src, text, i, token, control_cache);
 			}
-			Source.prototype.add = function (tok){
-				if (!tok || !tok.istoken){
-					throw tea.error(new Error(), 'Add the wrong parameters('+isClass(tok)+'), Only to can add Lexeme object');
-				}
-				this[this.length++] = tok;
+			Processor.prototype.macro = function (src, text, i, token){
+				return Processor.macro(this.context, src, text, i, token);
 			}
-			Source.prototype.back = function (opt, catch_comm){
-				while (opt > 1){
-					this.index = this.prevIndex(this.index, opt--, catch_comm);
-				}
-				this.index = this.prevIndex(this.index, opt, catch_comm);
-				return this;
-			}
-			Source.prototype.next = function (opt, catch_comm){
-				while (opt > 1){
-					this.index = this.nextIndex(this.index, opt--, catch_comm);
-				}
-				this.index = this.nextIndex(this.index, opt, catch_comm);
-				return this;
-			}
-			Source.prototype.nextIndex = function (index, ig_lf, catch_comm){
-				return GoIndex(1, this, index, ig_lf, catch_comm);
-			}
-			Source.prototype.prevIndex = function (index, ig_lf, catch_comm){
-				return GoIndex(-1, this, index, ig_lf, catch_comm);
-			}
-			Source.prototype.indexPair = function (s1, s2, index, reverse, not_throw_error){
-				index = (index != null ? index : this.index);
-				var ab = IndexPair(this, s1, s2, index, reverse);
-				if (!ab && !not_throw_error){
-					throw tea.error(new Error(), 'Source index pair miss "'+s2+'" token', this[index], 'Source error');
-				}
-				return ab;
-			}
-			Source.prototype.indexLine = function (index){
-				index = (index != null ? index : this.index);
-				var a = index, b = index, len = this.length-2;
-				while (a > len || (a > 0 && this[a-1] && this[a-1].type != 'LF')){
-					a--;
-				}
-				while (b < len && (!this[b] || this[b].type != 'LF')){
-					b++;
-				}
-				return [(a > len ? len : a), (b > len ? len : b), index];
-			}
-			Source.prototype.lineIndent = function (index){
-				index = (index != null ? index : this.index);
-				while (index >= 0){
-					if (this[index] && this[index].indent >= 0){
-						return this[index].indent;
-					}
-					index--;
-				}
-				return -1;
-			}
-			Source.prototype.trimIndent = function (a, b){
-				this.length && TrimIndent(this, a, b);
-				return this;
-			}
-			Source.prototype.indexOf = function (){
-				return IndexOf.apply(this, arguments);
-			}
-			Source.prototype.delete = function (a, b){
-				if (b == null) b = a;
-				for (var i = a; i <= b; i++){
-					this[i] = null;
-				}
-				return this;
-			}
-			Source.prototype.insert = function (pos, list){
-				list = list.istoken ? [list] : Slice.call(list);
-				var indent = this.lineIndent(pos);
-				for (var i=list.length-1, t; i >= 0; i--){
-					t = list[i];
-					if (!t || t.type == 'EOT'){
-						Splice.call(list, i, 1);
-					}else if (indent > 0 && t.indent >= 0){
-						t.indent += indent;
-					}
-				}
-				list.unshift(pos, 0);
-				Splice.apply(this, list);
-				return this;
-			}
-			Source.prototype.clone = function (a, b){
-				var src = new Source();
-				a = typeof a != 'number' ? 0 : a;
-				b = typeof b != 'number' ? this.length : b;
-				for (var i = a; i < b; i++){
-					if (this[i]){
-						src.add(this[i]);
-					}
-				}
-				src.add(Tokens.endToken);
-				return src;
-			}
-			Source.prototype.refresh = function (){
-				var target = this[this.index], a = 0, del_i = -1, del_len = 0;
-				for (var i=this.length-1, token; i >= 0; i--){
-					token = this[i];
-					if (token){
-						if (del_len){
-							Splice.call(this, del_i, del_len);
+			Processor.prototype.matchNode = function (type, src, opt){
+				var exp;
+				if (!(this.context[type])) return;
+				var map = this.context[type].map, _index = src.index;
+				for (var i=0, name; i < map.length; i++){
+					name = map[i];
+					src.index = _index;
+					if (exp = this.context[type][name].parse(src, opt)){
+						if (debug.prep){
+							debug.prep('[Prep '+type+': '+name+' matched]', src[_index]);
 						}
-						del_i = -1, del_len = 0;
-					}else {
-						del_i = i, del_len += 1;
+						return exp;
 					}
 				}
-				if (del_len){
-					Splice.call(this, del_i, del_len);
-				}
-				if (target != this[this.index]){
-					this.index = this.indexOf(target);
-				}
-				return this;
 			}
-			Source.prototype.join = function (a, b){
-				if (isArray(a)){
-					b = a[1], a = a[0];
+			Processor.string = function(ctx, src, text, i, token){
+				var b, str, re, m, val;
+				if ((b = indexRight(text, i, token.text)) === false){
+					throw tea.error(new Error(), 'tokenize string pattern error! miss right token', token);
 				}
-				a = a < 0 ? this.length+a : (a || 0), b = b < 0 ? this.length-1+b : Math.min(b || Infinity, this.length-2);
-				var texts = [];
-				for (var i = a; i <= b; i++){
-					if (this[i] && this[i].text != '\4') texts.push(this[i].text);
+				str = text.slice(i, b+1);
+				re = /([^\\]|^)(\#\{((\w+)(.*?))\})/g;
+				while (m = re.exec(str)){
+					val = parseMacro(ctx, null, m[3], 0, null, m[4]);
+					str = str.slice(0, m.index+1)+(val || '')+str.substr(m.index+m[0].length);
+					re.lastIndex = m.index+1;
 				}
-				return texts.join('');
-			}
-			Source.parse = function(text, file){
-				var token, m;
-				if (!file && !/^["']/.test(text) && Path.isPathText(text)){
-					file = text, text = null;
-				}
-				var loc = Tokens.location(file, text),
-					src = new Source(loc.source, loc.fileName),
-					i = 0,
-					token_re = /#token\s*(\w+(?:\s*,\s*\w+)*)\s*(.*?)(?:\n|$)/mg;
-				file = src.fileName;
-				text = src.source;
-				while (i < text.length && (token = Tokens.parse(text, i))){
-					if (typeof token == 'string'){
-						throw tea.error(new Error(), token, [text, i, text[i], file]);
-					}
-					if (token.text == '#token'){
-						token_re.lastIndex = i;
-						if ((m = token_re.exec(text)) && i == m.index){
-							var types = Text.split(m[1], ',', true), symbols = Text.split(m[2], ',', true);
-							Tokens.define(types, symbols);
-							i += m[0].length;
-							if (debug.prep){
-								debug.prep('[Prep define token: g{"'+symbols.join('", "')+'"}]', token);
-							}
-							continue;
-						}else {
-							token.location = loc.fission(token.text, i);
-							throw tea.error(new Error(), 501, token);
-						}
-					}
-					token.location = loc.fission(token.text, i);
-					if (token.location.columnNumber === 0){
-						token.indent = token.type == 'BlankTokn' ? token.text.replace(/\t/g, tab_size).length : 0;
-					}
-					i = token.location.end+1;
-					src.add(token);
-				}
-				src.add(Tokens.endToken);
-				return src;
+				str = Template.string(str);
+				token.text = str;
+				token.types = ['StringTokn', 'ConstTokn'];
+				token.location.end = b;
+				return token;
 			};
-			function TrimIndent(src, a, b){
-				if (a == null) a = 0;
-				if (b == null) b = src.length-1;
-				var _a = a, _b = b;
-				while (src[_a].is('BlankTokn', 'LF')){
-					_a++;
-				}
-				if (_a > a){
-					if (src[--_a].type != 'LF'){
-						_a--;
-					}
-					src.delete(a, _a);
-				}
-				while (src[_b].is('BlankTokn', 'LF')){
-					_b--;
-				}
-				if (_b < b){
-					src.delete(++_b, b);
-				}
-				var min = -1;
-				for (var i = a; i <= b; i++){
-					if (src[i] && src[i].indent >= 0){
-						if (min == -1 || src[i].indent < min){
-							min = src[i].indent;
-						}
-					}
-				}
-				if (min > 0){
-					for (var i = a; i <= b; i++){
-						if (src[i] && src[i].indent >= 0){
-							src[i].indent -= min;
-							if (src[i].indent == 0){
-								src[i+1].indent = src[i].indent;
-								src[i++] = null;
-							}else if (src[i].type == 'BlankTokn'){
-								src[i].text = src[i].text.replace(/\t/g, tab_size).substr(0, src[i].indent);
-							}
-						}
-					}
-				}
-				return src;
-			}
-			function GoIndex(ori, src, index, ig_lf, catch_comm){
-				var len = src.length-1, type;
-				while ((index += ori) >= 0 && index <= len){
-					type = src[index] && src[index].type;
-					if (!type || type == 'BlankTokn' || (!catch_comm && type == 'CommDecl') || (ig_lf && type == 'LF')){
-						continue;
-					}
-					return index;
-				}
-				if (ori > 0){
-					return index > len ? len : index;
-				}
-				return index < 0 ? 0 : index;
-			}
-			function IndexPair(src, s1, s2, index, reverse){
-				var s1_re = new RegExp('^'+s1.replace(/([^\w\|])/g, '\\$1')+'$'),
-					s2_re = new RegExp('^'+s2.replace(/([^\w\|])/g, '\\$1')+'$');
-				if (reverse){
-					var b = -1, jump = 0;
-					while (index >= 0){
-						if (s2_re.test(src[index].text)){
-							if (b == -1){
-								b = index;
-							}else if (s1 == s2){
-								return [index, b];
-							}else {
-								jump += 1;
-							}
-						}else if (s1_re.test(src[index].text) && b != -1){
-							if (jump == 0) return [index, b];
-							jump -= 1;
-						}
-						index -= 1;
-					}
-				}else {
-					var len = src.length, a = -1, jump = 0;
-					while (index < len){
-						if (s1_re.test(src[index].text)){
-							if (a == -1){
-								a = index;
-							}else if (s1 == s2){
-								return [a, index];
-							}else {
-								jump += 1;
-							}
-						}else if (s2_re.test(src[index].text) && a != -1){
-							if (jump == 0) return [a, index];
-							jump -= 1;
-						}
-						index += 1;
-					}
-				}
-			}
-			return Source;
-		})();
-		module.exports = Source;
-	});
-	CreateModule("../src/tokens/index.tea", function(module, exports){
-		var Tokens = module.exports,
-			Location = __require("../src/tokens/location.tea"),
-			Token = __require("../src/tokens/token.tea"),
-			token_types = {},
-			token_complex = [],
-			token_literals = {},
-			token_re = null,
-			token_complex_re = null,
-			token_complex_rre = null;
-		Tokens.token = function(text, types, indent, location){
-			if (!types){
-				if (text == '\4'){
-					types = ['EOT', 'BlockBreakTokn', 'BlockBreak', 'EndTokn'];
-				}else if (token_literals.hasOwnProperty(text)){
-					types = token_literals[text];
-				}else if (text){
-					types = ['UNKNOW'];
-				}else {
-					types = ['EMPTY'];
-				}
-			}
-			return new Token(text, types, indent, location);
-		};
-		Tokens.location = function(file, source, code, start, end, line, column){
-			return new Location(file, source, code, start, end, line, column);
-		};
-		Tokens.define = function(types, literals){
-			var literal_re, tmp;
-			if (arguments.length == 1){
-				if (isJson(types)){
-					for (var i in types){
-						if (!types.hasOwnProperty(i)) continue;
-						Tokens.define(i, types[i]);
-					}
-				}
-				return;
-			}
-			types = isArray(types) ? types : types.split(' ');
-			literals = isArray(literals) ? literals : literals.split('  ');
-			for (var _i=0, literal; _i < literals.length; _i++){
-				literal = literals[_i];
-				if (token_types.hasOwnProperty(literal) && /^[A-Z]\w+$/.test(literal)){
-					Tokens.define(types, token_types[literal]);
-					continue;
-				}
-				if (/\w\W|\W\w/.test(literal)){
-					literal_re = literal.replace(/(\W)/g, '\\$1');
-					if (token_complex.indexOf(literal_re) == -1){
-						token_complex.push(literal_re);
-					}
-				}
-				for (var _j=0, type; _j < types.length; _j++){
-					type = types[_j];
-					if (!token_types[type]) token_types[type] = [];
-					if (token_types[type].indexOf(literal) == -1){
-						token_types[type].push(literal);
-					}
-				}
-				if (tmp = token_literals[literal]){
-					for (var _j=0, type; _j < types.length; _j++){
-						type = types[_j];
-						if (tmp.indexOf(type) == -1){
-							tmp.push(type);
-						}
-					}
-				}else {
-					token_literals[literal] = types.slice();
-				}
-			}
-			if (token_complex.length){
-				token_complex.sort(function(a, b){return b.length-a.length});
-				token_complex_re = new RegExp('^(?:'+token_complex.join('|')+')(?!\\w)', 'g');
-				token_complex_rre = new RegExp('(?:'+token_complex.join('|')+')$', 'g');
-			}
-		};
-		Tokens.parse = function(source, pos){
-			var text, match, code, b, prev;
-			if (!(text = pos === 0 && source || source.substr(pos))){
-				return;
-			}
-			if (token_complex_re && (match = text.match(token_complex_re))){
-				if (token_literals.hasOwnProperty(match[0])){
-					return new Token(match[0], token_literals[match[0]]);
-				}
-			}
-			if (match = text.match(/^\n/)){
-				return new Token(match[0], token_literals[match[0]]);
-			}
-			if (match = text.match(/^[\r\t\f\ ]+/)){
-				return new Token(match[0], ['BlankTokn']);
-			}
-			if (match = text.match(/^(0[xX][0-9a-fA-F]+|(?:\.\d+|\d+(?:\.\d+)?)(?:e\-?\d+)?)/)){
-				return new Token(match[0], ['NumTokn', 'ConstTokn']);
-			}
-			if (match = text.match(/^([\$a-zA-Z_][\w\$]*)/)){
-				if (token_literals.hasOwnProperty(match[0])){
-					return new Token(match[0], token_literals[match[0]]);
-				}
-				return new Token(match[0], ['IdentifierTokn']);
-			}
-			if (!(match = text.match(/^[^\w\_\s]+/))){
-				return 'tokenize parse error! unexpected token like as "'+text.slice(0, 5)+'"';
-			}
-			code = match[0];
-			while (code && token_types.SymbolTokn.indexOf(code) == -1){
-				code = code.slice(0, -1);
-			}
-			switch (code){
-				case '"':case '"""':case '""""':case '`':case "'":case "'''":case "''''":
-					if ((b = indexOfRightPair(text, code, code)) === false){
-						return 'tokenize string pattern error! miss right token';
-					}
-					return new Token(text.slice(0, b+1), ['StringTokn', 'ConstTokn']);
-				case '#':
-					if (match = text.match(/^(\#[\$A-Za-z_][\w\$]*)/)){
-						return new Token(match[0], ['InstructionExpr']);
-					}
-				case '//':case '#!':
-					if ((b = text.indexOf('\n')) == -1){
-						b = text.length;
-					}
-					return new Token(text.slice(0, b), ['CommDecl', 'LineComm']);
-				case '/*':
-					if ((b = indexOfRightPair(text, '/*', '*/')) === false){
-						return 'tokenize comment pattern error! miss right token';
-					}
-					return new Token(text.slice(0, b+1), ['CommDecl', 'MultiLineComm']);
-				case '/':
-					if (pos && (prev = rtokenize(source, pos-1, true, true)) && !(typeof prev == 'string')){
-						if (/^(\+\+|\-\-\@|\]|\)|\})$|\"$|\'$/.test(prev[0])) break;
-						if (/^[\w\$]+$/.test(prev[0]) && token_types.Keyword.indexOf(prev[0]) == -1) break;
-					}
-					if ((b = indexOfRightPair(text, '/', '/')) === false){
-						return 'tokenize regexp pattern error! miss right token';
+			Processor.regexp = function(ctx, src, text, i, token){
+				var b, match;
+				if (!testValue(src, src.prevIndex(src.length, true))){
+					if ((b = indexRight(text, i, '/', '/')) === false){
+						throw tea.error(new Error(), 'tokenize regexp pattern error! miss right token', token);
 					}
 					if (match = text.substr(b+1).match(/^[gimy]+/)){
 						b = b+match[0].length;
 					}
-					code = text.slice(0, b+1);
-					return new Token(code, /\n/.test(code) ? ['RegExpDecl', 'ConstTokn', 'MultiLineRegExp'] : ['RegExpDecl', 'ConstTokn']);
-			}
-			if (token_literals.hasOwnProperty(code)){
-				return new Token(code, token_literals[code]);
-			}
-			return 'tokenize parse error! undefined token "'+code+'"';
-		};
-		Tokens.tokenize = function(text, opt){
-			var token;
-			if (typeof opt == 'number'){
-				return Tokens.parse(text, opt);
-			}
-			var list = [], pos = 0;
-			while (token = Tokens.parse(text, pos)){
-				list.push(opt == 'code list' ? token.text : token);
-				pos += token.text.length;
-			}
-			return list;
-		};
-		Tokens.endToken = Tokens.token('\4');
-		Tokens.types = token_types;
-		Tokens.define({'LF' : '\n',
-			'BlankTokn' : '\r  \t  \f  \ ',
-			'CommDecl' : '//  /*  */  #!',
-			'SymbolTokn Instruction' : '#',
-			'ConstTokn Boolean' : 'true  false',
-			'ConstTokn Null' : 'null  undefined  Infinity',
-			'Keyword' : 'this  instanceof  in  extends  null  undefined  Infinity  true  false  '+'if  while  with  catch  for  switch  case  default  else  try  do  finally  '+'new  typeof  delete  void  return  break  continue  throw  var  function  '+'let  enum  const  import  export  debugger  super  yield  class',
-			'IdentifierTokn' : 'eval  arguments  extends  import  export  get  set  static  as  of  and  or  not  is  require  let  enum  const  debugger  super  yield  class',
-			'Restricted' : 'instanceof  in  Infinity  '+'if  while  with  catch  for  switch  case  default  else  try  do  finally  '+'new  typeof  delete  void  return  break  continue  throw',
-			'SymbolTokn' : ';  ,  .  :  ?  \\  [  ]  {  }  (  )  //  /*  */  #!  '+'=  +=  -=  *=  /=  %=  &=  >>=  <<=  >>>=  '+'>  <  >=  <=  !=  !==  ==  ===  ++  --  '+'!  ~  +  -  *  /  %  &  |  ^  >>  <<  >>>  &&  ||  '+'**  ::  |=  ?=  @  ->  <-  >>  <<  >>>  <<<  =>  <=  ..  ...',
-			'SymbolTokn Quote' : '\'  "  """  \'\'\'  """"  \'\'\'\'  `',
-			'Controler' : 'if  while  with  catch  for  switch  case  default  else  try  do  finally',
-			'Declaration' : 'function  require  class  package  static  get  set  import  export',
-			'Clauses' : 'let  enum  const  var  return  break  continue  throw  debugger',
-			'Expression IdentifierTokn' : 'super  this  @',
-			'ClassRestricted' : 'static  get  set  extends',
-			'Unary' : 'new  typeof  yield  delete  void  not  !  ~  -  +  ++  --',
-			'Prefix Postfix' : '++  --',
-			'Binary Compute' : '+  -  *  /  %  &  |  ^  >>  <<  >>>  **  \\',
-			'Binary Compare' : 'instanceof  in  of  as  extends  is  not is  >  <  >=  <=  !=  !==  ==  ===',
-			'Binary Logic' : 'and  or  &&  ||',
-			'Binary Assign' : '=  +=  -=  *=  /=  %=  &=  |=  >>=  <<=  >>>=  ?=  |=',
-			'Ternary' : '?',
-			'Member' : '.  ::  ..  [',
-			'Comma' : ',',
-			'Open' : '{  (  [',
-			'Close' : '}  ]  )',
-			'BlockBreakTokn BlockBreak' : ';  \n',
-			'BlockStart' : ':  {',
-			'Contextual' : 'Binary  Member  Comma  in  as  of  ->  <-  =>  <=  ...',
-			'EndTokn' : 'BlockBreakTokn  Close  /*  //',
-			'IGLF' : 'Unary  Binary  Ternary  Member  Assign  Comma  Open  Contextual'});
-		function indexOfRightPair(text, s1, s2){
-			var a_b = Text.indexPair(text, 0, s1, s2, true);
-			return !a_b || a_b[0] !== 0 ? false : a_b[1]+s2.length-1;
-		}
-		function rtokenize(source, pos, ig_blank, ig_comm){
-			var text, match, code;
-			text = pos && source.slice(0, pos+1) || source;
-			while (text){
-				if (match = text.match(/\s+$/)){
-					if (!ig_blank){
-						return [match[0], match.index];
+					token.text = Template.regexp(text.slice(i, b+1));
+					token.types = ['RegExpDecl', 'ConstTokn'];
+					token.location.end = b;
+				}
+				return token;
+			};
+			Processor.comm = function(ctx, src, text, i, token){
+				var b;
+				switch (token.text){
+					case '/*':
+						if ((b = indexRight(text, i, '/*', '*/')) === false){
+							throw tea.error(new Error(), 'tokenize comment pattern error! miss right token', token);
+						}
+						token.types = ['CommDecl', 'MultiLineComm'];
+						break;
+					case '//':
+						token.types = ['CommDecl', 'LineComm'];
+						break;
+					case '#!':
+						token.types = ['CommDecl', 'ShellComm'];
+						break;
+				}
+				if (!b){
+					if ((b = text.indexOf('\n', i)) == -1){
+						b = text.length;
 					}
-					text = text.slice(0, match.index);
-					continue;
+					b -= 1;
 				}
-				if (match = text.match(/(\/\*[\s\w\W]*?\*\/|\/\*)$/) || text.match(/(\/\/|\#\W).*$/)){
-					if (!ig_comm){
-						return [match[0], match.index];
-					}
-					text = text.slice(0, match.index);
-					continue;
-				}
-				if (match = (token_complex_rre && text.match(token_complex_rre)) || text.match(/(0[xX][0-9a-fA-F]+|(?:\.\d+|\d+(?:\.\d+)?)(?:e\-?\d+)?)$/) || text.match(/([\$a-zA-Z_][\w\$]*)$/)){
-					return [match[0], match.index];
-				}
-				if (!(match = text.match(/[^\w\_\s]+$/))){
-					return 'reverse tokenize parse error! unexpected token like as "'+text.slice(-5)+'"';
-				}
-				code = match[0];
-				while (code && token_types.SymbolTokn.indexOf(code) == -1){
-					code = code.substr(1);
-				}
-				if (/'|"/.test(code)){
-					var str_rre = new RegExp(code+'(?:\\\\\\\\|'+code.replace(/(.)/g, '\\\\$1')+'|[\\s\\w\\W])*?'+code+'$');
-					if (match = text.match(str_rre)){
-						return [match[0], match.index];
+				token.text = text.slice(i, b+1);
+				token.location.end = b;
+				return token;
+			};
+			Processor.pound = function(ctx, src, text, i, token, cache){
+				var match, type;
+				if (match = text.substr(i+1).match(/^([\$A-Za-z_][\w\$]*)(\:?)/)){
+					type = match[1];
+					if (Processor.hasOwnProperty(type)){
+						token = Processor[type](ctx, src, text, i, token);
+					}else if (/^(elifdef|elif|ifdef|else|endif|if)$/.test(type)){
+						token = Processor.control(ctx, src, text, i, token, type, cache);
+					}else if (type == 'end'){
+						token = text.indexOf('\n', i);
 					}else {
-						text = text.slice(0, -code.length);
+						token.text = '#'+match[0];
+						token.types = ['InstructionExpr', 'ConstTokn'];
+						token.location.end = i+match[0].length;
+						token = parseMacro(ctx, src, text, i, token, match[0], token.location.end);
+					}
+				}
+				return token;
+			};
+			Processor.token = function(ctx, src, text, i, token){
+				var m;
+				if (m = text.substr(i).match(/^#token (\w+(?:\s*,\s*\w+)*) (.*)$/m)){
+					var types = Text.split(m[1], ',', true), symbols = Text.split(m[2], ',', true);
+					tea.defineToken(types, symbols);
+					if (debug.prep){
+						debug.prep('[Prep define token: g{"'+symbols.join('","')+'"}]', token);
+					}
+					return i+m[0].length;
+				}else {
+					throw tea.error(new Error(), 'define token syntax error!', token);
+				}
+			};
+			Processor.line = function(ctx, src, text, i, token){
+				token.text = token.location.lineNumber+'';
+				token.types = ['NumTokn', 'ConstTokn'];
+				if (token.indent >= 0){
+					token.types.push('LineHead');
+				}
+				token.location.end = i+4;
+				return token;
+			};
+			Processor.argv = function(ctx, src, text, i, token){
+				var m, arg;
+				if (!(m = text.substr(i).match(/^#argv (.*$)/m))){
+					throw tea.error(new Error(), 'define argv syntax error!', token);
+				}
+				var args = Text.split(m[1], ' ', true);
+				for (var _i=0, item; _i < args.length; _i++){
+					item = args[_i];
+					if (!item){
 						continue;
 					}
-				}
-				return [code, match.index];
-			}
-		}
-	});
-	CreateModule("../src/tokens/location.tea", function(module, exports){
-		var Location = (function(){
-			function Location(file, source, code, start, end, line, column){
-				if (!source && file){
-					source = Text.readFile(file);
-				}
-				this.__file_id = CacheFile(file);
-				this.__source_id = CacheSource(source);
-				this.code = code || '';
-				this.lineNumber = (line != null ? line : null);
-				this.columnNumber = (column != null ? column : null);
-				this.start = (start != null ? start : 0);
-				this.end = end || start+this.code.length-1;
-				if (line == null){
-					CountLineNumber(this, start);
-				}
-			}
-			var file_cache = [], source_cache = [];
-			Location.prototype.__defineGetter__("fileName", function(){
-				return file_cache[this.__file_id] || '';
-			});
-			Location.prototype.__defineGetter__("source", function(){
-				var data = source_cache[this.__source_id];
-				return data && data.source || '';
-			});
-			Location.prototype.__defineGetter__("line", function(){
-				var data = source_cache[this.__source_id];
-				return data && data[this.lineNumber-1][3] || '';
-			});
-			Location.prototype.fission = function (code, start){
-				return new Location(this.__file_id, this.__source_id, code, start);
-			}
-			function CountLineNumber(loc, start){
-				var data;
-				if (data = source_cache[loc.__source_id]){
-					for (var i=0, line_data; i < data.length; i++){
-						line_data = data[i];
-						if (start >= line_data[1] && start <= line_data[2]){
-							loc.lineNumber = line_data[0];
-							loc.columnNumber = start-line_data[1];
-							break;
+					if (arg = item.match(/\s*((-{0,2})[\w\-]+)(?:\s*=\s*(.*))?/)){
+						tea.argv[arg[1]] = evalValue(arg[3]);
+						if (debug.prep){
+							debug.prep('[Prep set argv: g{'+arg[1]+' == '+tea.argv[arg[1]]+'}]', token);
 						}
 					}
 				}
-				return loc;
-			}
-			function CacheFile(file){
-				if (typeof file == 'number'){
-					return file;
+				return i+m[0].length;
+			};
+			Processor.run = function(ctx, src, text, i, token){
+				var abcd, b, res;
+				if (!(abcd = indexInstruction(text, i))){
+					throw tea.error(new Error(), 'define run script syntax error', token);
 				}
-				if (file){
-					var index = file_cache.indexOf(file);
-					if (index == -1){
-						index = file_cache.push(file)-1;
-					}
-					return index;
-				}
-				return null;
-			}
-			function CacheSource(source){
-				if (typeof source == 'number'){
-					return source;
-				}
-				if (source){
-					var index = -1;
-					for (var i=0; i < source_cache.length; i++){
-						if (source_cache[i].text == source){
-							index = i;
-							break;
+				b = abcd[3];
+				try {
+					if (res = Template.run(text.slice(i+4, b-3), ['source', 'index', 'argv'], [src, i, tea.argv], ctx)){
+						src.parse(res, null, ctx);
+						if (debug.prep){
+							debug.prep('[Prep run instruction]', token);
 						}
 					}
-					if (index == -1){
-						var lines = source.split('\n'), shift = 0, data = [];
-						for (var i=0, line; i < lines.length; i++){
-							line = lines[i];
-							data.push([i+1, shift, (shift += line.length+1)-1, line+'\n']);
+				}catch (e) {
+					var err_pot = tea.helper.errorPot(token);
+					err_pot = err_pot.replace(/[^\n]*$/g, '')+text.slice(i+4, b-3).replace(/^/mg, err_pot.match(/"(\s*\d+\s*\|)/)[1]+'\t')+'\n"';
+					throw tea.error(new Error(), e, 'Prep run eval error: '+e.message, err_pot);
+				}
+				return b+1;
+			};
+			Processor.define = function(ctx, src, text, i, token){
+				var m, name, params, body;
+				if (!(m = text.substr(i).match(/^#define +(\w+)(\(.*?\))? *(\s*""""[\w\W]*?""""|(?:.*\\\n)*.*)/))){
+					throw tea.error(new Error(), 'define macro syntax error!', token);
+				}
+				name = m[1], params = m[2] && (m[2].slice(1, -1).trim() || []), body = m[3] && Text.trimIndent(m[3].replace(/\\\n/g, '\n').replace(/^\s*""""|""""\s*$/g, ''));
+				if (body && /#(?:if|argv)/.test(body)){
+					body = ctx.parse(body).join();
+				}
+				var macro = ctx.add(name, params, body);
+				if (macro.error){
+					throw tea.error(new Error(), macro.error, token);
+				}
+				if (debug.prep){
+					debug.prep('[Prep define: g{'+name+(m[2] || '')+'}]', token);
+				}
+				return i+m[0].length;
+			};
+			Processor.undef = function(ctx, src, text, i, token){
+				var m;
+				if (!(m = text.substr(i).match(/^#undef (.+)$/m))){
+					throw tea.error(new Error(), 'undefine syntax error!', token);
+				}
+				var names = m[1].trim().replace(/\s+/g, ' ').split(' ');
+				for (var _i=0, name; _i < names.length; _i++){
+					name = names[_i];
+					ctx.undef(name);
+				}
+				if (debug.prep){
+					debug.prep('[Prep undef: g{'+names.join(', ')+'}]', token);
+				}
+				return i+m[0].length;
+			};
+			Processor.include = function(ctx, src, text, i, token){
+				var m, file_list, file_dir, files, temp;
+				if (!(m = text.substr(i).match(/^#include +((?:[^\,\;\s\\]+(?:\\\ )*)+(?:\s*,\s*(?:[^\,\;\s\\]+(?:\\\ )*)+)*)\;*/))){
+					throw tea.error(new Error(), 'include syntax error!', token);
+				}
+				file_list = m[1].replace(/\s*,\s*/g, ',').replace(/\s*;+/g, '').trim().split(','), file_dir = Path.dirname(token.fileName || src.fileName);
+				files = [];
+				for (var f=0; f < file_list.length; f++){
+					temp = Path.parseFile(file_list[f], file_dir);
+					if (temp.error){
+						throw tea.error(new Error(), 'Can not find file: '+file_list[f]+' in "'+file_dir+'" dir', token);
+					}
+					for (var _i=0, file; _i < temp.length; _i++){
+						file = temp[_i];
+						if (!include_cache[file]){
+							include_cache[file] = ctx.parse(null, file);
+							include_cache[file].trimIndent();
 						}
-						data.source = source;
-						index = source_cache.push(data)-1;
-					}
-					return index;
-				}
-				return null;
-			}
-			return Location;
-		})();
-		module.exports = Location;
-	});
-	CreateModule("../src/tokens/token.tea", function(module, exports){
-		var Node = __require("../src/syntax/node.tea"), NodeBase = Node.NodeBase;
-		var Token = (function(){
-			function Token(text, types, indent, location){
-				this.text = text;
-				if (types){
-					this.types = Hash.slice(types);
-				}
-				if (indent != null){
-					this.indent = indent;
-				}
-				this.location = location || null;
-				this.istoken = true;
-			}
-			Token.prototype = new NodeBase();
-			Token.prototype.constructor = Token;
-			Token.prototype.__super__ = NodeBase.prototype;
-			var isNode = Node.isNode;
-			Token.prototype.__defineGetter__("types", function(){
-				return this._types;
-			});
-			Token.prototype.__defineSetter__("types", function(types){
-				this.type = types[0];
-				this._types = types;
-				return this._types;
-			});
-			Token.prototype.__defineSetter__("indent", function(num){
-				this._indent = (num != null ? num : -1);
-				var i = this.types.indexOf('LineHead');
-				if (this._indent >= 0){
-					if (i == -1) this.types.push('LineHead');
-				}else if (i >= 0){
-					this.types.splice(i, 1);
-				}
-			});
-			Token.prototype.__defineGetter__("indent", function(){
-				return this._indent;
-			});
-			Token.prototype.__defineGetter__("start", function(){
-				return this.location.start;
-			});
-			Token.prototype.__defineGetter__("end", function(){
-				return this.location.end;
-			});
-			Token.prototype.is = function (){
-				var list = arguments.length > 1 ? arguments : arguments[0].split(' '),
-					types = this.types;
-				for (var i=0; i < list.length; i++){
-					if (types.indexOf(list[i]) != -1){
-						return list[i];
-					}else if (isNode(types[0], list[i])){
-						return list[i];
+						if (include_cache[file].length){
+							src.insert(token.clone('/* Include file "'+file+'" */\n', ['CommDecl']));
+							src.insert(include_cache[file].clone());
+							if (debug.prep){
+								debug.prep('[Prep include: file at g{"'+file+'"}]', token);
+							}
+						}
 					}
 				}
-				return false;
-			}
-			Token.prototype.eq = function (){
-				var list = arguments.length > 1 ? arguments : arguments[0].split(' '),
-					text = this.text;
-				for (var i=0; i < list.length; i++){
-					if (list[i] == text){
-						return text;
+				return i+m[0].length;
+			};
+			Processor.test = function(ctx, src, text, i, token){
+				var b, m;
+				if (!(b = indexRight(text, i, '#test', '#end'))){
+					b = text.length;
+				}
+				text = text.slice(i, b-3);
+				if (!(m = text.match(/#test(.*)\n/))){
+					throw tea.error(new Error(), 'define test block syntax error', token);
+				}
+				text = text.substr(m[0].length);
+				if (m[1] && m[1].trim() == 'run'){
+					tea.argv['--test'] = true;
+				}
+				token.text = '/* Test: */\n'+tea.compile(text, ctx)+'\n/* Test end */';
+				token.types = ['TestPatt', 'CommDecl'];
+				src.add(token);
+				return b+1;
+			};
+			Processor.expr = function(ctx, src, text, i, token){
+				var m, type, name, pattern, writer;
+				if (!(m = text.substr(i).match(/#(expr|stat) +([A-Z][\w]+(?:Tokn|Patt|Decl|Expr|Stam)) +[\/\`]((?:[^\/\`]|\\\/|\\\`)+)[\/\`] *(\s*""""[\w\W]*?""""|(?:.*\\\n)*.+)/))){
+					throw tea.error(new Error(), 'define syntactic sugar syntax error', token);
+				}
+				type = m[1] == 'expr' ? 'expression' : 'statement';
+				name = m[2];
+				pattern = m[3];
+				writer = Text.trimIndent(m[4].replace(/\\\n/g, '\n').replace(/^\s*""""|""""\s*$/g, ''));
+				var ss = ctx.add(type, name, pattern, writer);
+				if (ss.error){
+					throw tea.error(new Error(), ss.error, token);
+				}
+				if (debug.prep){
+					debug.prep('[Prep register '+type+': '+name+' -> /'+pattern+'/]', token);
+				}
+				return i+m[0].length;
+			};
+			Processor.control = function(ctx, src, text, i, token, type, cache){
+				var blocks, status, data;
+				if (type == 'if' || type == 'ifdef'){
+					if (!(blocks = indexControl(text, i))){
+						throw tea.error(new Error(), 'define control preprocess syntax error', token);
+					}
+					status = false;
+					for (var _i=0, item; _i < blocks.length; _i++){
+						item = blocks[_i];
+						if (status){
+							item[1] = false;
+						}else {
+							item[1] = status = evalCondition(ctx, item[0], item[1], src, token);
+						}
+						cache[item[2]] = item;
 					}
 				}
-				return false;
-			}
-			Token.prototype.clone = function (text){
-				var token = new Token(text || this.text, this.types, this.indent, this.location);
-				token.parent = this.parent;
+				if (!(data = cache[i])){
+					throw tea.error(new Error(), 'unexpected #'+type+' ctx instruction', token);
+				}
+				if (data[1]){
+					return data[4]+1;
+				}else {
+					return data[5]+1;
+				}
+			};
+			Processor.macro = function(ctx, src, text, i, token){
+				if (testIdExpr(src, src.length)){
+					return parseMacro(ctx, src, text, i, token, token.text);
+				}
+				return token;
+			};
+			Processor.stam = Processor.expr;
+			function parseMacro(ctx, src, text, i, token, name, b){
+				if (b == null) b = i+name.length-1;
+				var macro, params, ab, val_src;
+				if (macro = ctx.get(name, 'macrofun')){
+					params = text.substr(b+1);
+					if (/^\s*\(/g.test(params) && (ab = Text.indexPair(params, 0, '(', ')'))){
+						b += ab[1]+1;
+						params = params.slice(ab[0]+1, ab[1]);
+					}else if (/^\ +[^\n\;\}\]\)\,]/.test(params)){
+						ab = Text.indexBreak(params, 0);
+						b += ab+1;
+						params = params.slice(0, ab+1);
+					}else {
+						params = '';
+					}
+				}
+				if (!macro || !params){
+					macro = ctx.get(name, 'macro');
+				}
+				if (macro){
+					val_src = macro.getValue(params, true);
+					if (src){
+						src.insert(val_src);
+						if (debug.prep){
+							debug.prep('[Prep macro matched: '+name+']', token);
+						}
+					}else {
+						return val_src.join();
+					}
+					return b+1;
+				}
 				return token;
 			}
-			return Token;
+			function indexInstruction(text, i){
+				var m, a, a_, b, type, label, b_, abcd;
+				if (m = text.substr(i).match(/^#(\w+)(\:?)/)){
+					a = i, a_ = i+m[0].length-1;
+					b = i+m[0].length-1;
+					type = m[1];
+					label = !!m[2];
+					var t = 10;
+					while (t--){
+						if (!(m = text.substr(b+1).match(/#(\w+)(\:?)/))){
+							b = text.length, b_ = b;
+							break;
+						}else {
+							if (m[1] == 'end' || m[1] == 'end'+type || m[1] == 'endif' && /^(ifdef|if|elifdef|elif|else)$/.test(type)){
+								b = b+1+m.index, b_ = b+m[0].length-1;
+								break;
+							}else if (label && m[2] || /^(elifdef|elif|else)$/.test(m[1])){
+								b_ = b = b+m.index;
+								break;
+							}
+							b = b+m.index;
+							if (/^(ifdef|if)$/.test(m[1])){
+								if (!(b = indexControl(text, b+1, 'end'))){
+									return;
+								}
+							}else if (/^(run|test)$/.test(m[1]) || m[2] == ':'){
+								if (!(abcd = indexInstruction(text, b+1))){
+									return;
+								}
+								b = abcd[3];
+							}
+						}
+					}
+					return [a, b, a_, b_];
+				}else {
+					throw tea.error(new Error(), 'not find instruction');
+				}
+			}
+			function indexControl(text, i, only_index){
+				var re, cache, abcd, a, b, _a, _b, m;
+				re = /^#(ifdef|if)\b/;
+				cache = [];
+				while (re.test(text.substr(i))){
+					if (!(abcd = indexInstruction(text, i))){
+						return;
+					}
+					a = abcd[0], b = abcd[1], _a = abcd[2], _b = abcd[3];
+					if (only_index){
+						cache.push([a, b, _a, _b]);
+					}else {
+						m = text.substr(_a+1).match(/.*$/m);
+						cache.push([text.slice(a+1, _a+1), m[0], a, b, _a+m[0].length, _b]);
+					}
+					re = /^#(elifdef|elif|else)\b/;
+					i = _b+1;
+				}
+				if (!only_index){
+					var last = cache[cache.length-1];
+					if (m = text.substr(last[3]).match(/^#(endif|end).*$/m)){
+						cache.push(['endif', '', last[3], last[3], last[5], last[3]+m[0].length-1]);
+					}
+				}
+				if (only_index == 'end'){
+					return cache[cache.length-1][3];
+				}
+				return cache;
+			}
+			function indexRight(text, index, s1, s2){
+				if (s2 == null) s2 = s1;
+				var a_b = Text.indexPair(text, index, s1, s2, true);
+				return !a_b || a_b[0] !== index ? false : a_b[1]+s2.length-1;
+			}
+			function testValue(src, index){
+				var token;
+				if (token = src[index]){
+					if (token.is('ConstTokn', 'Close', 'Postfix')){
+						return true;
+					}
+					if (token.is('IdentifierTokn')){
+						if (!token.is('Binary', 'Unary')){
+							return true;
+						}
+					}else if (token.is('Keyword')){
+						if (token.is('Restricted')){
+							return false;
+						}
+					}else {
+						return false;
+					}
+					token = src[src.prevIndex(index, true)];
+					if (token && token.is('Member')){
+						return true;
+					}
+				}
+				return false;
+			}
+			function testIdExpr(src, index){
+				var last;
+				last = src[src.prevIndex(index, true)];
+				if (last && last.eq('.', '::', '..', 'function', 'set', 'get', 'static')){
+					return false;
+				}
+				return true;
+			}
+			function evalValue(val){
+				if (val == 'false' || val == 'null'){
+					return false;
+				}else if (val){
+					try {
+						return eval(val);
+					}catch (e) {
+						return '"'+val+'"';
+					}
+				}
+				return true;
+			}
+			function evalCondition(ctx, type, condition, src, token){
+				var isdef, root_file, the_file, exp;
+				isdef = type.indexOf('def') != -1, root_file = tea.argv.file, the_file = token.fileName || src.fileName, exp = condition.trim().replace(/\:$/, '').replace(/((-{0,2})([\$a-zA-Z_][\w]*)\b)/g, function($0, $1, $2, $3){
+					var res;
+					if ($2){
+						if ($3 == 'main'){
+							return root_file == the_file;
+						}
+						if ($3 == 'root'){
+							return '"'+root_file+'"';
+						}
+						if ($3 == 'file'){
+							return '"'+the_file+'"';
+						}
+						res = tea.argv[$1];
+					}else if (isdef){
+						return !!ctx.get($1)+'';
+					}else {
+						if (global.hasOwnProperty($1)){
+							res = global[$1];
+						}else if (tea.argv.hasOwnProperty($1)){
+							res = tea.argv[$1];
+						}else {
+							return $1;
+						}
+					}
+					return typeof res == 'string' ? '"'+res.replace(/\"/g, '\"')+'"' : res;
+				});
+				try {
+					return exp && eval('!!('+exp+')') || type == 'else';
+				}catch (e) {
+					throw tea.error(new Error(), e, '[ProProcess condition '+type+' "'+condition+'" -> "'+exp+'" error', token, 'ProProcess condition error!');
+				}
+			}
+			module.exports = Processor;
+			return Processor;
 		})();
-		module.exports = Token;
-	});
-	CreateModule("../src/syntax/node.tea", function(module, exports){
-		var Scope = __require("../src/syntax/scope.tea");
+	});Module.register('/Users/wl/Sites/TeaJS/src/preprocess/template.tea', '../src/preprocess/template.tea', function(exports, require, module, __filename, __dirname){
+		function regexp(str){
+			str = str.replace(/([^\\]|^)\\i/g, '$1(?:[\\$_a-zA-Z]\\w+)');
+			str = str.replace(/(\\?[\(\"\'\{\[])\.{3}(\\?[\)\"\'\}\]])/g, '(?:$1(?:\\\\\\\\|\\\\$1|\\\\$2|$1(?:\\\\\\\\|\\\\$1|\\\\$2|[^$2]+)*$2|[^$2]+)*$2)');
+			str = str.replace(/\s*\n\s*/g, '');
+			return str;
+		};
+		function slices(str){
+			var m, ab, str_slices = [], tmp_re = /([^\\]|^)(\{\{|\$[a-zA-Z]+)/;
+			while (m = str.match(tmp_re)){
+				str_slices.push(str.slice(0, m.index+m[1].length));
+				if (m[2] == '{{'){
+					if (!(ab = Text.indexPair(str, m.index, '{{', '}}', true))){
+						break;
+					}
+					str_slices.push(str.slice(ab[0]+2, ab[1]));
+					str = str.substr(ab[1]+2);
+				}else {
+					str_slices.push(m[2]);
+					str = str.substr(m.index+m[0].length);
+				}
+			}
+			if (str){
+				str_slices.push(str);
+			}
+			return str_slices;
+		};
+		function string(str){
+			var symbol = str.match(/^('+|"+|`+)/)[1],
+				qq = symbol[0] == '`' ? "'" : symbol[0];
+			str = str.slice(symbol.length, -symbol.length);
+			if (!str){
+				return qq+str+qq;
+			}
+			if (/\n/.test(str)){
+				str = Text.trimIndent(str);
+			}
+			if (qq == '"'){
+				var str_slices = [];
+				for (var i_ref = slices(str), i=0, item; i < i_ref.length; i++){
+					item = i_ref[i];
+					if (!item){
+						continue;
+					}
+					if (i%2){
+						if (/[^\w\s\$\_]/.test(item)){
+							str_slices.push('('+item+')');
+						}else {
+							str_slices.push(item);
+						}
+					}else {
+						str_slices.push('"'+escapeString(symbol, item)+'"');
+					}
+				}
+				str = str_slices.join('+').replace(/^\"\"\+|\+\"\"$/g, '');
+			}else {
+				str = qq+escapeString(symbol, str)+qq;
+			}
+			return str;
+		};
+		function run(text, args, param, prep){
+			if (param){
+				return func(text, args, true, prep).apply(this, param);
+			}else {
+				return func(text, args, null, prep);
+			}
+		};
+		function func(text, args, create, prep){
+			var script;
+			args = args ? args.join(',') : '';
+			script = compile(text, prep);
+			script = "function("+args+"){\nvar __write  = '';\nfunction write(){for(var i=0; i<arguments.length; i++) __write += arguments[i]};\n"+script+";\nreturn __write;\n}";
+			if (create){
+				eval('create = '+script);
+				return create;
+			}
+			return script;
+		};
+		function compile(text, prep){
+			var snippets, script;
+			if (!test(text)){
+				return tea.compile(text, prep);
+			}
+			snippets = [];
+			for (var i_ref = slices(text), i=0, item; i < i_ref.length; i++){
+				item = i_ref[i];
+				if (!item){
+					continue;
+				}
+				snippets.push(i%2 ? item : "write '"+item+"';");
+			}
+			script = tea.compile(snippets.join('\n'), prep);
+			return script;
+		};
+		function test(text){
+			return /([^\\]|^)\{\{/.test(text);
+		};
+		function escapeString(symbol, str){
+			switch (symbol){
+				case '""""':case '`':case "''''":
+					str = Text(str, symbol[0]).replace(/([^\\]|^)(\\{2,4,6,8})?\\n/g, '$1$2\\n\\\n');
+					break;
+				case '"""':case "'''":
+					str = str.replace(/([^\\]|^)\n/g, '$1\\n').replace(/^\n/mg, '\\n\\\n');
+					break;
+				case '"':case "'":default:
+					str = str.replace(/([^\\]|^)\n|^\n/g, '$1\\n');
+					break;
+			}
+			if (symbol[0] == '"'){
+				if (symbol.length > 1){
+					str = str.replace(/([^\\])"/g, '$1\"');
+				}
+				str = str.replace(/\\'/g, "'");
+			}else {
+				if (symbol.length > 1){
+					str = str.replace(/([^\\])'/g, "$1\'");
+				}
+				str = str.replace(/\\"/g, '"');
+			}
+			return str;
+		}
+		module.exports.regexp = regexp;
+		module.exports.slices = slices;
+		module.exports.string = string;
+		module.exports.run = run;
+		module.exports.func = func;
+		module.exports.compile = compile;
+		module.exports.test = test;
+	});Module.register('/Users/wl/Sites/TeaJS/src/preprocess/macro.tea', '../src/preprocess/macro.tea', function(exports, require, module, __filename, __dirname){
+		var Macro = (function(){
+			var Template = require("../src/preprocess/template.tea");
+			function Macro(name, params, body, parent){
+				this.name = name;
+				this.type = params ? 'macrofun' : 'macro';
+				if (params){
+					if (typeof params == 'string'){
+						this.params = Text.split(params, ',', true);
+					}else {
+						this.params = params;
+					}
+				}else {
+					this.params = [];
+				}
+				this.body = body;
+				this.parent = parent;
+				if (Template.test(body)){
+					try {
+						this.script = Template.func(body, params, true);
+					}catch (e) {
+						this.error = e;
+					}
+				}
+			}
+			Macro.prototype.getValue = function (params, ret_src){
+				var value, val_src;
+				if (typeof params == 'string'){
+					params = Text.split(params.replace(/^\((.*)\)$/g, '$1'), ',', 'trim');
+				}
+				if (this.script){
+					value = this.script.apply(this.parent, params || []);
+				}else {
+					value = this.body;
+				}
+				value = replaceParam(value, this.params, params || []);
+				value = Text.trimIndent(value);
+				val_src = this.parent.parse(value);
+				if (ret_src){
+					return val_src;
+				}
+				return val_src.join();
+			}
+			function replaceParam(value, keys, params){
+				var keys_join = keys.join('|'),
+					re = new RegExp('(#*?)('+(keys_join ? '\\b(?:'+keys_join+')\\b|' : '')+'#(\\d+)|\\bARGR\\.\\.\\.)(##)?', 'g'),
+					m,
+					hash,
+					unhash,
+					key,
+					num,
+					arg,
+					val,
+					insert = [],
+					id;
+				while (m = re.exec(value)){
+					hash = m[1], key = m[2], num = m[3], unhash = m[4];
+					num = num || keys.indexOf(key);
+					if (key == 'ARGR...'){
+						val = params.slice(keys.length).join(', ');
+					}else if (params[num]){
+						val = params[num];
+					}
+					id = '$$$'+ID()+'$$$';
+					insert.push([id, (val ? hash%2 ? '"'+val+'"' : val : '')]);
+					value = value.slice(0, m.index)+id+value.substr(re.lastIndex);
+					re.lastIndex = m.index+id.length;
+				}
+				for (var i=0; i < insert.length; i++){
+					value = value.replace(insert[i][0], insert[i][1]);
+				}
+				return value;
+			}
+			module.exports = Macro;
+			return Macro;
+		})();
+	});Module.register('/Users/wl/Sites/TeaJS/src/preprocess/sugar.tea', '../src/preprocess/sugar.tea', function(exports, require, module, __filename, __dirname){
+		var Sugar = (function(){
+			var Syntax = require("../src/syntax/index.tea");
+			function Sugar(type, name, pattern, writer, parser){
+				this.type = type;
+				this.name = name;
+				this.stxre = Syntax.regexp(pattern);
+				this.parser = parser;
+				this.writer = writer;
+			}
+			Sugar.prototype.parse = function (src, opt){
+				var node = Syntax.matchNode(this.name, this.stxre, src, 'ret node');
+				if (node && this.parser){
+					return this.parser.call(this, node, src, opt);
+				}
+				return node;
+			}
+			Sugar.prototype.read = function (reader, node){
+				var write = reader.new(this.name);
+				if (typeof this.writer == 'string'){
+					write.read(this.writer, node);
+				}else {
+					write = this.writer(node, write) || write;
+				}
+				return write;
+			}
+			module.exports = Sugar;
+			return Sugar;
+		})();
+	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/index.tea', '../src/syntax/index.tea', function(exports, require, module, __filename, __dirname){
+		var token,
+			location,
+			source,
+			regexp,
+			match,
+			matchNode,
+			Node = require("../src/syntax/node.tea"),
+			Scope = require("../src/syntax/scope.tea"),
+			Parser = require("../src/syntax/parser.tea"),
+			SyntaxReg = require("../src/syntax/regexp.tea");
+		token = require("../src/syntax/token.tea");
+		location = require("../src/syntax/location.tea");
+		source = require("../src/syntax/source.tea");
+		function parse(src, ctx){
+			var ast = new Node('Root');
+			ast.context = null;
+			ast.source = src;
+			ast.fileName = src.fileName;
+			ast.filePath = Path.dirname(ast.fileName);
+			src.index = 0;
+			src.refresh();
+			var old_por = src.context;
+			if (ctx){
+				src.context = ctx;
+			}
+			ast.add(Parser.Node(src));
+			Scope.parse(ast);
+			ast.context = src.context;
+			src.context = old_por;
+			return ast;
+		};
+		regexp = SyntaxReg.compile;
+		match = function(stx_re, src, opt){
+			if (typeof stx_re == 'string'){
+				if (Parser.hasOwnProperty(stx_re)){
+					return Parser[stx_re](src, opt);
+				}
+				stx_re = Syntax.regexp(stx_re);
+			}
+			return SyntaxReg.match(stx_re, src);
+		};
+		matchNode = SyntaxReg.matchNode;
+		module.exports.token = token;
+		module.exports.location = location;
+		module.exports.source = source;
+		module.exports.parse = parse;
+		module.exports.regexp = regexp;
+		module.exports.match = match;
+		module.exports.matchNode = matchNode;
+	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/node.tea', '../src/syntax/node.tea', function(exports, require, module, __filename, __dirname){
+		var NodeBase = require("../src/syntax/base.tea");
+		var Node = (function(){
+			function Node(type){
+				this.type = type;
+				this.length = 0;
+				this.isnode = true;
+				this._scope = null;
+				if (arguments.length > 1){
+					this.add.apply(this, Array.prototype.slice.call(arguments, 1));
+				}
+			}
+			Node.prototype = new NodeBase();
+			Node.prototype.constructor = Node;
+			Node.prototype.__super__ = NodeBase.prototype;
+			Node.prototype.__defineGetter__("text", function(){
+				var tokens, texts;
+				tokens = this.tokens;
+				texts = [];
+				for (var _i=0, tk; _i < tokens.length; _i++){
+					tk = tokens[_i];
+					texts.push(tk.text);
+				}
+				return texts.join('');
+			});
+			Node.prototype.add = function (){
+				for (var i=0, node; i < arguments.length; i++){
+					node = arguments[i];
+					if (!node){
+						continue;
+					}
+					if (node.isnode || node.istoken){
+						node.parent = this;
+						this[this.length++] = node;
+					}else if (isArray(node)){
+						this.add.apply(this, node);
+					}else {
+						throw tea.error(new Error(), 'Node can only add object of "Node" or "Code" and "NaN" types ! >> '+node);
+					}
+				}
+				return this;
+			}
+			Node.prototype.tokens = function (index){
+				var tokens = [];
+				for (var i=0; i < this.length; i++){
+					if (this[i].istoken){
+						tokens.push(this[i]);
+					}else {
+						tokens.push.apply(tokens, this[i].tokens());
+					}
+					if (index === 0){
+						return tokens[0];
+					}
+				}
+				if (typeof index == 'number'){
+					return tokens[index < 0 ? tokens.length+index : index];
+				}
+				return tokens;
+			}
+			Node.prototype.clone = function (){
+				var node = new Node(this.type);
+				for (var i=0; i < this.length; i++){
+					node[node.length++] = this[i];
+				}
+				node.parent = this.parent;
+				return node;
+			}
+			return Node;
+		})();
+		module.exports = Node;
+	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/base.tea', '../src/syntax/base.tea', function(exports, require, module, __filename, __dirname){
+		var Scope = require("../src/syntax/scope.tea");
 		var NodeBase = (function(){
+			var nodemap = require("../src/syntax/map.tea").node;
 			function NodeBase(){}
 			NodeBase.prototype.__defineGetter__("root", function(){
 				var root = this;
@@ -1823,6 +2716,13 @@
 			NodeBase.prototype.__defineSetter__("scope", function(scope){
 				return this._scope = scope;
 			});
+			NodeBase.prototype.__defineGetter__("offsetScope", function(){
+				var scope = this.scope;
+				if (scope.isLetScope){
+					return scope.parent;
+				}
+				return scope;
+			});
 			NodeBase.prototype.queryParent = function (type){
 				var p = this.parent;
 				while (p && p.type != type){
@@ -1830,145 +2730,45 @@
 				}
 				return p;
 			}
-			return NodeBase;
-		})();
-		var Node = (function(){
-			function Node(type){
-				this.type = type;
-				this.length = 0;
-				this.isnode = true;
-				this._scope = null;
-				if (arguments.length > 1){
-					this.add.apply(this, Array.prototype.slice.call(arguments, 1));
-				}
-			}
-			Node.prototype = new NodeBase();
-			Node.prototype.constructor = Node;
-			Node.prototype.__super__ = NodeBase.prototype;
-			var NodeMap = {"all": []};
-			Node.prototype.is = function (){
-				var list = arguments.length > 1 ? Hash.slice(arguments) : arguments[0].split(' ');
-				if (list.indexOf(this.type) != -1){
-					return this.type;
-				}
+			NodeBase.prototype.is = function (){
+				var list, types;
+				list = arguments.length > 1 ? arguments : arguments[0].split(' '), types = this.types || [this.type];
 				for (var i=0; i < list.length; i++){
-					if (Node.isNode(this.type, list[i])){
+					if (types.indexOf(list[i]) != -1){
+						return list[i];
+					}else if (nodemap.test(types[0], list[i])){
 						return list[i];
 					}
 				}
 				return false;
 			}
-			Node.prototype.eq = function (){
-				if (this.length == 1 && this[0].istoken){
-					return this[0].eq.apply(this[0], arguments);
+			NodeBase.prototype.eq = function (){
+				var text, list;
+				if (this.isnode){
+					if (this.length == 1 && this[0].istoken){
+						text = this[0].text;
+					}else {
+						return false;
+					}
+				}else {
+					text = this.text;
+				}
+				list = arguments.length > 1 ? arguments : arguments[0].split(' ');
+				for (var i=0; i < list.length; i++){
+					if (list[i] == text){
+						return text;
+					}
 				}
 				return false;
 			}
-			Node.prototype.add = function (){
-				for (var i=0, node; i < arguments.length; i++){
-					node = arguments[i];
-					if (!node){
-						continue;
-					}
-					if (node.isnode || node.istoken){
-						node.parent = this;
-						this[this.length++] = node;
-					}else if (isArray(node)){
-						this.add.apply(this, node);
-					}else {
-						throw tea.error(new Error(), 'Node can only add object of "Node" or "Code" and "NaN" types ! >> '+node);
-					}
-				}
-				return this;
-			}
-			Node.prototype.tokens = function (index){
-				var tokens = [];
-				for (var i=0; i < this.length; i++){
-					if (this[i].istoken){
-						tokens.push(this[i]);
-					}else {
-						tokens.push.apply(tokens, this[i].tokens());
-					}
-					if (index === 0){
-						return tokens[0];
-					}
-				}
-				if (typeof index == 'number'){
-					return tokens[index < 0 ? tokens.length+index : index];
-				}
-				return tokens;
-			}
-			Node.prototype.clone = function (){
-				var node = new Node(this.type);
-				for (var i=0; i < this.length; i++){
-					node[node.length++] = this[i];
-				}
-				node.parent = this.parent;
-				return node;
-			}
-			Node.isNode = function(name, type){
-				if (!type){
-					if (NodeMap['Expr'].indexOf(name) != -1){
-						return 'Expr';
-					}
-					if (NodeMap['Decl'].indexOf(name) != -1){
-						return 'Decl';
-					}
-					if (NodeMap['Stam'].indexOf(name) != -1){
-						return 'Stam';
-					}
-					return false;
-				}
-				return name == type || NodeMap[type] && NodeMap[type].indexOf(name) != -1;
-			};
-			Node.define = function(types, names){
-				if (arguments.length == 1){
-					if (isJson(types)){
-						for (var i in types){
-							if (!types.hasOwnProperty(i)) continue;
-							Node.define(i, types[i]);
-						}
-					}
-					return;
-				}
-				types = isArray(types) ? types : types.split(' ');
-				names = isArray(names) ? names : names.split(' ');
-				for (var _i=0, name; _i < names.length; _i++){
-					name = names[_i];
-					if (NodeMap.hasOwnProperty(name)){
-						Node.define(types, NodeMap[name]);
-					}
-					for (var _j=0, type; _j < types.length; _j++){
-						type = types[_j];
-						if (!NodeMap[type]) NodeMap[type] = [];
-						if (NodeMap[type].indexOf(name) == -1) NodeMap[type].push(name);
-						if (NodeMap['all'].indexOf(name) == -1) NodeMap['all'].push(name);
-					}
-				}
-			};
-			Node.define({'Token' : 'ConstTokn IdentifierTokn NumTokn StringTokn RegexpTokn SymbolTokn TmlTokn BlockBreakTokn',
-				'DataPatt' : 'Token ArrayExpr JsonExpr UnaryExpr IdentifierExpr PrefixExpr PostfixExpr NotExpr',
-				'AccessorExpr' : 'DataPatt CompelExpr',
-				'ValueExpr' : 'AccessorExpr CallExpr',
-				'LogicExpr' : 'CompareExpr ComputeExpr ValueExpr',
-				'BinaryExpr' : 'LogicExpr',
-				'FunctionExpr' : 'FunctionDecl ClassExpr GetterDecl SetterDecl MethodDecl PackageExpr LambdaExpr',
-				'ExprStam' : 'SuperExpr ThisExpr AtExpr TernaryExpr Ternary2.5Expr BinaryExpr FunctionExpr RequireStam CommDecl ImportExpr ExtendsExpr',
-				'ClausesStam' : 'LetDecl ConstDecl VarDecl ReturnStam BreakStam ContinueStam ThrowStam DebuggerStam ExportDecl',
-				'ControlStam' : 'IfPatt ElseIfPatt ElsePatt WhileStam DoWhileStam WithStam ForStam SwitchStam CaseStam DefaultStam TryPatt CatchPatt FinallyPatt',
-				'ConditionPatt' : 'ForPConditionPatt ForPConditionPatt ForPConditionPatt',
-				'BlockStam' : 'LineBlockStam IndentBlockStam StamBlockStam',
-				'StatementStam' : 'ControlStam ClausesStam AssignmentExpr CommaExpr SeleteStam BlockStam ExprStam',
-				'NodeStam' : 'BlockStam',
-				'ScopeNode' : 'Root FunctionExpr',
-				'IgSemicolon' : 'LabelStam IfStam ElseIfStam ElseStam WhileStam WithStam ForStam WitchStam TryStam CatchStam FinallyStam FunctionExpr GetterDecl SetterDecl ClassExpr MethodDecl ExportDecl StaticDecl PackageExpr CommDecl BlockBreakTokn'});
-			return Node;
+			return NodeBase;
 		})();
-		module.exports = Node;
-		module.exports.NodeBase = NodeBase;
-	});
-	CreateModule("../src/syntax/scope.tea", function(module, exports){
+		module.exports = NodeBase;
+	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/scope.tea', '../src/syntax/scope.tea', function(exports, require, module, __filename, __dirname){
 		var Scope = (function(){
+			var global_scope = new Scope();
+			global_scope.type = 'Global';
+			global_scope.top = null;
 			function Scope(node){
 				this.name = null;
 				if (node && (node.isnode || node.istoken)){
@@ -1996,9 +2796,6 @@
 						break;
 				}
 			}
-			var global_scope = new Scope();
-			global_scope.type = 'Global';
-			global_scope.top = null;
 			Scope.prototype.__defineGetter__("top", function(){
 				if (!this._top_){
 					var scopeParent = this.node && this.node.scopeParent;
@@ -2107,7 +2904,7 @@
 				}
 				return scope;
 			}
-			Scope.prototype.joinRequire = function (file){
+			Scope.prototype.addRequire = function (file){
 				if (!Path.isFile(file)){
 					throw tea.error(new Error(), 'join the "'+file+'" file not exist');
 				}
@@ -2151,10 +2948,14 @@
 				return scope;
 			}
 			function checkIdentifier(parent, id, scope, let_scope){
-				var idexpr, ass_expr, argu_expr, expr, p = parent;
+				var idexpr, ass_expr, argu_expr, arr_patt, expr, p = parent;
 				do {
 					if (p.type == 'IdentifierExpr'){
 						idexpr = p;
+						continue;
+					}
+					if (p.type == 'ArrayPatt'){
+						arr_patt = p;
 						continue;
 					}
 					if (p.type == 'AssignmentDecl' || p.type == 'AssignmentExpr'){
@@ -2165,7 +2966,7 @@
 						argu_expr = p;
 						continue;
 					}
-					if (p.type == 'CommaExpr' || p.type == 'CommaStam' || p.type == 'NodeStam' || p.type == 'ArrayPatt'){
+					if (p.type == 'CommaExpr' || p.type == 'CommaStam' || p.type == 'NodeStam'){
 						continue;
 					}
 					expr = p;
@@ -2180,11 +2981,36 @@
 						}
 					}else if (expr.is('FunctionDecl', 'GetterDecl', 'SetterDecl', 'MethodDecl', 'ClassExpr', 'ClassExpr')){
 						checkFunctionName(parent, id, scope);
+					}else if (ass_expr && arr_patt){
+						checkIdentifierExpr(expr, ass_expr, arr_patt, id, scope, let_scope);
+					}else if (/AtExpr/.test(parent.parent.type) && parent.index == 1){
+						checkAt(parent.parent, id);
 					}
 				}else {
 					checkIdentifierExpr(expr, ass_expr, idexpr, id, scope, let_scope);
 				}
 				return;
+			}
+			function checkAt(parent, id){
+				var scope, top_scope;
+				if (parent.length == 2 && parent.parent.type == 'AssignmentExpr'){
+					scope = parent.offsetScope;
+					if (scope.type == 'ClassExpr'){
+						scope.set('statics', id.text);
+						scope.set('static', id.text);
+						return;
+					}
+					top_scope = scope.parent;
+					if (top_scope.type == 'ClassExpr'){
+						if (top_scope.protos.indexOf(scope.name) != -1){
+							top_scope.set('protos', id.text);
+							top_scope.set('proto', id.text, true);
+						}else if (top_scope.statics.indexOf(scope.name) != -1){
+							top_scope.set('statics', id.text);
+							top_scope.set('static', id.text);
+						}
+					}
+				}
 			}
 			function checkArguments(expr_type, ass_expr, id, scope, let_scope){
 				var root;
@@ -2214,7 +3040,7 @@
 						break;
 					case 'ProtoDecl':case 'InitDecl':
 						scope.set('protos', id.text);
-						scope.set('proto', id.text);
+						scope.set('proto', id.text, true);
 						break;
 					case 'StaticDecl':
 						scope.set('statics', id.text);
@@ -2301,595 +3127,159 @@
 			return Scope;
 		})();
 		module.exports = Scope;
-	});
-	CreateModule("../src/preprocess/preprocessor.tea", function(module, exports){
-		var Parser = __require("../src/preprocess/parser.tea"),
-			Source = __require("../src/preprocess/source.tea"),
-			Template = __require("../src/preprocess/template.tea");
-		var PreProcessor = (function(){
-			function PreProcessor(extend){
-				this.macro = {"map": []};
-				this.macrofun = {"map": []};
-				this.statement = {"map": []};
-				this.expression = {"map": []};
-				this.tests = [];
-				if (extend){
-					this.extends(extend);
-				}
-			}
-			PreProcessor.prototype.__defineGetter__("length", function(){
-				return this.macro.map.length+this.macrofun.map.length+this.statement.map.length+this.expression.map.length;
-			});
-			PreProcessor.prototype.parse = function (src, not_compile){
-				var m, macro, val;
-				if (typeof src == 'string'){
-					src = Source.parse(src);
-				}
-				for (var i=0, token; i < src.length; i++){
-					token = src[i];
-					if (!token){
-						continue;
-					}
-					switch (token.type){
-						case 'InstructionExpr':
-							Parser.instruction.call(this, src, i, token);
-							break;
-						case 'IdentifierTokn':
-							if (!not_compile){
-								Parser.compileMacro.call(this, src, i, token);
-							}
-							break;
-						case 'StringTokn':
-							var text = token.text, re = /([^\\]|^)(\#\{(\w+)(.*?)\})/g;
-							if (!not_compile){
-								while (m = re.exec(text)){
-									if (macro = m[4] ? this.get(m[3], 'macrofun') : this.get(m[3], 'macro')){
-										if (val = macro.getValue(m[4])){
-											text = text.slice(0, m.index+(m[1] ? 1 : 0))+val+text.substr(re.lastIndex);
-											re.lastIndex = m.index;
-										}
-									}
-								}
-							}
-							token.text = Template.parseString(text);
-							break;
-						case 'RegExpDecl':
-							token.text = Template.parseRegExp(token.text);
-							break;
-					}
-				}
-				src.index = 0;
-				src.refresh();
-				return src;
-			}
-			PreProcessor.prototype.undef = function (name){
-				var i;
-				for (var _i_ref = ['macrofun', 'macro', 'statement', 'expression'], _i=0, type; _i < _i_ref.length; _i++){
-					type = _i_ref[_i];
-					if ((i = this[type].map.indexOf(name)) >= 0){
-						this[type].map.splice(i, 1);
-						delete this[type][name];
-					}
-				}
-			}
-			PreProcessor.prototype.add = function (something){
-				if (typeof something == 'string'){
-					if (something == 'expression' || something == 'statement'){
-						something = new SyntacticSugar(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]);
-					}else {
-						something = new Macro(arguments[0], arguments[1], arguments[2]);
-					}
-				}
-				var key = something.name, type = something.type;
-				this[type][key] = something;
-				if (this[type].map.indexOf(key) == -1){
-					this[type].map.push(key);
-				}
-				return something;
-			}
-			PreProcessor.prototype.get = function (key){
-				if (!(this.length)) return;
-				var limits = arguments.length > 1 ? Hash.slice(arguments, 1) : ['macrofun', 'macro', 'statement', 'expression'];
-				for (var _i=0, type; _i < limits.length; _i++){
-					type = limits[_i];
-					if (this[type].map.indexOf(key) != -1){
-						return this[type][key];
-					}
-				}
-			}
-			PreProcessor.prototype.extends = function (extend){
-				for (var _i_ref = ['macrofun', 'macro', 'statement', 'expression'], _i=0, type; _i < _i_ref.length; _i++){
-					type = _i_ref[_i];
-					for (var _j=0, key; _j < extend[type].map.length; _j++){
-						key = extend[type].map[_j];
-						this.add(extend[type][key]);
-					}
-				}
-			}
-			PreProcessor.prototype.matchNode = function (type, src, opt){
-				var exp;
-				if (!(this[type])) return;
-				var map = this[type].map, _index = src.index;
-				for (var i=0, name; i < map.length; i++){
-					name = map[i];
-					src.index = _index;
-					if (exp = this[type][name].parse(src, opt)){
-						if (debug.prep){
-							debug.prep('[Prep '+type+': '+name+' matched]', src[_index]);
-						}
-						return exp;
-					}
-				}
-			}
-			return PreProcessor;
-		})();
-		var Macro = (function(){
-			function Macro(name, params, body){
-				this.name = name;
-				var params_key = params && params.join('').trim() || '', key = params_key+body;
-				if (cache[key]){
-					this.type = cache[key].type;
-					this.params = cache[key].params;
-					this.body = cache[key].body;
-					this.script = cache[key].script;
-				}else {
-					this.type = params ? 'macrofun' : 'macro';
-					this.params = params_key ? params : [];
-					this.body = body;
-					if ((/#script/).test(body)){
-						try {
-							var script = Template.textScript(body, params);
-							this.script = eval('('+script+')');
-						}catch (e) {
-							this.error = e;
+	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/map.tea', '../src/syntax/map.tea', function(exports, require, module, __filename, __dirname){
+		var token,
+			node,
+			token_map = {'LF' : '\n',
+				'BlankTokn' : '\r  \t  \f  \ ',
+				'CommDecl' : '//  /*  */  #!',
+				'SymbolTokn Instruction' : '#',
+				'ConstTokn Boolean' : 'true  false',
+				'ConstTokn Null' : 'null  undefined  Infinity',
+				'Keyword' : 'this  instanceof  in  extends  null  undefined  Infinity  true  false  '+'if  while  with  catch  for  switch  case  default  else  try  do  finally  '+'new  typeof  delete  void  return  break  continue  throw  var  function  '+'let  enum  const  import  export  debugger  super  yield  class',
+				'IdentifierTokn' : 'eval  arguments  extends  import  export  get  set  static  as  of  and  or  not  is  require  let  enum  const  debugger  super  yield  class',
+				'Restricted' : 'instanceof  in  Infinity  '+'if  while  with  catch  for  switch  case  default  else  try  do  finally  '+'new  typeof  delete  void  return  break  continue  throw',
+				'SymbolTokn' : ';  ,  .  :  ?  \\  [  ]  {  }  (  )  //  /*  */  #!  '+'=  +=  -=  *=  /=  %=  &=  >>=  <<=  >>>=  '+'>  <  >=  <=  !=  !==  ==  ===  ++  --  '+'!  ~  +  -  *  /  %  &  |  ^  >>  <<  >>>  &&  ||  '+'**  ::  |=  ?=  @  ->  <-  >>  <<  >>>  <<<  =>  <=  ..  ...',
+				'SymbolTokn Quote' : '\'  "  """  \'\'\'  """"  \'\'\'\'  `',
+				'Controler' : 'if  while  with  catch  for  switch  case  default  else  try  do  finally',
+				'Declaration' : 'function  require  class  package  static  get  set  import  export',
+				'Clauses' : 'let  enum  const  var  return  break  continue  throw  debugger',
+				'Expression IdentifierTokn' : 'super  this  @',
+				'ClassRestricted' : 'static  get  set  extends',
+				'Unary' : 'new  typeof  yield  delete  void  not  !  ~  -  +  ++  --',
+				'Prefix Postfix' : '++  --',
+				'Binary Compute' : '+  -  *  /  %  &  |  ^  >>  <<  >>>  **  \\',
+				'Binary Compare' : 'instanceof  in  of  as  extends  is  not is  >  <  >=  <=  !=  !==  ==  ===',
+				'Binary Logic' : 'and  or  &&  ||',
+				'Binary Assign' : '=  +=  -=  *=  /=  %=  &=  |=  >>=  <<=  >>>=  ?=  |=',
+				'Ternary' : '?',
+				'Member' : '.  ::  ..  [',
+				'Comma' : ',',
+				'Open' : '{  (  [',
+				'Close' : '}  ]  )',
+				'BlockBreakTokn BlockBreak' : ';  \n',
+				'BlockStart' : ':  {',
+				'Contextual' : 'Binary  Member  Comma  in  as  of  ->  <-  =>  <=  ...',
+				'EndTokn' : 'BlockBreakTokn  Close  /*  //',
+				'IGLF' : 'Unary  Binary  Ternary  Member  Assign  Comma  Open  Contextual'},
+			node_map = {'Token' : 'ConstTokn IdentifierTokn NumTokn StringTokn RegexpTokn SymbolTokn TmlTokn BlockBreakTokn',
+				'DataPatt' : 'Token ArrayExpr JsonExpr UnaryExpr IdentifierExpr PrefixExpr PostfixExpr NotExpr',
+				'AccessorExpr' : 'DataPatt CompelExpr',
+				'ValueExpr' : 'AccessorExpr CallExpr',
+				'LogicExpr' : 'CompareExpr ComputeExpr ValueExpr',
+				'BinaryExpr' : 'LogicExpr',
+				'FunctionExpr' : 'FunctionDecl ClassExpr GetterDecl SetterDecl MethodDecl PackageExpr LambdaExpr',
+				'ExprStam' : 'SuperExpr ThisExpr AtExpr TernaryExpr Ternary2.5Expr BinaryExpr FunctionExpr RequireStam CommDecl ImportExpr ExtendsExpr',
+				'ClausesStam' : 'LetDecl ConstDecl VarDecl ReturnStam BreakStam ContinueStam ThrowStam DebuggerStam ExportDecl',
+				'ControlStam' : 'IfPatt ElseIfPatt ElsePatt WhileStam DoWhileStam WithStam ForStam SwitchStam CaseStam DefaultStam TryPatt CatchPatt FinallyPatt',
+				'ConditionPatt' : 'ForPConditionPatt ForPConditionPatt ForPConditionPatt',
+				'BlockStam' : 'LineBlockStam IndentBlockStam StamBlockStam',
+				'StatementStam' : 'ControlStam ClausesStam AssignmentExpr CommaExpr SeleteStam BlockStam ExprStam',
+				'NodeStam' : 'BlockStam',
+				'ScopeNode' : 'Root FunctionExpr',
+				'IgSemicolon' : 'LabelStam IfStam ElseIfStam ElseStam WhileStam WithStam ForStam WitchStam TryStam CatchStam FinallyStam FunctionExpr GetterDecl SetterDecl ClassExpr MethodDecl ExportDecl StaticDecl PackageExpr CommDecl BlockBreakTokn'};
+		token = {"types": {},
+			"literals": {},
+			"complexs": [],
+			"complexre": null,
+			"define": function(types, literals){
+				var literal_re, tmp;
+				if (arguments.length == 1){
+					if (isJson(types)){
+						for (var i in types){
+							if (!types.hasOwnProperty(i)) continue;
+							this.define(i, types[i]);
 						}
 					}
-					cache[key] = this;
-				}
-			}
-			var cache = {}, Template = __require("../src/preprocess/template.tea");
-			Macro.prototype.getValue = function (params, src){
-				var value;
-				if (params){
-					params = Text.split(params.replace(/^\((.*)\)$/g, '$1'), ',', 'trim');
-				}
-				if (this.script){
-					value = this.script.apply({"self": this, "src": src}, params || []);
-				}else {
-					value = this.body;
-				}
-				value = replaceParam(value, this.params || [], params || []);
-				return Text.trimIndent(value);
-			}
-			function replaceParam(value, keys, params){
-				var keys_join = keys.join('|'),
-					re = new RegExp('(#*?)('+(keys_join ? '\\b(?:'+keys_join+')\\b|' : '')+'#(\\d+)|\\bARGR\\.\\.\\.)(##)?', 'g'),
-					m,
-					hash,
-					unhash,
-					key,
-					num,
-					arg,
-					val,
-					insert = [],
-					id;
-				while (m = re.exec(value)){
-					hash = m[1], key = m[2], num = m[3], unhash = m[4];
-					num = num || keys.indexOf(key);
-					if (key == 'ARGR...'){
-						val = params.slice(keys.length).join(', ');
-					}else if (params[num]){
-						val = params[num];
-					}
-					id = '$$$'+ID()+'$$$';
-					insert.push([id, (val ? hash%2 ? '"'+val+'"' : val : '')]);
-					value = value.slice(0, m.index)+id+value.substr(re.lastIndex);
-					re.lastIndex = m.index+id.length;
-				}
-				for (var i=0; i < insert.length; i++){
-					value = value.replace(insert[i][0], insert[i][1]);
-				}
-				return value;
-			}
-			return Macro;
-		})();
-		var SyntacticSugar = (function(){
-			function SyntacticSugar(type, name, pattern, writer, parser){
-				this.type = type;
-				this.name = name;
-				this.stxre = Syntax.regexp(pattern);
-				this.parser = parser;
-				this.writer = writer;
-			}
-			var Syntax = __require("../src/syntax/index.tea");
-			SyntacticSugar.prototype.parse = function (src, opt){
-				var node = Syntax.matchNode(this.name, this.stxre, src, 'ret node');
-				if (node && this.parser){
-					return this.parser.call(this, node, src, opt);
-				}
-				return node;
-			}
-			SyntacticSugar.prototype.read = function (reader, node){
-				var write = reader.new(this.name);
-				if (typeof this.writer == 'string'){
-					write.read(this.writer, node);
-				}else {
-					write = this.writer(node, write) || write;
-				}
-				return write;
-			}
-			return SyntacticSugar;
-		})();
-		module.exports = PreProcessor;
-	});
-	CreateModule("../src/preprocess/parser.tea", function(module, exports){
-		var Parser = module.exports,
-			Tokens = __require("../src/tokens/index.tea"),
-			Syntax = __require("../src/syntax/index.tea"),
-			Template = __require("../src/preprocess/template.tea"),
-			IncludeCache = {};
-		Parser.instruction = function(src, index, token){
-			var type = token.text.substr(1);
-			if (Parser.hasOwnProperty(type)){
-				Parser[type].call(this, src, index, token);
-			}else if (/^(elifdef|elif|ifdef|else|endif|if)$/.test(type)){
-				if (type == 'if' || type == 'ifdef'){
-					Parser.control.call(this, src, index, token);
-				}else {
-					throw tea.error(new Error(), 'unexpected #'+type+' prep instruction', token);
-				}
-			}else if (type == 'end'){
-				throw tea.error(new Error(), 'unexpected #end prep instruction', token);
-			}else {
-				if (!Parser.compileMacro.call(this, src, index, token)){
-					var line = src.indexLine(index);
-					src.delete(index, line[1]-1);
-				}
-			}
-		};
-		Parser.compileMacro = function(src, index, token){
-			var name = token.text, param, value;
-			if (token.type == 'InstructionExpr'){
-				name = name.substr(1);
-			}else {
-				var last = src[src.prevIndex(index, true)];
-				if (last && last.eq('.', '::', '..', 'function', 'set', 'get', 'static')){
 					return;
 				}
-			}
-			var macro = this.get(name, 'macrofun');
-			if (macro){
-				src.index = index;
-				var param_node = Syntax.match(src.next(1).text == '(' ? 'ParamsExpr' : 'ParamsStam', src);
-				if (param_node){
-					var param = src.join(index+1, src.index).trim();
-					if (param_node.type == 'ParamsExpr'){
-						param = param.slice(1, -1).trim();
+				types = isArray(types) ? types : types.split(' ');
+				literals = isArray(literals) ? literals : literals.split('  ');
+				for (var _i=0, literal; _i < literals.length; _i++){
+					literal = literals[_i];
+					if (this.types.hasOwnProperty(literal) && /^[A-Z]\w+$/.test(literal)){
+						this.define(types, this.types[literal]);
+						continue;
 					}
-					src.delete(index, src.index);
-				}else {
-					macro = null;
-				}
-			}
-			if (!macro){
-				macro = this.get(name, 'macro');
-			}
-			if (macro){
-				value = macro.getValue(param, src);
-				src.delete(index, index);
-				if (value){
-					src.insert(index, this.parse(value));
-				}
-				if (debug.prep){
-					debug.prep('[Prep macro matched: '+name+']', token);
-				}
-				return true;
-			}
-			return false;
-		};
-		Parser.line = function(src, index, token){
-			token.text = token.location.lineNumber+'';
-			token.types = ['NumTokn', 'ConstTokn'];
-			if (token.indent >= 0){
-				token.types.push('LineHead');
-			}
-		};
-		Parser.argv = function(src, index, token){
-			var m, line = src.indexLine(index);
-			if (typeof tea != 'undefined'){
-				var line_text = src.join(line[0], line[1]);
-				if (m = line_text.match(/\#argv\s*((-{0,2})[\w\-]+)\s*(.*)/)){
-					var type = m[2], name = m[1], value = true;
-					if (m[3] == 'false' || m[3] == 'null'){
-						value = false;
-					}else if (m[3]){
-						try {
-							value = eval(m[3]);
-						} catch (_e){}
-					}
-					tea.argv[name] = value;
-					if (debug.prep){
-						debug.prep('[Prep set argv: g{'+name+' == '+tea.argv[name]+'}]', token);
-					}
-				}
-			}
-			src.delete(line[0], line[1]);
-		};
-		Parser.token = function(src, index, token){
-			var m, line = src.indexLine(index), line_text = src.join(line[0], line[1]);
-			src.delete(line[0], line[1]);
-			if (m = line_text.match(/#token\s*(\w+(?:\s*,\s*\w+)*)\s*(.*)/)){
-				var types = Text.split(m[1], ',', true), symbols = Text.split(m[2], ',', true);
-				Tokens.define(types, symbols);
-				if (debug.prep){
-					debug.prep('[Prep define token: g{"'+symbols.join('", "')+'"}]', token);
-				}
-			}
-		};
-		Parser.run = function(src, index, token){
-			var res, block = src.indexPair('#run', '#endrun|#end', index);
-			if (!block){
-				block = [index, src.length];
-			}
-			var block_text = src.join(block[0]+1, block[1]-1);
-			src.delete(block[0], block[1]);
-			if (block_text){
-				try {
-					var script = Template.runScript(block_text);
-					if (res = eval(script)){
-						src.insert(index, Tokens.tokenize(res));
-					}
-					if (debug.prep){
-						debug.prep('[Prep run instruction]', token);
-					}
-				}catch (e) {
-					var err_pot = tea.helper.errorPot(token);
-					err_pot = err_pot.replace(/[^\n]*$/g, '')+block_text.replace(/^/mg, err_pot.match(/"(\s*\d+\s*\|)/)[1]+'\t')+'\n"';
-					throw tea.error(new Error(), e, 'Prep run eval error: '+e.message, err_pot);
-				}
-			}
-		};
-		Parser.define = function(src, index, token){
-			var m,
-				_ref = indexInstruction(src, index, token), a = _ref[0], b = _ref[1],
-				text = src.join(a+1, b);
-			if (m = text.match(/\s*(\w+)(\(.*?\))?\s*((?:.*(?:\n\s*)?""""[\w\W]*?""""|(?:.*\\\n)*.*)(?:\n|$))/)){
-				var name = m[1],
-					params = m[2] && m[2].slice(1, -1).replace(/\s/g, '').split(','),
-					body = m[3] && Text.trimIndent(m[3].replace(/\\\n/g, '\n').replace(/^""""|""""\s*$/g, ''));
-				if (body && /#(?:if|argv)/.test(body)){
-					body = this.parse(body).join();
-				}
-				var macro = this.add(name, params, body);
-				if (macro.error){
-					throw tea.error(new Error(), macro.error, token);
-				}
-				if (debug.prep){
-					debug.prep('[Prep define: g{'+name+(m[2] || '')+'}]', token);
-				}
-			}
-			src.delete(a, b);
-		};
-		Parser.undef = function(src, index, token){
-			var line = src.indexLine(index), line_text = src.join(line[0]+1, line[1]).trim();
-			src.delete(line[0], line[1]);
-			if (line_text){
-				var names = line_text.replace(/\s+/g, ' ').split(' ');
-				for (var i=0; i < names.length; i++){
-					this.undef(names[i]);
-				}
-				if (debug.prep){
-					debug.prep('[Prep undef: g{'+names.join(', ')+'}]', token);
-				}
-			}
-		};
-		Parser.include = function(src, index, token){
-			src.index = index;
-			var b = index,
-				the_dir = Path.dirname(token.location && token.location.fileName || src.fileName),
-				files = [],
-				temp = [];
-			while (src.next(1).type == 'StringTokn'){
-				temp = Path.parseFile(src.current.text, the_dir);
-				if (temp.error){
-					throw tea.error(new Error(), 'Can not find file: '+src.text+' in "'+the_dir+'" dir', token);
-				}
-				files.push.apply(files, temp);
-				b = src.index;
-				if (src.next(1).text == ','){
-					continue;
-				}
-				break;
-			}
-			src.delete(index, b);
-			var insert = [];
-			for (var i=0, file; i < files.length; i++){
-				file = files[i];
-				if (!IncludeCache[file]){
-					IncludeCache[file] = this.parse(file, true);
-					IncludeCache[file].trimIndent();
-				}
-				if (IncludeCache[file].length){
-					insert.push.apply(insert, Tokens.tokenize('/* Include file "'+file+'" */\n'));
-					insert.push.apply(insert, IncludeCache[file].clone());
-					if (debug.prep){
-						debug.prep('[Prep include: file at g{"'+file+'"}]', token);
-					}
-				}
-			}
-			if (insert.length){
-				src.insert(index, insert);
-			}
-		};
-		Parser.control = function(src, index, token){
-			var cache = [], nest = -1;
-			for (var i=index, token; i < src.length; i++){
-				token = src[i];
-				if (!token || !/#(ifdef|if|elifdef|elif|else|endif|end)/.test(token.text)){
-					continue;
-				}
-				if (token.text == '#ifdef' || token.text == '#if'){
-					nest += 1;
-				}
-				if (nest === 0){
-					var line = src.indexLine(i);
-					if (cache.length){
-						cache[cache.length-1].push(line[1]);
-					}
-					cache.push([token.text,
-						(token.text == '#else' ? '' : src.join(line[0]+1, line[1]).trim()),
-						line[0],
-						line[1]]);
-				}
-				if (token.text == '#endif' || token.text == '#end'){
-					nest -= 1;
-				}
-			}
-			if (cache.length && cache[cache.length-1][0].substr(0, 4) != '#end'){
-				cache[cache.length-1].push(src.length-1);
-				cache.push(['#endif', '', src.length-1, src.length-1]);
-			}
-			if (!src._cachePrepData){
-				src._cachePrepData = {};
-			}
-			var type, cond, status, a, b, c;
-			for (var i=0, block; i < cache.length; i++){
-				block = cache[i];
-				type = block[0], cond = block[1], a = block[2], b = block[3], c = block[4];
-				if (type == '#endif' || type == '#end'){
-					src.delete(a, c);
-					break;
-				}
-				if (status){
-					src.delete(a, c);
-					continue;
-				}
-				if (type == '#else'){
-					src.delete(a, b);
-					continue;
-				}
-				if (status = cond && EvalCondition.call(this, type, cond, src, src[a])){
-					src.delete(a, b);
-				}else {
-					src.delete(a, c);
-				}
-			}
-		};
-		Parser.test = function(src, index, token){
-			var _ref = src.indexPair('#test', '#end', index), a = _ref[0], b = _ref[1];
-			token.text = '/* Test: */\n'+tea.compile(src.clone(a+1, b-1), this)+'\n/* Test end */';
-			token.types = ['TestPatt', 'CommDecl'];
-			src.delete(a+1, b);
-		};
-		Parser.expr = function(src, index, token){
-			var _ref = indexInstruction(src, index, token), a = _ref[0], b = _ref[1],
-				i = src.nextIndex(index),
-				type = token.text.substr(1),
-				name = src[i].text;
-			i = src.nextIndex(i);
-			if (i > b){
-				throw tea.error(new Error(), 'Prep grammar define syntax error', token);
-			}
-			var pattern = src[i].text.slice(1, -1), writer = src.join(i+1, b);
-			writer = Text.trimIndent(writer.replace(/\\\n/g, '\n').replace(/^\s*""""|""""\s*$/g, ''));
-			this.add(type == 'expr' ? 'expression' : 'statement', name, pattern, writer);
-			if (debug.prep){
-				debug.prep('[Prep register '+type+': '+name+' -> /'+pattern+'/]', token);
-			}
-			src.delete(a, b);
-		};
-		Parser.stam = Parser.expr;
-		function indexInstruction(src, index, token){
-			var line = src.indexLine(index), a = line[0], b = line[1], c;
-			if (src[b-1].text == '\\'){
-				while (src[b-1].text == '\\'){
-					b = src.indexLine(b+1)[1];
-				}
-			}else if ((c = src.nextIndex(b, true)) && src[c].text.substr(0, 4) == '""""'){
-				b = src.indexLine(b+1)[1];
-			}
-			return [a, b];
-		}
-		function EvalCondition(type, condition, src, token){
-			var isdef = type.indexOf('def') != -1,
-				root_file = tea.argv.file,
-				the_file = token.location && token.location.fileName || src.fileName,
-				that = this,
-				exp = condition.trim().replace(/((-{0,2})([\$a-zA-Z_][\w]*)\b)/g, function($0, $1, $2, $3){
-					var res;
-					if ($2){
-						if ($3 == 'main'){
-							return root_file == the_file;
+					if (/\w\W|\W\w/.test(literal)){
+						literal_re = literal.replace(/(\W)/g, '\\$1');
+						if (this.complexs.indexOf(literal_re) == -1){
+							this.complexs.push(literal_re);
 						}
-						if ($3 == 'root'){
-							return '"'+root_file+'"';
+					}
+					for (var _j=0, type; _j < types.length; _j++){
+						type = types[_j];
+						if (!this.types[type]) this.types[type] = [];
+						if (this.types[type].indexOf(literal) == -1){
+							this.types[type].push(literal);
 						}
-						if ($3 == 'file'){
-							return '"'+the_file+'"';
+					}
+					if (tmp = this.literals[literal]){
+						for (var _j=0, type; _j < types.length; _j++){
+							type = types[_j];
+							if (tmp.indexOf(type) == -1){
+								tmp.push(type);
+							}
 						}
-						res = tea.argv[$1];
-					}else if (isdef){
-						return !!(that.get($1))+'';
 					}else {
-						if (global.hasOwnProperty($1)){
-							res = global[$1];
-						}else if (tea.argv.hasOwnProperty($1)){
-							res = tea.argv[$1];
-						}else {
-							return $1;
+						this.literals[literal] = types.slice();
+					}
+				}
+				if (this.complexs.length){
+					this.complexs.sort(function(a, b){return b.length-a.length});
+					this.complexre = new RegExp('^(?:'+this.complexs.join('|')+')(?!\\w)', 'g');
+				}
+			}};
+		node = {"map": {},
+			"all": [],
+			"test": function(name, type){
+				if (!type){
+					if (this.map['Expr'].indexOf(name) != -1){
+						return 'Expr';
+					}
+					if (this.map['Decl'].indexOf(name) != -1){
+						return 'Decl';
+					}
+					if (this.map['Stam'].indexOf(name) != -1){
+						return 'Stam';
+					}
+					return false;
+				}
+				return name == type || this.map[type] && this.map[type].indexOf(name) != -1;
+			},
+			"define": function(types, names){
+				if (arguments.length == 1){
+					if (isJson(types)){
+						for (var i in types){
+							if (!types.hasOwnProperty(i)) continue;
+							this.define(i, types[i]);
 						}
 					}
-					return typeof res == 'string' ? '"'+res.replace(/\"/g, '\"')+'"' : res;
-				});
-			try {
-				return eval('!!('+exp+')');
-			}catch (e) {
-				throw tea.error(new Error(), e, '[ProProcess condition '+type+' "'+condition+'" -> "'+exp+'" error', token, 'ProProcess condition error!');
-			}
-		}
-	});
-	CreateModule("../src/syntax/index.tea", function(module, exports){
-		var Syntax = module.exports,
-			Node = __require("../src/syntax/node.tea"),
-			Scope = __require("../src/syntax/scope.tea"),
-			Parser = __require("../src/syntax/parser.tea"),
-			SyntaxReg = __require("../src/syntax/regexp.tea");
-		Syntax.parse = function(src, preprocessor){
-			var ast = new Node('Root');
-			ast.preProcessor = null;
-			ast.fileName = src.fileName;
-			ast.filePath = Path.dirname(ast.fileName);
-			src.index = 0;
-			src.refresh();
-			var old_preprocessor = src.preProcessor;
-			if (preprocessor){
-				src.preProcessor = preprocessor;
-			}
-			ast.add(Parser.Node(src));
-			Scope.parse(ast);
-			ast.preProcessor = src.preProcessor;
-			src.preProcessor = old_preprocessor;
-			return ast;
-		};
-		Syntax.regexp = SyntaxReg.compile;
-		Syntax.match = function(stx_re, src, opt){
-			if (typeof stx_re == 'string'){
-				if (Parser.hasOwnProperty(stx_re)){
-					return Parser[stx_re](src, opt);
+					return;
 				}
-				stx_re = Syntax.regexp(stx_re);
-			}
-			return SyntaxReg.match(stx_re, src);
-		};
-		Syntax.matchNode = SyntaxReg.matchNode;
-		Syntax.isNode = Node.isNode;
-	});
-	CreateModule("../src/syntax/parser.tea", function(module, exports){
+				types = isArray(types) ? types : types.split(' ');
+				names = isArray(names) ? names : names.split(' ');
+				for (var _i=0, name; _i < names.length; _i++){
+					name = names[_i];
+					if (this.map.hasOwnProperty(name)){
+						this.define(types, this.map[name]);
+					}
+					for (var _j=0, type; _j < types.length; _j++){
+						type = types[_j];
+						if (!this.map[type]) this.map[type] = [];
+						if (this.map[type].indexOf(name) == -1) this.map[type].push(name);
+						if (this.all.indexOf(name) == -1) this.all.push(name);
+					}
+				}
+			}};
+		token.define(token_map);
+		node.define(node_map);
+		module.exports.token = token;
+		module.exports.node = node;
+	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/parser.tea', '../src/syntax/parser.tea', function(exports, require, module, __filename, __dirname){
 		var Parser = module.exports,
-			Node = __require("../src/syntax/node.tea"),
-			SyntaxReg = __require("../src/syntax/regexp.tea"),
-			level = 0,
-			ttimes = 0;
+			Node = require("../src/syntax/node.tea"),
+			SyntaxReg = require("../src/syntax/regexp.tea");
 		Parser.define = function(name, pattern, callback){
 			var m;
 			if (typeof pattern == 'string'){
@@ -3011,6 +3401,17 @@
 		Parser.define('ClassStatStam', 'Declaration(classStatement) | StatementStam');
 		Parser.define('StatementPatt', '(is(CommDecl) | is?(IdentifierTokn) LabelStam | StatementStam){lf} is?(EndTokn){err:215}');
 		Parser.define('ClassStatementPatt', '(is(CommDecl) | is?(IdentifierTokn) LabelStam | Declaration(classStatement) | StatementStam){lf} is?(EndTokn){err:215}');
+		Parser.RegExpDecl = function(src, param){
+			var a, b, _ref;
+			_ref = src.indexPair('/', '/', src.index), a = _ref[0], b = _ref[1];
+			while (src[b+1] && /^[gimy]+/.test(src[b+1].text)){
+				b += 1;
+			}
+			src.current.text = src.join(a, b);
+			src.current.types = ['RegExpDecl', 'ConstTokn'];
+			src.delete(a+1, b);
+			return src.current;
+		};
 		Parser.DataPatt = function(src, param){
 			switch (src.text){
 				case '(':
@@ -3019,6 +3420,8 @@
 					return Parser.ArrayExpr(src, param);
 				case '{':
 					return Parser.JsonExpr(src, param);
+				case '/':
+					return Parser.RegExpDecl(src, param);
 			}
 			switch (src.current.is('Unary', 'IdentifierTokn', 'ConstTokn')){
 				case 'Unary':
@@ -3156,7 +3559,7 @@
 				case '@':
 					return Parser.AtExpr(src, opt);
 			}
-			if (src.preProcessor && (exp = src.preProcessor.matchNode('expression', src, opt))){
+			if (src.context && (exp = src.context.processor.matchNode('expression', src, opt))){
 				return exp;
 			}
 			return false;
@@ -3262,7 +3665,7 @@
 		};
 		Parser.Statement = function(src, opt){
 			var exp;
-			if (src.preProcessor && (exp = src.preProcessor.matchNode('statement', src, opt))){
+			if (src.context && (exp = src.context.processor.matchNode('statement', src, opt))){
 				return exp;
 			}
 			return false;
@@ -3274,7 +3677,7 @@
 				o_index = src.index,
 				not_emtpy,
 				end = opt.end ? opt.end.split(',') : [];
-			end.push('\n', ';', '}', ']', ']');
+			end.push('\n', ';', '}', ']', ']', 'else', 'while', 'catch', 'finally', 'case', 'default');
 			while (src.index < src.length){
 				if (src.current.text == ';'){
 					not_emtpy = true;
@@ -3423,6 +3826,9 @@
 			var sta,
 				stamfn = src.isClassBlock || opt.classStatement ? 'ClassStatStam' : 'StatementStam';
 			if (sta = Parser[stamfn](src, opt)){
+				if (src.peek.text == ';'){
+					src.next(1);
+				}
 				return new Node('StamBlockStam', sta);
 			}
 		};
@@ -3538,18 +3944,17 @@
 			}
 			return node;
 		}
-	});
-	CreateModule("../src/syntax/regexp.tea", function(module, exports){
-		var Tokens = __require("../src/tokens/index.tea"),
-			Node = __require("../src/syntax/node.tea"),
-			Parser = __require("../src/syntax/parser.tea");
+	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/regexp.tea', '../src/syntax/regexp.tea', function(exports, require, module, __filename, __dirname){
+		var Token = require("../src/syntax/token.tea"),
+			Node = require("../src/syntax/node.tea"),
+			Parser = require("../src/syntax/parser.tea");
 		var SyntaxReg = (function(){
+			var stx_re_cache = {};
 			function SyntaxReg(){
 				this.length = 0;
 				this.quantifier = '';
 				this.minmatch = 0;
 			}
-			var stx_re_cache = {};
 			SyntaxReg.prototype.push = function (){
 				for (var i=0; i < arguments.length; i++){
 					if (arguments[i] instanceof SyntaxReg){
@@ -3683,7 +4088,7 @@
 				}else if (text == '*'){
 					ptn.type = 'ALL';
 					ptn.key = text;
-				}else if (Tokens.types.hasOwnProperty(text)){
+				}else if (Token.types.hasOwnProperty(text)){
 					ptn.type = 'Tokn';
 					ptn.key = text;
 				}else if (m = text.match(/^[A-Z]\w+(?:Tokn|(Patt|Expr|Stam|Decl))$/)){
@@ -3704,7 +4109,7 @@
 					}
 				}else {
 					text = compileVal(text);
-					var token_list = Tokens.tokenize(text, 'code list');
+					var token_list = Token.tokenize(text, 0, 'code list');
 					if (token_list.length == 1){
 						ptn.type = 'Code';
 						ptn.key = text;
@@ -4051,283 +4456,688 @@
 			return SyntaxReg;
 		})();
 		module.exports = SyntaxReg;
-	});
-	CreateModule("../src/preprocess/template.tea", function(module, exports){
-		var Template = module.exports;
-		Template.runScript = function(script, args, param){
-			if (!param) param = [];
-			script = Template.writeExprFunc(script, args);
-			script = "("+script+")("+(param.join(','))+");";
-			script = tea.compile(script);
-			return script;
-		};
-		Template.textScript = function(text, args){
-			var chips = [], script, ab, m;
-			while (text && (ab = Text.indexPair(text, 0, '#script', '#end'))){
-				if (script = text.slice(0, ab[0])){
-					chips.push("write '"+(Text(script))+"';");
+	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/token.tea', '../src/syntax/token.tea', function(exports, require, module, __filename, __dirname){
+		var NodeBase = require("../src/syntax/base.tea");
+		var Token = (function(){
+			var tokenmap, token_literals, token_symbol, token_complex_re;
+			tokenmap = require("../src/syntax/map.tea").token;
+			token_literals = tokenmap.literals;
+			token_symbol = tokenmap.types.SymbolTokn;
+			token_complex_re = tokenmap.complexre;
+			function Token(text, types, indent, location){
+				if (this.constructor != Token){
+					if (arguments.length == 1 || typeof types == 'number'){
+						return Token.parse(text, types);
+					}
+					return new Token(text, types, indent, location);
 				}
-				if (script = text.slice(ab[0]+7, ab[1])){
-					chips.push(script);
+				if (!types){
+					if (text == '\4'){
+						types = ['EOT', 'BlockBreakTokn', 'BlockBreak', 'EndTokn'];
+					}else if (token_literals.hasOwnProperty(text)){
+						types = token_literals[text];
+					}else if (text){
+						types = ['Character'];
+					}else {
+						types = ['EMPTY'];
+					}
 				}
-				text = text.substr(ab[1]+4);
+				this.text = text;
+				this.types = Hash.slice(types);
+				if (indent != null) this.indent = indent;
+				this.location = location || null;
+				this.istoken = true;
 			}
-			if (text){
-				chips.push("write '"+(Text(text))+"';");
+			Token.prototype = new NodeBase();
+			Token.prototype.constructor = Token;
+			Token.prototype.__super__ = NodeBase.prototype;
+			Token.prototype.__defineGetter__("types", function(){
+				return this._types;
+			});
+			Token.prototype.__defineSetter__("types", function(types){
+				this.type = types[0];
+				this._types = types;
+				return this._types;
+			});
+			Token.prototype.__defineSetter__("indent", function(num){
+				this._indent = (num != null ? num : -1);
+				var i = this.types.indexOf('LineHead');
+				if (this._indent >= 0){
+					if (i == -1) this.types.push('LineHead');
+				}else if (i >= 0){
+					this.types.splice(i, 1);
+				}
+			});
+			Token.prototype.__defineGetter__("indent", function(){
+				return this._indent;
+			});
+			Token.prototype.__defineGetter__("fileName", function(){
+				return this.location && this.location.fileName;
+			});
+			Token.prototype.__defineGetter__("start", function(){
+				return this.location && this.location.start;
+			});
+			Token.prototype.__defineGetter__("end", function(){
+				return this.location && this.location.end;
+			});
+			Token.prototype.clone = function (text, types){
+				var token = new Token(text || this.text, types || this.types, this.indent, this.location);
+				token.parent = this.parent;
+				return token;
 			}
-			script = Template.writeExprFunc(chips.join('\n'), args);
-			script = tea.compile(script);
-			return script;
-		};
-		Template.writeExprFunc = function(script, args){
-			if (!args) args = [];
-			script = Template.parseWriteExp(script);
-			script = Text.trimIndent(script).replace(/^/mg, tab_size).trim();
-			return "function("+(args.join(','))+"){\n    __write  = '';\n    _write   = function(){for(i -> arguments){__write += arguments[i]}};\n    "+script+";\n    return __write;\n}";
-		};
-		Template.parseWriteExp = function(script, name){
-			name = name || '_write';
-			script = script.replace(/^(\n?(\s*))\bwrite\b\s+((?:'(?:\\'|.)*'|"(?:\\"|.)*"|[^;'"])*?)(;|\n?$)/mg, '$1'+name+'((($3)+"").replace(/^/mg, "$2"));');
-			return script;
-		};
-		Template.parseRegExp = function(str){
-			str = str.replace(/\s*\n\s*/g, '');
-			return str;
-		};
-		Template.parseString = function(str){
-			var symbol = str.match(/^('+|"+|`)/)[1], qq = symbol[0] == '`' ? "'" : symbol[0];
-			str = str.slice(symbol.length, -symbol.length);
-			if (!str){
-				return qq+str+qq;
+			Token.types = tokenmap.types;
+			Token.define = function(types, literals){
+				return tokenmap.define(types, literals);
+			};
+			Token.parse = function(text, index){
+				if (index == null) index = 0;
+				var match, code;
+				if (!(text = text.substr(index))){
+					return;
+				}
+				if (token_complex_re && (match = text.match(token_complex_re))){
+					if (token_literals.hasOwnProperty(match[0])){
+						return new Token(match[0], token_literals[match[0]]);
+					}
+				}
+				if (match = text.match(/^\n/)){
+					return new Token(match[0], token_literals[match[0]]);
+				}
+				if (match = text.match(/^[\r\t\f\ ]+/)){
+					return new Token(match[0], ['BlankTokn']);
+				}
+				if (match = text.match(/^(0[xX][0-9a-fA-F]+|(?:\.\d+|\d+(?:\.\d+)?)(?:e\-?\d+)?)/)){
+					return new Token(match[0], ['NumTokn', 'ConstTokn']);
+				}
+				if (match = text.match(/^([\$a-zA-Z_][\w\$]*)/)){
+					if (token_literals.hasOwnProperty(match[0])){
+						return new Token(match[0], token_literals[match[0]]);
+					}
+					return new Token(match[0], ['IdentifierTokn']);
+				}
+				if (!(match = text.match(/^[^\w\_\s]+/))){
+					return {"error": 'tokenize parse error! unexpected token like as "'+text.slice(0, 5)+'"'};
+				}
+				code = match[0];
+				while (code && token_symbol.indexOf(code) == -1){
+					code = code.slice(0, -1);
+				}
+				if (!code){
+					return new Token(match[0]);
+				}
+				if (token_literals.hasOwnProperty(code)){
+					return new Token(code, token_literals[code]);
+				}
+				return {"error": 'tokenize parse error! undefined token "'+code+'"'};
+			};
+			Token.tokenize = function(text, index, opt){
+				if (index == null) index = 0;
+				var list, tk;
+				list = [];
+				while (tk = Token.parse(text, index)){
+					list.push(opt == 'code list' ? tk.text : tk);
+					index += tk.text.length;
+				}
+				return list;
+			};
+			return Token;
+		})();
+		module.exports = Token;
+	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/location.tea', '../src/syntax/location.tea', function(exports, require, module, __filename, __dirname){
+		var Location = (function(){
+			var file_cache = [], source_cache = [];
+			function Location(file, source, code, start, end, line, column){
+				if (!source && file){
+					source = Text.readFile(file);
+				}
+				this.__file_id = CacheFile(file);
+				this.__source_id = CacheSource(source);
+				this.code = code || '';
+				this.lineNumber = (line != null ? line : null);
+				this.columnNumber = (column != null ? column : null);
+				this.start = (start != null ? start : 0);
+				this.end = end || start+this.code.length-1;
+				if (line == null){
+					CountLineNumber(this, start);
+				}
 			}
-			if (/\n/.test(str)){
-				str = Text.trimIndent(str);
+			Location.prototype.__defineGetter__("fileName", function(){
+				return file_cache[this.__file_id] || '';
+			});
+			Location.prototype.__defineGetter__("source", function(){
+				var data = source_cache[this.__source_id];
+				return data && data.source || '';
+			});
+			Location.prototype.__defineGetter__("line", function(){
+				var data = source_cache[this.__source_id];
+				return data && data[this.lineNumber-1][3] || '';
+			});
+			Location.prototype.fission = function (code, start, end){
+				return new Location(this.__file_id, this.__source_id, code, start, end);
 			}
-			if ((symbol[0] == '"' || symbol[0] == '`') && /[^\\](?:\$\{|\$\w)/.test(str)){
-				var str_chips = [], m, ab, chip, exp;
-				while (m = str.match(/([^\\])\$(\{|[\$_\w]+)/)){
-					chip = str.slice(0, m.index+1);
-					if (m[2] == '{'){
-						if (!(ab = Text.indexPair(str, m.index, '{', '}', true))){
+			function CountLineNumber(loc, start){
+				var data;
+				if (data = source_cache[loc.__source_id]){
+					for (var i=0, line_data; i < data.length; i++){
+						line_data = data[i];
+						if (start >= line_data[1] && start <= line_data[2]){
+							loc.lineNumber = line_data[0];
+							loc.columnNumber = start-line_data[1];
 							break;
 						}
-						exp = str.slice(ab[0]+1, ab[1]);
-						str = str.substr(ab[1]+1);
-					}else {
-						exp = m[2];
-						str = str.substr(m.index+m[0].length);
-					}
-					if (chip){
-						str_chips.push('"'+FormatString(symbol, chip)+'"');
-					}
-					if (/[^\w\s]/.test(exp)){
-						str_chips.push('('+exp+')');
-					}else {
-						str_chips.push(exp);
 					}
 				}
-				if (str){
-					str_chips.push('"'+FormatString(symbol, str)+'"');
-				}
-				str = str_chips.join('+').replace(/^\"\"\+|\+\"\"$/g, '');
-			}else {
-				str = qq+FormatString(symbol, str)+qq;
+				return loc;
 			}
-			return str;
-		};
-		Template.joinRequire = function(requires, main){
-			var head = "(function(){\n    var _r = {};\n    function __require(nm){\n        var md = _r[nm];\n        return !md ? {} : (md.init === true ? md.exports : md.init());\n    }\n    function RegisterModule(){\n        for(var i=0, len=arguments.length; i<len; i++) if(!_r[arguments[i]]) _r[arguments[i]] = {'exports':{}};\n    }\n    function CreateModule(nm, creater){\n        if(!_r[nm]) _r[nm] = {'exports':{}};\n        _r[nm].init = function(){ return this.init = true, creater(this, this.exports), this.exports; };\n        return _r[nm].exports;\n    }",
-				foot = "    global = typeof(window) != 'undefined' ? window : global;\n    global['__require'] = __require;\n})();",
-				modules = [];
+			function CacheFile(file){
+				if (typeof file == 'number'){
+					return file;
+				}
+				if (file){
+					var index = file_cache.indexOf(file);
+					if (index == -1){
+						index = file_cache.push(file)-1;
+					}
+					return index;
+				}
+				return null;
+			}
+			function CacheSource(source){
+				if (typeof source == 'number'){
+					return source;
+				}
+				if (source){
+					var index = -1;
+					for (var i=0; i < source_cache.length; i++){
+						if (source_cache[i].text == source){
+							index = i;
+							break;
+						}
+					}
+					if (index == -1){
+						var lines = source.split('\n'), shift = 0, data = [];
+						for (var i=0, line; i < lines.length; i++){
+							line = lines[i];
+							data.push([i+1, shift, (shift += line.length+1)-1, line+'\n']);
+						}
+						data.source = source;
+						index = source_cache.push(data)-1;
+					}
+					return index;
+				}
+				return null;
+			}
+			return Location;
+		})();
+		module.exports = Location;
+	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/source.tea', '../src/syntax/source.tea', function(exports, require, module, __filename, __dirname){
+		var Source = (function(){
+			var Splice = Array.prototype.splice,
+				Slice = Array.prototype.slice,
+				IndexOf = Array.prototype.indexOf,
+				Token = require("../src/syntax/token.tea"),
+				Location = require("../src/syntax/location.tea"),
+				PreProcess = require("../src/preprocess/index.tea");
+			function Source(source, file, ctx){
+				if (this.constructor != Source){
+					return new Source(source, file, ctx);
+				}
+				this.index = 0;
+				this.length = 0;
+				this.source = null;
+				this.fileName = null;
+				this.context = ctx || PreProcess.context();
+				if (arguments.length){
+					this.parse(source, file, this.context, true).clean();
+				}
+			}
+			Source.prototype.parse = function (text, file, ctx, init){
+				if (ctx == null) ctx = this.context;
+				var loc, i, control_cache, token, code;
+				if (!file && !/^["']/.test(text) && Path.isPathText(text)){
+					file = text, text = null;
+				}
+				loc = new Location(file, text);
+				text = loc.source;
+				file = loc.fileName;
+				i = 0;
+				control_cache = {};
+				if (init || !this.source){
+					this.source = text;
+					this.fileName = file;
+				}
+				while (i < text.length && (token = Token(text, i))){
+					if (token.error){
+						throw tea.error(new Error(), token.error, [text, i, text[i], file]);
+					}
+					token.location = loc.fission(token.text, i);
+					if (this.length && this[this.length-1].is('LF')){
+						token.indent = token.type == 'BlankTokn' ? token.text.replace(/\t/g, tab_size).length : 0;
+					}
+					switch (code = token.text){
+						case '"':case '"""':case '""""':case '`':case "'":case "'''":case "''''":
+							token = ctx.processor.string(this, text, i, token);
+							break;
+						case '/*':case '#!':case '//':
+							token = ctx.processor.comm(this, text, i, token);
+							break;
+						case '/':
+							token = ctx.processor.regexp(this, text, i, token);
+							break;
+						case '#':
+							token = ctx.processor.pound(this, text, i, token, control_cache);
+							break;
+						default:
+							if (token.type == 'IdentifierTokn'){
+								token = ctx.processor.macro(this, text, i, token);
+							}
+							break;
+					}
+					if (typeof token == 'number'){
+						if (token < 0){
+							break;
+						}
+						i = token;
+					}else {
+						i = token.location.end+1;
+						this.add(token);
+					}
+				}
+				return this;
+			}
+			Source.prototype.__defineGetter__("text", function(){
+				return this.current.text;
+			});
+			Source.prototype.__defineGetter__("type", function(){
+				return this.current.type;
+			});
+			Source.prototype.__defineGetter__("current", function(){
+				return this.get(this.index);
+			});
+			Source.prototype.__defineGetter__("peek", function(){
+				return this.get(this.nextIndex(this.index, true));
+			});
+			Source.prototype.__defineGetter__("prev", function(){
+				return this.get(this.prevIndex(this.index, true));
+			});
+			Source.prototype.is = function (){
+				return this.current.is.apply(this[this.index], arguments);
+			}
+			Source.prototype.eq = function (){
+				return this.current.eq.apply(this[this.index], arguments);
+			}
+			Source.prototype.get = function (index){
+				return this[index] || {};
+			}
+			Source.prototype.add = function (tok){
+				if (!tok || !tok.istoken){
+					throw tea.error(new Error(), 'Add the wrong parameters('+isClass(tok)+'), Only to can add Lexeme object');
+				}
+				this[this.length++] = tok;
+				return this;
+			}
+			Source.prototype.back = function (opt, catch_comm){
+				while (opt > 1){
+					this.index = this.prevIndex(this.index, opt--, catch_comm);
+				}
+				this.index = this.prevIndex(this.index, opt, catch_comm);
+				return this;
+			}
+			Source.prototype.next = function (opt, catch_comm){
+				while (opt > 1){
+					this.index = this.nextIndex(this.index, opt--, catch_comm);
+				}
+				this.index = this.nextIndex(this.index, opt, catch_comm);
+				return this;
+			}
+			Source.prototype.nextIndex = function (index, ig_lf, catch_comm){
+				return GoIndex(1, this, index, ig_lf, catch_comm);
+			}
+			Source.prototype.prevIndex = function (index, ig_lf, catch_comm){
+				return GoIndex(-1, this, index, ig_lf, catch_comm);
+			}
+			Source.prototype.indexPair = function (s1, s2, index, not_throw_error){
+				index = (index != null ? index : this.index);
+				var ab = IndexPair(this, s1, s2, index);
+				if (!ab && !not_throw_error){
+					throw tea.error(new Error(), 'Source index pair miss "'+s2+'" token', this[index], 'Source error');
+				}
+				return ab;
+			}
+			Source.prototype.indexLine = function (index){
+				index = (index != null ? index : this.index);
+				var a = index, b = index, len = this.length-2;
+				while (a > len || (a > 0 && this[a-1] && this[a-1].type != 'LF')){
+					a--;
+				}
+				while (b < len && (!this[b] || this[b].type != 'LF')){
+					b++;
+				}
+				return [(a > len ? len : a), (b > len ? len : b), index];
+			}
+			Source.prototype.lineIndent = function (index){
+				index = (index != null ? index : this.index);
+				while (index >= 0){
+					if (this[index] && this[index].indent >= 0){
+						return this[index].indent;
+					}
+					index--;
+				}
+				return -1;
+			}
+			Source.prototype.trimIndent = function (a, b){
+				this.length && TrimIndent(this, a, b);
+				return this;
+			}
+			Source.prototype.indexOf = function (){
+				return IndexOf.apply(this, arguments);
+			}
+			Source.prototype.matchOf = function (re, index){
+				if (index == null) index = 0;
+				var m, a, b;
+				if (m = this.source.match(re)){
+					for (var i=index, tk; i < this.length; i++){
+						tk = this[i];
+						if (!tk){
+							continue;
+						}
+						if (tk.start == m.index && tk.fileName == this.fileName){
+							a = i;
+						}
+						if (tk.end == m.index+m[0].length && tk.fileName == this.fileName){
+							b = i;
+						}
+						if (a != null && b != null){
+							return [a, b];
+						}
+					}
+				}
+			}
+			Source.prototype.delete = function (a, b){
+				if (b == null) b = a;
+				for (var i = a; i <= b; i++){
+					this[i] = null;
+				}
+				return this;
+			}
+			Source.prototype.insert = function (pos, list){
+				if (arguments.length == 1){
+					list = pos, pos = this.length;
+				}
+				list = list.istoken ? [list] : Slice.call(list);
+				var indent = this.lineIndent(pos);
+				for (var i=list.length-1, t; i >= 0; i--){
+					t = list[i];
+					if (!t || t.type == 'EOT'){
+						Splice.call(list, i, 1);
+					}else if (indent > 0 && t.indent >= 0){
+						t.indent += indent;
+					}
+				}
+				list.unshift(pos, 0);
+				Splice.apply(this, list);
+				return this;
+			}
+			Source.prototype.clone = function (a, b){
+				var src = new Source();
+				a = typeof a != 'number' ? 0 : a;
+				b = typeof b != 'number' ? this.length : b;
+				for (var i = a; i < b; i++){
+					if (this[i]){
+						src.add(this[i]);
+					}
+				}
+				if (b != this.length){
+					src.add(this[this.length-1]);
+				}
+				return src;
+			}
+			Source.prototype.clean = function (){
+				var a;
+				a = -1;
+				for (var i=0, token; i < this.length; i++){
+					token = this[i];
+					if (!token){
+						continue;
+					}
+					if (token.type == 'EOT'){
+						this[i] = null;
+					}
+					if (token.is('LineHead')){
+						a = i;
+					}
+					if (token.is('LF')){
+						if (a != -1){
+							this.delete(a, i);
+						}
+						a = -1;
+						continue;
+					}
+					if (!token.is('BlankTokn')){
+						a = -1;
+					}
+				}
+				return this.refresh().add(Token('\4'));
+			}
+			Source.prototype.refresh = function (){
+				var target = this[this.index], a = 0, del_i = -1, del_len = 0;
+				for (var i=this.length-1, token; i >= 0; i--){
+					token = this[i];
+					if (token){
+						if (del_len){
+							Splice.call(this, del_i, del_len);
+						}
+						del_i = -1, del_len = 0;
+					}else {
+						del_i = i, del_len += 1;
+					}
+				}
+				if (del_len){
+					Splice.call(this, del_i, del_len);
+				}
+				if (target != this[this.index]){
+					this.index = this.indexOf(target);
+				}
+				return this;
+			}
+			Source.prototype.join = function (a, b){
+				if (isArray(a)){
+					b = a[1], a = a[0];
+				}
+				a = a < 0 ? this.length+a : (a || 0), b = b < 0 ? this.length+b : Math.min(b || Infinity, this.length);
+				var texts = [];
+				for (var i = a; i <= b; i++){
+					if (this[i] && this[i].text != '\4') texts.push(this[i].text);
+				}
+				return texts.join('');
+			}
+			function TrimIndent(src, a, b){
+				if (a == null) a = 0;
+				if (b == null) b = src.length-1;
+				var _a = a, _b = b;
+				while (src[_a].is('BlankTokn', 'LF')){
+					_a++;
+				}
+				if (_a > a){
+					if (src[--_a].type != 'LF'){
+						_a--;
+					}
+					src.delete(a, _a);
+				}
+				while (src[_b].is('BlankTokn', 'LF')){
+					_b--;
+				}
+				if (_b < b){
+					src.delete(++_b, b);
+				}
+				var min = -1;
+				for (var i = a; i <= b; i++){
+					if (src[i] && src[i].indent >= 0){
+						if (min == -1 || src[i].indent < min){
+							min = src[i].indent;
+						}
+					}
+				}
+				if (min > 0){
+					for (var i = a; i <= b; i++){
+						if (src[i] && src[i].indent >= 0){
+							src[i].indent -= min;
+							if (src[i].indent == 0){
+								src[i+1].indent = src[i].indent;
+								src[i++] = null;
+							}else if (src[i].type == 'BlankTokn'){
+								src[i].text = src[i].text.replace(/\t/g, tab_size).substr(0, src[i].indent);
+							}
+						}
+					}
+				}
+				return src;
+			}
+			function GoIndex(ori, src, index, ig_lf, catch_comm){
+				var len = src.length-1, type;
+				while ((index += ori) >= 0 && index <= len){
+					type = src[index] && src[index].type;
+					if (!type || type == 'BlankTokn' || (!catch_comm && type == 'CommDecl') || (ig_lf && type == 'LF')){
+						continue;
+					}
+					return index;
+				}
+				if (ori > 0){
+					return index > len ? len : index;
+				}
+				return index < 0 ? 0 : index;
+			}
+			function IndexPair(src, s1, s2, index){
+				var s1_re = new RegExp('^'+s1.replace(/([^\w\|])/g, '\\$1')+'$'),
+					s2_re = new RegExp('^'+s2.replace(/([^\w\|])/g, '\\$1')+'$'),
+					len = src.length,
+					a = -1,
+					jump = 0;
+				while (index < len){
+					if (src[index].text == '\\'){
+						index += 2;
+						continue;
+					}
+					if (s1_re.test(src[index].text)){
+						if (a == -1){
+							a = index;
+						}else if (s1 == s2){
+							return [a, index];
+						}else {
+							jump += 1;
+						}
+					}else if (s2_re.test(src[index].text) && a != -1){
+						if (jump == 0) return [a, index];
+						jump -= 1;
+					}
+					index += 1;
+				}
+			}
+			return Source;
+		})();
+		module.exports = Source;
+	});Module.register('/Users/wl/Sites/TeaJS/src/preprocess/require.tea', '../src/preprocess/require.tea', function(exports, require, module, __filename, __dirname){
+		var Context = require("../src/preprocess/context.tea");
+		function join(requires, main){
+			var reader = main.reader, modules = [];
 			for (var file in requires){
 				if (!requires.hasOwnProperty(file)) continue;
 				var item = requires[file];
-				modules.push('CreateModule("'+item[0]+'", function(module, exports){\n'+item[2].text.replace(/^/mg, '\t\t')+'\n\t});');
+				var key = item[0],
+					ctx = item[1],
+					module_write = reader.new('ModuleReg').read("Module.register('#0', '#1', function(exports, require, module, __filename, __dirname){#2});", [file, key, reader.new('NodeStam', ctx.rewriter)]);
+				modules.push(module_write);
 			}
-			return head+'\n\t'+modules.join('\n\t')+'\n'+foot+'\n'+main.text;
+			modules = reader.new('ModulePackage', requireTemplate(), reader.new('NodeStam', modules));
+			main.insert(0, modules);
+			return main;
 		};
-		function FormatString(symbol, str){
-			switch (symbol){
-				case '""""':case '`':case "''''":
-					str = Text(str, symbol[0]).replace(/([^\\]|^)(\\{2,4,6,8})?\\n/g, '$1$2\\n\\\n');
-					break;
-				case '"""':case "'''":
-					str = str.replace(/([^\\]|^)\n/g, '$1\\n').replace(/^\n/mg, '\\n\\\n');
-					break;
-				case '"':case "'":default:
-					str = str.replace(/([^\\]|^)\n|^\n/g, '$1\\n');
-					break;
-			}
-			if (symbol[0] == '"'){
-				if (symbol.length > 1){
-					str = str.replace(/([^\\])"/g, '$1\"');
+		function load(files, cache){
+			if (cache == null) cache = {};
+			for (var file in files){
+				if (!files.hasOwnProperty(file)) continue;
+				var key = files[file];
+				if (file == 'length' || cache.hasOwnProperty(file)){
+					continue;
 				}
-				str = str.replace(/\\'/g, "'");
-			}else {
-				if (symbol.length > 1){
-					str = str.replace(/([^\\])'/g, "$1\'");
+				if (debug.log){
+					debug.log('** require file: '+file);
 				}
-				str = str.replace(/\\"/g, '"');
+				var ctx = new Context({"file": file});
+				cache[file] = [key, ctx];
+				if (ctx.requires.length){
+					load(ctx.requires, cache);
+				}
 			}
-			return str;
+			return cache;
+		};
+		function requireTemplate(){
+			var format;
+			format = function(){
+				var _require, __modules, Module;
+				if (!global && typeof (window) != 'undefined'){
+					global = window;
+				}
+				_require = require;
+				require = function(key){
+					var mod = __modules[key];
+					if (mod){
+						if (mod.loaded){
+							return mod.exports;
+						}
+						return mod.load();
+					}else {
+						return module.require(key);
+					}
+				};
+				__modules = {};
+				Module = function(filename, creater){
+					this.id = filename;
+					this.exports = {};
+					this.filename = filename;
+					this.loaded = false;
+					this.creater = creater;
+					this.require = require;
+				};
+				Module.prototype.load = function(){
+					this.loaded = true;
+					this.creater(this.exports, require, this, this.filename, this.filename.replace(/\/.+$/g, ''));
+					module.constructor._cache[this.filename] = this;
+					return this.exports;
+				};
+				Module.register = function(filename, key, creater){
+					if (!(__modules.hasOwnProperty(key))){
+						__modules[key] = new Module(filename, creater);
+					}
+				};
+			};
+			return '('+format.toString().replace(/^\t|^ {4}/mg, '').replace(/\s*\}\s*$/, '#}')+')();\n\n';
 		}
-	});
-	CreateModule("../src/rewriter/index.tea", function(module, exports){
-		var Reader = __require("../src/rewriter/reader.tea"),
-			SourceMap = __require("../src/rewriter/sourcemap.tea");
-		exports.read = function(ast, preprocessor){
-			if (!preprocessor) preprocessor = ast.preProcessor;
-			var write = Reader(preprocessor).read(ast);
-			return beautify(write);
+		module.exports.join = join;
+		module.exports.load = load;
+	});Module.register('/Users/wl/Sites/TeaJS/src/rewriter/index.tea', '../src/rewriter/index.tea', function(exports, require, module, __filename, __dirname){
+		var Reader = require("../src/rewriter/reader.tea"),
+			SourceMap = require("../src/rewriter/sourcemap.tea"),
+			Beautify = require("../src/rewriter/beautify.tea");
+		exports.read = function(ast, ctx){
+			if (!ctx) ctx = ast.context;
+			var write = Reader(ctx).read(ast);
+			return write;
 		};
 		exports.sourceMap = function(){
 			return new SourceMap();
 		};
-		function beautify(writer){
-			for (var i=0, item; i < writer.length; i++){
-				item = writer[i];
-				if (item == ','){
-					writer[i] = ', ';
-					continue;
-				}
-				switch (item.type){
-					case 'VarDecl':case 'LetDecl':
-						beautifyVarDecl(writer, i);
-						beautify(item);
-						break;
-					case 'NodeStam':
-						beautify(item);
-						if (item.length && writer.type != 'Root'){
-							beautifyIndent(item);
-							beautifyTrim(item).insert(0, '\n\t').add('\n');
-						}
-						break;
-					default:
-						if (item.iswriter){
-							beautify(item);
-						}
-						break;
-				}
-			}
-			if (/JsonExpr|ArrayExpr|VarDecl/.test(writer.type)){
-				var text = writer.text;
-				if (text.length > 80 || /\n/.test(text)){
-					beautifyWrap(writer);
-					beautifyIndent(writer);
-				}
-			}
-			return writer;
-		}
-		function beautifyVarDecl(writer, index){
-			var _b, var_writer = writer[index], b = index;
-			while (true){
-				_b = b+1;
-				while (typeof writer[_b] == 'string' && /^[;|\n|\s]+$/.test(writer[_b])){
-					_b += 1;
-				}
-				if (writer[_b] && /LetDecl|VarDecl/.test(writer[_b].type)){
-					beautifyTrim(writer[_b], /^(var\ |var\b|\ )/, /(;|\n)$/);
-					var_writer.add(',').add.apply(var_writer, Hash.slice(writer[_b]));
-					b = _b;
-					continue;
-				}
-				break;
-			}
-			if (b != index){
-				writer.delete(index+1, b);
-			}
-			return writer;
-		}
-		function beautifyIndent(writer){
-			for (var i=0, item; i < writer.length; i++){
-				item = writer[i];
-				if (item.iswriter){
-					beautifyIndent(item);
-				}else if (item.istoken){
-					if (item.type != 'StringTokn'){
-						item.text = item.text.replace(/\n/g, '\n\t');
-					}
-				}else {
-					writer[i] = item.replace(/\n/g, '\n\t');
-				}
-			}
-			return writer;
-		}
-		function beautifyWrap(writer){
-			for (var i=0, item; i < writer.length; i++){
-				item = writer[i];
-				if (item == ', '){
-					writer[i] = ',\n';
-				}else if (item.type == 'ArgumentsDecl'){
-					beautifyWrap(item);
-				}
-			}
-			return writer;
-		}
-		function beautifyTrim(writer, lre, rre){
-			if (lre == null) lre = /^\s+/;
-			if (rre == null) rre = /\s+$/;
-			if (lre){
-				beautifyTrimLeft(writer, lre);
-			}
-			if (rre){
-				beautifyTrimRight(writer, rre);
-			}
-			return writer;
-		}
-		function beautifyTrimLeft(writer, re){
-			if (re == null) re = /^\s+/;
-			var temp = writer;
-			while (temp[0]){
-				if (typeof temp[0] == 'string'){
-					if (re.test(temp[0]) && !(temp[0] = temp[0].replace(re, ''))){
-						temp.delete(0);
-						continue;
-					}
-				}else if (temp[0].istoken && re.test(temp[0].text)){
-					if (!(temp[0].text = temp[0].text.replace(re, ''))){
-						temp.delete(0);
-						continue;
-					}
-				}else if (temp[0].iswriter){
-					beautifyTrimLeft(temp[0], re);
-				}
-				break;
-			}
-			return writer;
-		}
-		function beautifyTrimRight(writer, re){
-			if (re == null) re = /\s+$/;
-			var last = writer.length-1, temp = writer;
-			while (temp[last]){
-				if (typeof temp[last] == 'string'){
-					if (re.test(temp[last]) && !(temp[last] = temp[last].replace(re, ''))){
-						last = temp.delete(last).length-1;
-						continue;
-					}
-				}else if (temp[last].istoken && re.test(temp[last].text)){
-					if (!(temp[last].text = temp[last].text.replace(re, ''))){
-						last = temp.delete(last).length-1;
-						continue;
-					}
-				}else if (temp[last].iswriter){
-					beautifyTrimRight(temp[last], re);
-				}
-				break;
-			}
-			return writer;
-		}
-	});
-	CreateModule("../src/rewriter/reader.tea", function(module, exports){
-		var Writer = __require("../src/rewriter/writer.tea");
+	});Module.register('/Users/wl/Sites/TeaJS/src/rewriter/reader.tea', '../src/rewriter/reader.tea', function(exports, require, module, __filename, __dirname){
 		var Reader = (function(){
-			function Reader(preprocessor){
+			var Writer = require("../src/rewriter/writer.tea");
+			var ES5 = require("../src/rewriter/ES5.tea");
+			var pattern_cache = {};
+			function Reader(ctx){
 				if (this.constructor != Reader){
-					return new Reader(preprocessor);
+					return new Reader(ctx);
 				}
-				this.preProcessor = preprocessor;
+				this.context = ctx;
 			}
-			var pattern_cache = {}, pattern_map = {};
 			Reader.prototype.new = function (type){
 				var write = new Writer(this, type);
 				if (arguments.length > 1){
@@ -4336,20 +5146,18 @@
 				return write;
 			}
 			Reader.prototype.read = function (node, do_each){
-				var stx_ptn;
+				var res;
 				if (!node){
 					return;
 				}
 				if (!node.istoken && !node.isnode){
 					return node;
 				}
-				var res;
-				if (!do_each && pattern_map.hasOwnProperty(node.type)){
-					res = pattern_map[node.type];
-				}else if (!do_each && Reader.prototype.hasOwnProperty(node.type)){
-					var write = this.new(node.type), res = this[node.type](node, write) || write;
-				}else if (!do_each && this.preProcessor && (stx_ptn = this.preProcessor.get(node.type, 'statement', 'expression'))){
-					res = stx_ptn.read(this, node);
+				if (!do_each && (res = getReader(node.type, this, node))){
+					if (res.isnode){
+						return this.read(res, true);
+					}
+					return res;
 				}else if (node.isnode){
 					var write = this.new(node.type);
 					for (var i=0, item; i < node.length; i++){
@@ -4358,20 +5166,12 @@
 					}
 					return write;
 				}else if (node.istoken){
-					res = node;
-				}
-				if (res){
-					if (typeof res == 'string'){
-						return this.patt(res, node);
-					}else if (res.isnode){
-						return this.read(res, true);
-					}
-					return res;
+					return node;
 				}
 			}
-			Reader.prototype.patt = function (patt_str, node, write){
-				var res, patt = getPattern(patt_str, node);
-				if (!patt){
+			Reader.prototype.patt = function (patt, node, write){
+				var res;
+				if (!(patt = getPattern(patt, node))){
 					return;
 				}
 				if (!write) write = this.new(patt.name || node.type);
@@ -4396,17 +5196,6 @@
 				}
 				return write;
 			}
-			Reader.define = function(map){
-				for (var name in map){
-					if (!map.hasOwnProperty(name)) continue;
-					var ptn = map[name];
-					Reader.compilePattern(ptn);
-					for (var _i_ref = name.split(' '), _i=0, n; _i < _i_ref.length; _i++){
-						n = _i_ref[_i];
-						pattern_map[n] = ptn;
-					}
-				}
-			};
 			Reader.compilePattern = function(source){
 				var m;
 				if (pattern_cache[source]){
@@ -4434,37 +5223,30 @@
 					}
 					patt.push(ptn);
 				}
+				patt.isreader = true;
 				return pattern_cache[source] = patt;
 			};
-			function compilePatternCondition(text){
-				var m, list = [];
-				while (m = text.match(/^\ *#(\d+(?:\.\d+)*)? (is|eq) (.*?)(\&\&|\|\||$)/)){
-					list.push({"fn": m[2],
-						"indexs": m[1] && m[1].split('.'),
-						"param": m[3].trim().split(','),
-						"logic": m[4]});
-					if (m[4]){
-						text = text.substr(m[0].length);
-						continue;
+			function getReader(type, self, node){
+				var write, reader;
+				if (!reader && ES5.hasOwnProperty(type)){
+					reader = ES5[type];
+				}
+				if (reader){
+					if (typeof reader == 'function'){
+						write = self.new(type);
+						reader = reader.call(self, node, write) || write;
 					}
-					break;
+					if (typeof reader == 'string' || reader.isreader){
+						return self.patt(reader, node);
+					}
+					return reader;
 				}
-				return list;
+				if (self.context && (reader = self.context.get(type, 'statement', 'expression'))){
+					return reader.read(self, node);
+				}
 			}
-			function compilePatternAccessor(match, source){
-				var fn, index, param;
-				if (fn = match[1]){
-					index = match[2];
-				}else {
-					index = match[3];
-				}
-				if (index){
-					index = index.split('.');
-				}
-				return {"fn": fn, "indexs": index, "param": param, "ispattern": true, "source": source};
-			}
-			function getPattern(key, node){
-				var item, patt = Reader.compilePattern(key);
+			function getPattern(patt, node){
+				var item, patt = patt.isreader ? patt : Reader.compilePattern(patt);
 				for (var i=0; i < patt.length; i++){
 					if (!patt[i].condition){
 						return patt[i];
@@ -4503,941 +5285,95 @@
 				}
 				return item;
 			}
-			function parsePatternAccessor(patt, node){
-				var item = getNodeItem(node, patt.indexs);
-				if (!item){
-					return null;
-				}
-				var write;
-				if (!patt.fn){
-					write = item.istoken || item.isnode ? this.read(item, node == item) : item;
-				}else if (this[patt.fn]){
-					if (/^[A-Z]+$/.test(patt.fn)){
-						write = item.isnode || item.istoken ? this.read(item, node == item) : item;
-						this[patt.fn](write);
-					}else {
-						write = this.new(patt.name || patt.fn);
-						var res = this[patt.fn](item, write);
-						if (typeof res == 'string'){
-							this.patt(res, item, write);
+			function initReader(reader){
+				for (var name in reader){
+					if (!reader.hasOwnProperty(name)) continue;
+					var ptn = reader[name];
+					if (typeof ptn == 'string'){
+						Reader.compilePattern(ptn);
+					}
+					if (/ /.test(name)){
+						delete reader[name];
+						for (var _i_ref = name.split(' '), _i=0, n; _i < _i_ref.length; _i++){
+							n = _i_ref[_i];
+							reader[n] = ptn;
 						}
 					}
+				}
+			}
+			function compilePatternCondition(text){
+				var m, list = [];
+				while (m = text.match(/^\ *#(\d+(?:\.\d+)*)? (is|eq) (.*?)(\&\&|\|\||$)/)){
+					list.push({"fn": m[2],
+						"indexs": m[1] && m[1].split('.'),
+						"param": m[3].trim().split(','),
+						"logic": m[4]});
+					if (m[4]){
+						text = text.substr(m[0].length);
+						continue;
+					}
+					break;
+				}
+				return list;
+			}
+			function compilePatternAccessor(match, source){
+				var fn, index, param;
+				if (fn = match[1]){
+					index = match[2];
+				}else {
+					index = match[3];
+				}
+				if (index){
+					index = index.split('.');
+				}
+				return {"fn": fn, "indexs": index, "param": param, "ispattern": true, "source": source};
+			}
+			function parsePatternAccessor(patt, node){
+				var item, write;
+				if (!(item = getNodeItem(node, patt.indexs))){
+					return null;
+				}
+				if (!patt.fn){
+					write = item.istoken || item.isnode ? this.read(item, node == item) : item;
+				}else if (/^[A-Z]+$/.test(patt.fn) && this[patt.fn]){
+					write = item.isnode || item.istoken ? this.read(item, node == item) : item;
+					this[patt.fn](write);
+				}else if (write = getReader(patt.fn, this, item)){
+					return write;
 				}else {
 					throw tea.error(new Error(), 'writer patt has undefined function', [patt.source, -1, patt.fn]);
 				}
 				return write;
 			}
-			return Reader;
-		})();
-		Reader.define({'CommaExpr CommaStam ArgumentsDecl' : 'COMMA(#)',
-			'ArgumentsExpr CompelExpr ConditionStam' : '\(COMMA(#)\)',
-			'ParamsStam ParamsExpr' : '\(ParamsPatt(#)\)',
-			'ArrayExpr' : '\[COMMA(#)\]',
-			'JsonExpr' : '\{COMMA(#)\}',
-			'PrefixExpr PostfixExpr' : '#0#1',
-			'ReturnStam BreakStam ContinueStam ThrowStam' : '#0 #1',
-			'DotExpr' : '.#0',
-			'DebuggerStam' : '#0',
-			'FunctionDecl' : '#0 #1#2#3',
-			'FunctionExpr' : '#0#1#2',
-			'ExportDecl' : '#1',
-			'IfPatt' : '#0 #1#2',
-			'ElseIfPatt' : '#0 if #1#2',
-			'ElsePatt' : '#0 #1',
-			'WhileStam' : '#0 #1#2',
-			'WithStam' : '#0 #1#2',
-			'TryPatt' : '#0 #1',
-			'CatchPatt' : '#0 #1 #2',
-			'FinallyPatt' : '#0 #1',
-			'ThisExpr' : 'this#1',
-			'LabelStam' : '#0#1 #2',
-			'ForBaseConditionPatt' : '(#0; #1; #2)',
-			'ForInConditionPatt' : '(#0 #1 #2)',
-			'UnaryExpr' : '(? #0 eq +) Math.abs(#1) | (? #0 is SymbolTokn) #0#1 | #0 #1',
-			'NotExpr' : '(? #1 is ValueExpr) !#0 | !(#1)',
-			'TernaryExpr' : '(? #2 is ExprStam && #4 is ExprStam) #0 #1 #2 #3 #4 | if (#0) #2; else #4',
-			'LambdaExpr' : '(? #1 is ReturnStam) function#0{#1} | function#0{return #1}',
-			'Root' : 'NodeStam(#0)',
-			'BlockStam IndentBlockStam LineBlockStam StamBlockStam' : '{NodeStam(#)}'});
-		Reader.prototype.TestPatt = function(node, __write){
-			if (tea.argv['--test']){
-				__write.add(node);
+			initReader(ES5);
+			Reader.prototype.COMMA = function (write){
+				return this.JOIN(write, ',');
 			}
-		};
-		Reader.prototype.CommDecl = function(node, __write){
-			if (!tea.argv['--clear'] || node.text[0] == '#'){
-				__write.add(node);
-			}
-		};
-		Reader.prototype.IdentifierExpr = function(node, __write){
-			var let_name, id = node[0], scope = node.scope;
-			if (let_name = scope.getLet(id.text)){
-				id.text = let_name;
-			}else if (this.class_scope){
-				switch (scope.isDefined(id.text)){
-					case 'static':case 'unknow':
-						if (this.class_scope.variables[id.text] == 'static'){
-							id.text = this.class_scope.name+'.'+id.text;
-						}
-						break;
+			Reader.prototype.JOIN = function (write, separator){
+				if (separator == null) separator = ' ';
+				for (var i = write.length-1; i >= 1; i--){
+					Array.prototype.splice.call(write, i, 0, separator);
 				}
-			}
-			__write.read(id);
-		};
-		Reader.prototype.ComputeExpr = function(node, __write){
-			var list = [];
-			for (var i=0; i < node.length; i++){
-				switch (node[i].istoken && node[i].text){
-					case '**':
-						list.push('Math.pow(', list.pop(), ', ', node[++i], ')');
-						break;
-					case '\\':
-						list.push('Math.floor(', list.pop(), '/', node[++i], ')');
-						break;
-					default:
-						list.push(node[i]);
-						break;
-				}
-			}
-			__write.read(list);
-		};
-		Reader.prototype.CompareExpr = function(node, __write){
-			var list = [];
-			if (node.length == 5 && node[3].eq('<', '>', '>=', '<=')){
-				return '#0 #1 #2 && #2 #3 #4';
-			}
-			for (var i=0; i < node.length; i++){
-				switch (i%2 && node[i].text){
-					case 'as':
-						if (node[i+1].type == 'StringTokn'){
-							list.push('typeof ', list.pop(), ' == ', node[++i]);
-						}else {
-							list.push(' instanceof ', node[++i]);
-						}
-						break;
-					case 'in':
-						if (node[i+1].type == 'ArrayExpr'){
-							list.push(node[++i], '.indexOf(', list.pop(), ')>=0');
-						}else {
-							list.push(node[++i], '.hasOwnProperty(', list.pop(), ')');
-						}
-						break;
-					case 'of':
-						list.push('[].indexOf.call(', node[++i], ', ', list.pop(), ')>=0');
-						break;
-					case 'is':
-						node[i].text = ' === ';
-						list.push(node[i]);
-						break;
-					case 'not is':
-						node[i].text = ' !== ';
-						list.push(node[i]);
-						break;
-					default:
-						if (i%2){
-							node[i].text = ' '+node[i].text+' ';
-						}
-						list.push(node[i]);
-						break;
-				}
-			}
-			__write.read(list);
-		};
-		Reader.prototype.LogicExpr = function(node, __write){
-			var i;
-			for (i = 1; i < node.length; i += 2){
-				switch (node[i].text){
-					case 'and':
-						node[i].text = '&&';
-						break;
-					case 'or':
-						node[i].text = '||';
-						break;
-				}
-			}
-			if (node.length == 3){
-				if (node[2].is('ExprStam')){
-					return '#0 #1 #2';
-				}
-				if (node.parent.is('NodeStam')){
-					if (node[1].text == '||'){
-						if (node[0].is('ValueExpr')){
-							return 'if (!#0) #2';
-						}
-						return 'if (!(#0)) #2';
-					}
-					return 'if (#0) #2';
-				}
-				return '#0 #1 (#2)';
-			}
-			__write.read(this.JOIN(Hash.slice(node), ' '));
-		};
-		Reader.prototype['Ternary2.5Expr'] = function(node, __write){
-			if (node.parent.is('NodeStam')){
-				return 'if (#0) #2';
-			}else {
-				if (!node[0].is('ValueExpr')){
-					var ref = AllocateRefName(node.scope);
-					return '(('+ref+' = #0) != null ? '+ref+' : #2)';
-				}
-			}
-			return '(#0 != null ? #0 : #2)';
-		};
-		Reader.prototype.SeleteStam = function(node, __write){
-			switch (node[1].text){
-				case 'if':case '<-':
-					return 'if (#2) #0';
-				case 'or':case '||':
-					if (node[0].is('ValueExpr')){
-						return 'if (!#0) #2';
-					}
-					return 'if (!(#0)) #2';
-				default:
-					return 'if (#0) #2';
-			}
-		};
-		Reader.prototype.AssignmentExpr = function(node, __write){
-			var left = node[0], right = node[2];
-			if (left.type == 'ArrayPatt'){
-				return AssignmentArrayPatt.call(this, __write, left, right, node);
-			}else if (left.type == 'AccessorPatt' && left[left.length-1].type == 'SlicePatt'){
-				return AssignmentSlicePatt.call(this, __write, left, right, node);
-			}else if (node.parent.type == 'ArgumentsExpr'){
-				return left;
-			}else {
-				switch (node[1].text){
-					case '?=':
-						if (node.parent && node.parent.is('NodeStam')){
-							return 'if (#0 == null) #0 = #2';
-						}
-						return '(#0 == null && (#0 = #2))';
-					case '|=':
-						if (node.parent && node.parent.is('NodeStam')){
-							return 'if (!#0) #0 = #2';
-						}
-						return '(!#0 && (#0 = #2))';
-				}
-			}
-			if (node.parent.type == 'JsonExpr'){
-				if (node[0].is('IdentifierTokn')){
-					return '"#0"#1 #2';
-				}
-			}
-			return '#0 #1 #2';
-		};
-		Reader.prototype.AssignmentDecl = Reader.prototype.AssignmentExpr;
-		Reader.prototype.ParamsPatt = function(node, __write){
-			for (var i=0, item; i < node.length; i++){
-				item = node[i];
-				if (item.istoken && item.text == ','){
-					__write.add('null');
-				}else {
-					__write.read(item);
-				}
-			}
-			this.COMMA(__write);
-		};
-		Reader.prototype.SlicePatt = function(node, __write){
-			var ab = AccessorSlicePatt.call(this, node);
-			if (!ab[1]){
-				__write.read('.slice(', ab[0] || '', ')');
-			}else {
-				__write.read('.slice(', ab[0] || '0', ', ', ab[1], ')');
-			}
-		};
-		Reader.prototype.MemberExpr = function(node, __write){
-			if (node[0].type == 'UnaryExpr' && node[0][0].text == '-'){
-				var parent = node.parent.clone();
-				parent.length = node.index;
-				if (parent){
-					__write.read('[#0.length#1]', [parent, node[0]]);
-				}
-			}else {
-				__write.read('[', node[0], ']');
-			}
-		};
-		Reader.prototype.MemberPatt = function(node, __write){
-			switch (node[0].text){
-				case '::':
-					node[0].text = '.prototype';
-					break;
-				case '..':
-					node[0].text = '.constructor';
-					break;
-			}
-			return '#0.#1';
-		};
-		Reader.prototype.LetDecl = function(node, __write){
-			node[0].text = 'var';
-			ResetDefineVariableDecl(node[1], node.scope, 'let', 'let_');
-			return '#0 #1';
-		};
-		Reader.prototype.VarDecl = function(node, __write){
-			ResetDefineVariableDecl(node[1], node.scope, 'defined');
-			return '#0 #1';
-		};
-		Reader.prototype.DoWhileStam = function(node, __write){
-			if (node[2]){
-				return '#0 #1 #2 #3';
-			}else {
-				return '#0{NodeStam(#1)break;} while (true)';
-			}
-		};
-		Reader.prototype.TryStam = function(node, __write){
-			if (node.length > 1){
-				return '#';
-			}else {
-				return '# catch (_e){}';
-			}
-		};
-		Reader.prototype.SwitchStam = function(node, __write){
-			var block = node[2],
-				block_body = this.new('NodeStam'),
-				exp_cache = [],
-				case_write,
-				sub_block;
-			for (var _i=0, item; _i < block.length; _i++){
-				item = block[_i];
-				if (!case_write) case_write = this.new(item.type);
-				if (item.type == 'CaseStam'){
-					for (var _j=0, key; _j < item[1].length; _j++){
-						key = item[1][_j];
-						case_write.read(item[0], ' ', key, ':');
-					}
-					sub_block = item[3];
-				}else {
-					case_write.read(item[0], ':');
-					sub_block = item[2];
-				}
-				if (sub_block){
-					var sub_write = this.SwitchCaseBlock(sub_block, this.new('NodeStam'));
-					block_body.read(case_write.read(sub_write));
-					case_write = null, sub_block = null;
-				}
-			}
-			__write.read(node[0], ' ', node[1], this.new(block.type, '{', block_body, '}'));
-		};
-		Reader.prototype.SwitchCaseBlock = function(node, __write){
-			var last = node.length-1;
-			while (node[last] && node[last].is('CommDecl')){
-				last -= 1;
-			}
-			var insert_break = true;
-			if (node[last] && node[last].is('ReturnStam', 'BreakStam', 'ContinueStam')){
-				if (node[last].type == 'ContinueStam'){
-					node[last] = null;
-				}
-				insert_break = false;
-			}
-			this.NodeStam(node, __write);
-			if (insert_break){
-				__write.read('\nbreak;');
-			}
-			return __write;
-		};
-		Reader.prototype.forCondition = function(node, __write){
-			var scope = node.scope,
-				exp1 = node[0],
-				exp2 = node[1],
-				exp3 = node[2],
-				$mark = exp2 && exp2.text || '->',
-				$var,
-				$i,
-				$i_text,
-				$def,
-				$temp,
-				$len,
-				$tar,
-				$tar_exp;
-			if (exp1.type == 'VarDecl'){
-				$var = true, exp1 = exp1[1];
-			}
-			if (!exp3){
-				exp3 = exp1, exp1 = null;
-			}
-			if (exp1){
-				switch (exp1.type){
-					case 'CommaExpr':case 'ArgumentsDecl':
-						$i = exp1[0], $temp = exp1[1];
-						break;
-					default:
-						$i = exp1;
-						break;
-				}
-			}
-			if ($i){
-				if ($i.type == 'AssignmentDecl' || $i.type == 'AssignmentExpr'){
-					$def = $i[2], $i = $i[0];
-				}else if ($i.type == 'ConstTokn'){
-					$def = $i, $i = null;
-				}
-				if ($i){
-					if ($i.type == 'IdentifierExpr'){
-						$i = $i[0];
-					}
-					if ($i.type != 'IdentifierTokn'){
-						tea.throw('for condition(3) statiment syntax error!', $i);
-					}
-					if (/\=|of/.test($mark)){
-						$temp = $i, $i = null;
-					}
-				}
-			}
-			if (!$i){
-				$var = true, $i = AllocateVarName(scope);
-			}
-			$i_text = $i.text || $i;
-			var def_type = scope.isDefined($i_text);
-			$var = $var || !def_type || def_type == 'let';
-			if (exp3.type == 'CommaExpr' && exp3.length == 1){
-				exp3 = exp3[0];
-			}
-			switch (exp3.is('ArrayExpr', 'JsonExpr', 'AccessorExpr', 'IdentifierExpr', 'AtExpr', 'NumTokn')){
-				case 'AccessorExpr':case 'IdentifierExpr':case 'AtExpr':
-					$tar = exp3;
-					break;
-				case 'NumTokn':
-					$len = this.new('NumTokn').read(exp3);
-					break;
-				default:
-					$tar = $i_text+'_ref';
-					$tar_exp = this.new('AssignmentExpr').read($tar, ' = ', exp3);
-					break;
-			}
-			$len = $len || this.new('AssignmentExpr').read($tar, '.length');
-			$tar = this.new('IdentifierExpr').read($tar);
-			$i = this.new('IdentifierExpr').read($i);
-			return [$mark, $var, $i, $def, $temp, $len, $tar, $tar_exp];
-		};
-		Reader.prototype.ForStam = function(node, __write){
-			var block_body, condition = node[1];
-			if (condition.type == 'ForBaseConditionPatt'){
-				return '#0 #1#2';
-			}
-			var scope = node.scope,
-				_ref = this.forCondition(condition), $mark = _ref[0], $var = _ref[1], $i = _ref[2], $def = _ref[3], $temp = _ref[4], $len = _ref[5], $tar = _ref[6], $tar_exp = _ref[7];
-			scope.setLet('__length', $len.text);
-			scope.setLet('__index', $i.text);
-			scope.setLet('__target', $tar.text);
-			var cond_body = this.new('ConditionBody');
-			block_body = this.new('NodeStam');
-			if (/in|of/.test($mark)){
-				cond_body.read($var ? 'var ' : '', $i, ' in ', $tar);
-				if ($tar_exp){
-					__write.read(this.VAR($tar_exp), ';\n');
-				}
-				block_body.add(this.new('IfStam', 'if (!#0.hasOwnProperty(#1)) continue;\n', [$tar, $i]));
-				if ($temp){
-					block_body.add(this.new('AssignmentExpr', 'var #0 = #1[#2];\n', [$temp, $tar, $i]));
-				}
-			}else {
-				if ($mark[0] == '<'){
-					if ($def = $def || [$tar, '.length-1']){
-						$def = [$i, '=', $def];
-					}
-					cond_body.read('#0; #1 >= #2; #1--', [this.VAR($tar_exp, $def, $temp), $i, '0']);
-				}else {
-					if ($def = $def || $var && '0'){
-						$def = [$i, '=', $def];
-					}
-					cond_body.read('#0; #1 < #2; #1++', [this.VAR($tar_exp, $def, $temp), $i, $len]);
-				}
-				if ($temp){
-					block_body.add(this.new('AssignmentExpr', '#0 = #1[#2];\n', [$temp, $tar, $i]));
-				}
-			}
-			this.NodeStam(node[2], block_body);
-			__write.add(node[0], ' ', this.new('ForConditionPatt', '(', cond_body, ')'), this.new(node[2].type, '{', block_body, '}'));
-		};
-		Reader.prototype.PackageExpr = function(node, __write){
-			if (node.length == 2){
-				return '(function()#1)()';
-			}
-			var params = this.new('ParamsExpr'),
-				argus = this.new('ArgumentsExpr'),
-				has_ass = false;
-			if (node[1].length){
-				ResetDefineVariableDecl(node[1], node.scope, 'argument');
-				for (var i=0, item; i < node[1].length; i++){
-					item = node[1][i];
-					if (item.type == 'AssignmentDecl'){
-						has_ass = true;
-						argus.read(item[0]);
-						params.read(item[2]);
-					}else {
-						argus.read('_'+i);
-						params.read(item);
-					}
-				}
-			}
-			__write.read('(function(#0)#1)(#2)', [this.COMMA(argus), node[2], this.COMMA(params)]);
-		};
-		Reader.prototype.ClassExpr = function(node, __write){
-			var _i = 1, scope = node.scope, name, extend, block, is_ass = false;
-			if (node[_i].type == 'IdentifierTokn'){
-				name = node[_i++];
-			}
-			if (node[_i].type == 'ExtendsExpr'){
-				extend = node[_i++];
-			}
-			if (!name){
-				if (node.parent.type == 'AssignmentDecl'){
-					is_ass = true;
-					name = node.parent[0];
-				}else if (node.parent.type == 'AssignmentExpr'){
-					is_ass = true;
-					name = node.parent[0][0];
-				}
-			}
-			if (!name){
-				throw tea.error(new Error(), 321, node[0]);
-			}
-			scope.name = name.text;
-			block = node[_i];
-			var old_scope = this.class_scope;
-			this.class_scope = scope;
-			var block_write = this.new('NodeStam');
-			this.NodeStam(block, block_write);
-			if (extend){
-				block_write.insert(0, this.ExtendsExpr(extend));
-			}
-			var construct_write = this.new('ConstructorStam'),
-				construct_body = this.new('NodeStam');
-			if (scope.inits.length){
-				construct_body.read(scope.inits);
-			}
-			if (scope.construct){
-				this.NodeStam(scope.construct[2], construct_body);
-				construct_write.read('function #0#1{#2}\n', [name, scope.construct[1], construct_body]);
-			}else {
-				construct_write.read('function #0(){#1}\n', [name, construct_body]);
-			}
-			block_write.insert(0, construct_write);
-			block_write.read('\nreturn #0;', [name]);
-			if (is_ass){
-				__write.read('(function(){#0})()', [block_write]);
-			}else {
-				__write.read('var #1 = (function(){#0})()', [block_write, name]);
-			}
-			this.class_scope = old_scope;
-		};
-		Reader.prototype.ExtendsExpr = function(node, __write){
-			if (!__write) __write = this.new('ExtendsExpr');
-			var scope = node.scope, name = scope.name, list = node[1];
-			__write.read('#0.prototype = new #1();\n#0.prototype.constructor = #0;\n#0.prototype.__super__ = #1.prototype;\n', [name, list[0]]);
-			if (list.length > 1){
-				__write.read('#0.__extends = function(){\n    for (var i=0; i<arguments.length; i++){\n        var _super = arguments[i].prototype;\n        for (var name in _super)\n            if (_super[name].hasOwnProperty(name))\n                this.prototype[name] = _super[name];\n    }\n};\n#0.__extends(COMMA(#1));\n', [name, Hash.slice(list, 1)]);
-			}
-			return __write;
-		};
-		Reader.prototype.SuperExpr = function(node, __write){
-			var acc = node[0], pam = node[1], supe = acc[0];
-			supe.text = 'this.__super__';
-			if (acc.length == 1){
-				supe.text += '.'+(node.scope.name || 'constructor');
-			}
-			if (pam){
-				var pam_write = this.read(pam);
-				pam_write[1].insert(0, 'this', ', ');
-				__write.read(acc, '.call', pam_write);
-			}else {
-				return '#0.call(this, arguments)';
-			}
-		};
-		Reader.prototype.AtExpr = function(node, __write){
-			var scope = node.scope;
-			if (scope.type == 'ClassExpr'){
-				node[0].text = scope.name;
-			}else {
-				scope = scope.queryParent('ClassExpr');
-				if (scope && ClassStaticAtSymbol(scope, node)){
-					node[0].text = scope.name;
-				}else {
-					node[0].text = 'this';
-				}
-			}
-			return '#';
-		};
-		Reader.prototype.SetterDecl = function(node, __write){
-			if (node.parent.type == 'JsonExpr'){
-				return '#0 #1#2#3';
-			}
-			var class_scope = node.scope.parent;
-			if (class_scope.type == 'ClassExpr'){
-				var type = node.type == 'SetterDecl' ? '__defineSetter__' : '__defineGetter__';
-				if (node.length < 4){
-					__write.read('#0.prototype.'+type+'("#1", function()#2)', [class_scope.name, node[1], node[2]]);
-				}else {
-					__write.read('#0.prototype.'+type+'("#1", function#2#3)', [class_scope.name, node[1], node[2], node[3]]);
-				}
-			}
-		};
-		Reader.prototype.GetterDecl = Reader.prototype.SetterDecl;
-		Reader.prototype.MethodDecl = function(node, __write){
-			if (node.parent.type == 'JsonExpr'){
-				return '"#0": function#1#2';
-			}
-			var scope = node.scope, class_scope = scope.parent;
-			switch (class_scope.type){
-				case 'ClassExpr':
-					var class_name = class_scope.name;
-					if (scope.name == 'constructor'){
-						class_scope.construct = node;
-						return '';
-					}else {
-						__write.read('#0.prototype.#1 = function #2#3', [class_name, node[0], node[1], node[2]]);
-					}
-					break;
-				default:
-					return 'function #0#1#2';
-			}
-		};
-		Reader.prototype.StaticDecl = function(node, __write){
-			var class_scope = node.scope;
-			if (class_scope.type != 'ClassExpr'){
-				class_scope = class_scope.parent;
-			}
-			var exp = node[1];
-			if (exp.type == 'ArgumentsDecl'){
-				for (var i=0, item; i < exp.length; i++){
-					item = exp[i];
-					if (item.type == 'AssignmentDecl'){
-						__write.read('#0.#1 #2 #3;', [class_scope.name, item[0], item[1], item[2]]);
-					}else {
-						__write.read('#0.#1 = null;', [class_scope.name, item]);
-					}
-					if (i < exp.length-1){
-						__write.add('\n');
-					}
-				}
-			}else {
-				__write.read('#0.#1 = function#2#3;', [class_scope.name, exp[0], exp[1], exp[2]]);
-			}
-		};
-		Reader.prototype.ProtoDecl = function(node, __write){
-			var class_scope = node.scope.queryParent('ClassExpr');
-			if (!class_scope){
-				throw tea.error(new Error(), 325, node[0]);
-			}
-			var exp = node[1], class_name = class_scope.name;
-			if (exp.type == 'ArgumentsDecl'){
-				for (var i=0, item; i < exp.length; i++){
-					item = exp[i];
-					if (item.type == 'AssignmentDecl'){
-						__write.read('#0.prototype.#1 #2 #3;', [class_name, item[0], item[1], item[2]]);
-					}else {
-						__write.read('#0.prototype.#1 = null;', [class_name, item]);
-					}
-					if (i < exp.length-1){
-						__write.add('\n');
-					}
-				}
-			}else {
-				__write.read('#0.prototype.#1 = function#2#3;', [class_name, exp[0], exp[1], exp[2]]);
-			}
-		};
-		Reader.prototype.InitDecl = function(node, __write){
-			var class_scope = node.scope;
-			if (class_scope.type != 'ClassExpr'){
-				throw tea.error(new Error(), 326, node[0]);
-			}
-			var exp = node[1], write = this.new('InitDecl');
-			if (exp.type == 'ArgumentsDecl'){
-				for (var i=0, item; i < exp.length; i++){
-					item = exp[i];
-					if (item.type == 'AssignmentDecl'){
-						write.read('this.#0 #1 #2;\n', item);
-					}else {
-						write.read('this.# = null;\n', item);
-					}
-				}
-			}else {
-				write.read('this.#0 = function#1#2;\n', exp);
-			}
-			class_scope.inits.push(write);
-			return '';
-		};
-		Reader.prototype.RequireStam = function(node, __write){
-			var format,
-				type,
-				write,
-				_format,
-				argv = tea.argv || {},
-				root_scope = argv['--join'] ? node.scope.root : null,
-				params = ParseRequireFile(node[1], root_scope);
-			if (params.length > 1){
-				if (node.parent.is('AssignmentDecl', 'AssignmentExpr')){
-					if (node.parent[0].type == 'ArrayExpr'){
-						format = '#0(#1)';
-						type = 'arr';
-						write = this.new('ArrayExpr');
-					}else {
-						format = '"#2": #0(#1)';
-						type = 'json';
-						write = this.new('JsonExpr');
-					}
-				}else {
-					format = 'var #2 = #0(#1)';
-					type = 'var';
-					write = this.new('VarExpr');
-				}
-			}else {
-				write = __write;
-				format = '#0(#1)';
-			}
-			for (var i=0; i < params.length; i++){
-				_format = params[i].name ? format : '#0(#1)';
-				if (params[i].file && root_scope){
-					write.read(this.new('RequireExpr', _format, ['__require', '"'+root_scope.joinRequire(params[i].file)+'"', params[i].name]));
-				}else {
-					write.read(this.new('RequireExpr', _format, [node[0], params[i].expr, params[i].name]));
-				}
-			}
-			switch (type){
-				case 'var':
-					__write.read(this.JOIN(write, ';\n'));
-					break;
-				case 'json':
-					__write.read('{', this.JOIN(write, ', '), '}');
-					break;
-				case 'arr':
-					__write.read('[', this.JOIN(write, ', '), ']');
-					break;
-			}
-		};
-		Reader.prototype.NodeStam = function(node, __write){
-			var res;
-			if (!__write) __write = this.new('NodeStam');
-			var len = node.length-1;
-			for (var i=0, item; i < node.length; i++){
-				item = node[i];
-				res = this.read(item);
-				if (res && (res.istoken || res.length)){
-					__write.add(res);
-					if (item.type != 'CommDecl' && (item.is('AssignmentExpr', 'ClausesStam', 'CommaStam') || !/(\}|;)$/.test(res.lastText))){
-						__write.add(';');
-					}
-					if (i < len){
-						__write.add('\n');
-					}
-				}
-			}
-			NodeStamUnDefined.call(this, node, __write);
-			return __write;
-		};
-		Reader.prototype.COMMA = function(write){
-			return this.JOIN(write, ',');
-		};
-		Reader.prototype.JOIN = function(write, separator){
-			if (separator == null) separator = ' ';
-			for (var i = write.length-1; i >= 1; i--){
-				Array.prototype.splice.call(write, i, 0, separator);
-			}
-			return write;
-		};
-		Reader.prototype.VAR = function(){
-			var list = [];
-			for (var i=0; i < arguments.length; i++){
-				if (arguments[i]){
-					list.push(this.read(arguments[i]));
-				}
-			}
-			if (list.length){
-				this.COMMA(list);
-				var write = this.new('VarDecl', 'var #0', [list]);
 				return write;
 			}
-		};
-		function NodeStamUnDefined(node, __write){
-			var argv = tea.argv || {}, scope = node.scope, a = 0;
-			while (__write[a] && (__write[a].type == 'CommDecl' || __write[a] == '\n')){
-				a += 1;
-			}
-			if (!argv['--safe']){
-				var un_defineds = scope.get('undefined');
-				if (un_defineds && un_defineds.length){
-					__write.insert(a, this.VAR.apply(this, un_defineds), ';\n');
-				}
-			}
-			var argus = scope.argumentsDefine;
-			if (argus && argus.length){
-				var write = this.new('ArgumentsStam');
-				for (var i=0; i < argus.length; i++){
-					write.read('if (#0 == null) #0 #1 #2;\n', argus[i]);
-				}
-				__write.insert(0, write);
-			}
-			var exts = scope.exports;
-			if (exts && exts.length){
-				var write = this.new('ExportStam');
-				for (var i=0; i < exts.length; i++){
-					write.add('\nmodule.exports.'+exts[i]+' = '+exts[i]+';');
-				}
-				__write.add(write);
-			}
-		}
-		function AssignmentSlicePatt(__write, left, right, node){
-			left.length -= 1;
-			if (left[left.length].length == 0){
-				__write.read('#0.push(#1)', [left, right]);
-			}else {
-				var ab = AccessorSlicePatt.call(this, left[left.length], true);
-				__write.read('#0.splice.apply(#0, [#1, #2].concat(#3))', [left, ab[0], ab[1], right]);
-			}
-		}
-		function AssignmentArrayPatt(__write, left, right, node){
-			if (right.type == 'ArrayExpr'){
-				for (var i=0; i < left.length; i++){
-					if (i > 0){
-						__write.add(', ');
-					}
-					if (right[i]){
-						__write.read('#0 #1 #2', [left[i], node[1], right[i]]);
-					}else {
-						throw tea.error(new Error(), 'array pattern assignment declaration syntax error', right[i-1]);
+			Reader.prototype.VAR = function (){
+				var list = [];
+				for (var i=0; i < arguments.length; i++){
+					if (arguments[i]){
+						list.push(this.read(arguments[i]));
 					}
 				}
-			}else {
-				var ref = AllocateRefName(node.scope);
-				if (node.parent.parent.type == 'VarDecl'){
-					node.scope.set('defined', ref, true);
-				}
-				__write.read('#0 = #1', [ref, right]);
-				for (var i=0; i < left.length; i++){
-					__write.read(', #0 #1 #2[#3]', [left[i], node[1], ref, i+'']);
+				if (list.length){
+					this.COMMA(list);
+					var write = this.new('VarDecl', 'var #0', [list]);
+					return write;
 				}
 			}
-		}
-		function AccessorSlicePatt(node, count_b){
-			var a, b;
-			if (node.length == 3){
-				a = node[0], b = node[2];
-			}else if (node.length == 2){
-				if (node[0].text == ':'){
-					a = 0, b = node[1];
-				}else {
-					a = node[0], b = 0;
-				}
-			}else if (node.length >= 1){
-				a = 0, b = 0;
-			}
-			if (count_b){
-				var parent = node.parent, write = this.new('AccessorExpr');
-				if (b){
-					write.type = 'ComputeExpr';
-					if (b[0] && b[0].text == '-'){
-						write.read(parent, '.length', b);
-					}else {
-						write.read(b, '-', a);
-					}
-					b = write;
-				}else {
-					b = write.read(parent, '.length');
-				}
-			}
-			return [a, b];
-		}
-		function ResetDefineVariableDecl(decl_list, scope, type, prefix){
-			for (var i=0, left; i < decl_list.length; i++){
-				left = decl_list[i];
-				if (left.type == 'AssignmentDecl'){
-					left = left[0];
-				}
-				if (left.type == 'ArrayPatt'){
-					for (var _i=0, item; _i < left.length; _i++){
-						item = left[_i];
-						item.text = ResetDefine(scope, type, item.text, prefix);
-					}
-				}else if (left.istoken){
-					left.text = ResetDefine(scope, type, left.text, prefix);
-				}else {
-					decl_list[i] = ResetDefine(scope, type, decl_list[i], prefix);
-				}
-			}
-		}
-		function ResetDefine(scope, type, name, prefix){
-			scope.set(type, name, true);
-			if (prefix){
-				if (type == 'let'){
-					scope.lets[name] = prefix+name;
-				}
-				return prefix+name;
-			}
-			return name;
-		}
-		function AllocateVarName(scope){
-			var keymap = 'ijklmnopqrstuvwxyz';
-			for (var i=0; i < keymap.length; i++){
-				if (!scope.isDefined('_'+keymap[i])){
-					var key = '_'+keymap[i];
-					scope.set('let', key);
-					return key;
-				}
-			}
-			return '__i';
-		}
-		function AllocateRefName(scope){
-			var i = 0, name = '_ref', stat = scope.isDefined(name, null, 1);
-			while (true){
-				if (!stat || stat == 'let'){
-					scope.set('undefined', name);
-					return name;
-				}
-				name += i++;
-				stat = scope.isDefined(name, null, 1);
-			}
-		}
-		function ClassStaticAtSymbol(clas_scope, node){
-			if (clas_scope.type = 'ClassExpr'){
-				if (node.length > 1 && node[1].type == 'DotExpr'){
-					var member = node[1][0];
-					if (member.type == 'IdentifierTokn' && clas_scope.statics.indexOf(member.text) != -1){
-						var name = member.text;
-						if (clas_scope.protos.indexOf(name) == -1){
-							return name;
-						}
-					}
-				}
-			}
-			return false;
-		}
-		function ParseRequireFile(node, join){
-			var list = [], tar_dir = node.root.filePath || '';
-			for (var i=0, item; i < node.length; i++){
-				item = node[i];
-				if (item.is('StringTokn')){
-					if (join && Path.isPathText(item.text)){
-						var files = Path.parseFile(item.text, tar_dir, ['.js', '.tea']);
-						if (!files.error){
-							if (files.length == 1){
-								list.push({"name": RequireModuleName(file), "expr": item, "file": files[0]});
-								continue;
-							}
-							for (var _i=0, file; _i < files.length; _i++){
-								file = files[_i];
-								list.push({"name": RequireModuleName(file),
-									"expr": item.clone('"'+file+'"'),
-									"file": file});
-							}
-							continue;
-						}
-						if (debug.log){
-							debug.log('** [Require: Can not join file: '+item.text+']');
-						}
-					}
-					list.push({"name": RequireModuleName(item.text), "expr": item, "file": ''});
-				}else {
-					list.push({"name": '', "expr": item, "file": ''});
-				}
-			}
-			return list;
-		}
-		function RequireModuleName(file){
-			return Text.getName(file);
-		}
+			return Reader;
+		})();
 		module.exports = Reader;
-	});
-	CreateModule("../src/rewriter/writer.tea", function(module, exports){
+	});Module.register('/Users/wl/Sites/TeaJS/src/rewriter/writer.tea', '../src/rewriter/writer.tea', function(exports, require, module, __filename, __dirname){
+		var Beautify = require("../src/rewriter/beautify.tea");
 		var Writer = (function(){
 			function Writer(reader, type){
 				this.length = 0;
@@ -5445,6 +5381,9 @@
 				this.reader = reader;
 				this.iswriter = true;
 			}
+			Writer.prototype.__defineGetter__("text", function(){
+				return Writer.listToText(Beautify(this));
+			});
 			Writer.prototype.__defineGetter__("lastText", function(){
 				var last = this;
 				while (true){
@@ -5514,74 +5453,1151 @@
 				}
 				return this;
 			}
-			Writer.prototype.body = function (left, right, not_indent){
-				var body = this.reader.new('Body');
-				if (left){
-					this.read(left);
+			Writer.prototype.toList = function (not_beautify){
+				if (!not_beautify){
+					return Beautify(this);
 				}
-				this.add(body);
-				if (right){
-					this.read(right);
-				}
-				body.notIndent = not_indent;
-				return body;
-			}
-			Writer.prototype.__defineGetter__("text", function(){
-				return this.toText();
-			});
-			Writer.prototype.toText = function (){
-				var texts = [];
-				for (var _i=0, item; _i < this.length; _i++){
-					item = this[_i];
-					if (!item) continue;
-					if (item.iswriter){
-						texts.push(item.toText());
-					}else if (item.istoken){
-						texts.push(item.text);
-					}else if (/string|number|undefined|boolean/.test(typeof (item))){
-						texts.push(item);
-					}else {
-						throw tea.error(new Error(), 'bad writer data!!'+isClass(item));
-					}
-				}
-				return texts.join('');
-			}
-			Writer.prototype.toList = function (){
 				var list = [];
 				for (var _i=0, item; _i < this.length; _i++){
 					item = this[_i];
 					if (!item) continue;
 					if (item.iswriter){
-						list.push.apply(list, item.toList());
+						list.push.apply(list, item.toList(true));
 					}else {
 						list.push(item);
 					}
 				}
 				return list;
 			}
+			Writer.listToText = function(list){
+				var texts = [];
+				for (var _i=0, item; _i < list.length; _i++){
+					item = list[_i];
+					if (item.istoken){
+						texts.push(item.text);
+					}else if (item.iswriter || isArray(item)){
+						texts.push(Writer.listToText(item));
+					}else {
+						texts.push(item);
+					}
+				}
+				return texts.join('');
+			};
 			return Writer;
 		})();
 		module.exports = Writer;
-	});
-	CreateModule("../src/rewriter/sourcemap.tea", function(module, exports){
-		var SourceMap = (function(){
-			function SourceMap(){
-				this.version = 3;
-				this.file = '';
-				this.sourceRoot = '';
-				this.sources = [];
-				this.names = [];
-				this.mappings = [];
+	});Module.register('/Users/wl/Sites/TeaJS/src/rewriter/beautify.tea', '../src/rewriter/beautify.tea', function(exports, require, module, __filename, __dirname){
+		function Beautify(writer){
+			var shell_comm = [], list = Beautify.start(writer, null, shell_comm);
+			if (shell_comm.length){
+				list.unshift(shell_comm[0], '\n');
 			}
+			return list;
+		}
+		Beautify.start = function(writer, not_concat, shell_comm){
+			var w_list = [];
+			for (var i=0, item; i < writer.length; i++){
+				item = writer[i];
+				switch (item.type){
+					case 'CommDecl':
+						if (item[0]){
+							item = item[0];
+						}
+						if (item.is('ShellComm')){
+							if (shell_comm){
+								shell_comm.push(item);
+							}
+							if (writer[i+1] == '\n'){
+								i++;
+							}
+							continue;
+						}
+						break;
+					case 'VarDecl':case 'LetDecl':
+						item = this.varList(item);
+						i = this.concatVarList(writer, i, item);
+						item = this.wrapList(item, writer.constructor.listToText(item));
+						break;
+					case 'JsonExpr':case 'ArrayExpr':
+						item = this.start(item, true, shell_comm);
+						item = this.wrapList(item, writer.constructor.listToText(item));
+						break;
+					case 'NodeStam':
+						item = this.start(item, null, shell_comm);
+						if (item.length && writer.type != 'Root'){
+							this.indentList(item);
+							this.trimList(item).unshift('\n\t');
+							item.push('\n');
+						}
+						break;
+					default:
+						if (item.iswriter){
+							item = this.start(item, null, shell_comm);
+						}else if (item == ','){
+							item = ', ';
+						}
+						break;
+				}
+				w_list.push(item);
+			}
+			if (not_concat){
+				return w_list;
+			}
+			return this.concatList(w_list);
+		};
+		Beautify.indentList = function(list){
+			for (var i=0, item; i < list.length; i++){
+				item = list[i];
+				if (item.istoken){
+					if (item.type != 'StringTokn'){
+						item.text = item.text.replace(/\n/g, '\n\t');
+					}
+				}else if (typeof item == 'string'){
+					list[i] = item.replace(/\n/g, '\n\t');
+				}
+			}
+			return list;
+		};
+		Beautify.wrapList = function(list, text){
+			if (text.length > 80 || /\n/.test(text)){
+				for (var i=0, item; i < list.length; i++){
+					item = list[i];
+					if (/^\s*,\s*$/.test(item)){
+						list[i] = ',\n';
+					}
+				}
+				list = this.concatList(list);
+				this.indentList(list);
+			}
+			return list;
+		};
+		Beautify.varList = function(writer){
+			var list = [];
+			for (var i=0, item; i < writer.length; i++){
+				item = writer[i];
+				if (item.type == 'ArgumentsDecl'){
+					list.push.apply(list, this.start(item, true));
+				}else if (item.iswriter){
+					list.push(this.start(item));
+				}else if (item == ','){
+					list.push(', ');
+				}else {
+					list.push(item);
+				}
+			}
+			return list;
+		};
+		Beautify.concatVarList = function(writer, index, list){
+			var _b, b = index;
+			while (true){
+				_b = b+1;
+				while (typeof writer[_b] == 'string' && /^[;|\n|\s]+$/.test(writer[_b])){
+					_b += 1;
+				}
+				if (writer[_b] && /LetDecl|VarDecl/.test(writer[_b].type)){
+					list.push(', ');
+					list.push.apply(list, this.trimList(this.varList(writer[_b]), /^(var\ |var\b|\ )/, /(;|\n)$/));
+					b = _b;
+					continue;
+				}
+				break;
+			}
+			return b;
+		};
+		Beautify.concatList = function(list){
+			var res_list = [];
+			for (var _i=0, item; _i < list.length; _i++){
+				item = list[_i];
+				if (isArray(item)){
+					res_list.push.apply(res_list, item);
+				}else {
+					res_list.push(item);
+				}
+			}
+			return res_list;
+		};
+		Beautify.trimList = function(list, left, right){
+			if (left == null) left = /^\s+/;
+			if (right == null) right = /\s+$/;
+			if (left){
+				this.trimLeft(list, left);
+			}
+			if (right){
+				this.trimRight(list, right);
+			}
+			return list;
+		};
+		Beautify.trimLeft = function(list, re){
+			if (re == null) re = /^\s+/;
+			while (list[0]){
+				if (list[0].istoken){
+					if (!(list[0].text = list[0].text.replace(re, ''))){
+						list.shift();
+						continue;
+					}
+				}else if (typeof list[0] == 'string'){
+					if (!(list[0] = list[0].replace(re, ''))){
+						list.shift();
+						continue;
+					}
+				}else if (list.hasOwnProperty('length')){
+					if (this.trimLeft(list[0], re).length == 0){
+						list.shift();
+						continue;
+					}
+				}
+				break;
+			}
+			return list;
+		};
+		Beautify.trimRight = function(list, re){
+			if (re == null) re = /\s+$/;
+			var last;
+			while (list[last = list.length-1]){
+				if (list[last].istoken){
+					if (!(list[last].text = list[last].text.replace(re, ''))){
+						list.pop();
+						continue;
+					}
+				}else if (typeof list[last] == 'string'){
+					if (!(list[last] = list[last].replace(re, ''))){
+						list.pop();
+						continue;
+					}
+				}else if (list.hasOwnProperty('length')){
+					if (this.trimRight(list[last], re).length == 0){
+						list.pop();
+						continue;
+					}
+				}
+				break;
+			}
+			return list;
+		};
+		module.exports = Beautify;
+	});Module.register('/Users/wl/Sites/TeaJS/src/rewriter/ES5.tea', '../src/rewriter/ES5.tea', function(exports, require, module, __filename, __dirname){
+		var ES5 = {'CommaExpr CommaStam ArgumentsDecl' : 'COMMA(#)',
+				'ArgumentsExpr CompelExpr ConditionStam' : '\(COMMA(#)\)',
+				'ParamsStam ParamsExpr' : '\(ParamsPatt(#)\)',
+				'ArrayExpr' : '\[COMMA(#)\]',
+				'JsonExpr' : '\{COMMA(#)\}',
+				'PrefixExpr PostfixExpr' : '#0#1',
+				'ReturnStam BreakStam ContinueStam ThrowStam' : '#0 #1',
+				'DotExpr' : '.#0',
+				'DebuggerStam' : '#0',
+				'FunctionDecl' : '#0 #1#2#3',
+				'FunctionExpr' : '#0#1#2',
+				'ExportDecl' : '#1',
+				'IfPatt' : '#0 #1#2',
+				'ElseIfPatt' : '#0 if #1#2',
+				'ElsePatt' : '#0 #1',
+				'WhileStam' : '#0 #1#2',
+				'WithStam' : '#0 #1#2',
+				'TryPatt' : '#0 #1',
+				'CatchPatt' : '#0 #1 #2',
+				'FinallyPatt' : '#0 #1',
+				'ThisExpr' : 'this#1',
+				'LabelStam' : '#0#1 #2',
+				'ForBaseConditionPatt' : '(#0; #1; #2)',
+				'ForInConditionPatt' : '(#0 #1 #2)',
+				'UnaryExpr' : '(? #0 eq +) Math.abs(#1) | (? #0 is SymbolTokn) #0#1 | #0 #1',
+				'NotExpr' : '(? #1 is ValueExpr) !#0 | !(#1)',
+				'TernaryExpr' : '(? #2 is ExprStam && #4 is ExprStam) #0 #1 #2 #3 #4 | if (#0) #2; else #4',
+				'LambdaExpr' : '(? #1 is ReturnStam) function#0{#1} | function#0{return #1}',
+				'Root' : 'NodeStam(#0)',
+				'BlockStam IndentBlockStam LineBlockStam StamBlockStam' : '{NodeStam(#)}'};
+		ES5.TestPatt = function(node, __write){
+			if (tea.argv['--test']){
+				__write.add(node);
+			}
+		};
+		ES5.CommDecl = function(node, __write){
+			if (!tea.argv['--clear'] || node.text[0] == '#'){
+				__write.add(node);
+			}
+		};
+		ES5.IdentifierExpr = function(node, __write){
+			var let_name, id = node[0], scope = node.scope;
+			if (let_name = scope.getLet(id.text)){
+				id.text = let_name;
+			}else if (this.class_scope){
+				switch (scope.isDefined(id.text)){
+					case 'static':case 'unknow':
+						if (this.class_scope.variables[id.text] == 'static'){
+							id.text = this.class_scope.name+'.'+id.text;
+						}
+						break;
+				}
+			}
+			__write.read(id);
+		};
+		ES5.ComputeExpr = function(node, __write){
+			var list = [];
+			for (var i=0; i < node.length; i++){
+				switch (node[i].istoken && node[i].text){
+					case '**':
+						list.push('Math.pow(', list.pop(), ', ', node[++i], ')');
+						break;
+					case '\\':
+						list.push('Math.floor(', list.pop(), '/', node[++i], ')');
+						break;
+					default:
+						list.push(node[i]);
+						break;
+				}
+			}
+			__write.read(list);
+		};
+		ES5.CompareExpr = function(node, __write){
+			var list = [];
+			if (node.length == 5 && node[3].eq('<', '>', '>=', '<=')){
+				return '#0 #1 #2 && #2 #3 #4';
+			}
+			for (var i=0; i < node.length; i++){
+				switch (i%2 && node[i].text){
+					case 'as':
+						if (node[i+1].type == 'StringTokn'){
+							list.push('typeof ', list.pop(), ' == ', node[++i]);
+						}else {
+							list.push(' instanceof ', node[++i]);
+						}
+						break;
+					case 'in':
+						if (node[i+1].type == 'ArrayExpr'){
+							list.push(node[++i], '.indexOf(', list.pop(), ')>=0');
+						}else {
+							list.push(node[++i], '.hasOwnProperty(', list.pop(), ')');
+						}
+						break;
+					case 'of':
+						list.push('[].indexOf.call(', node[++i], ', ', list.pop(), ')>=0');
+						break;
+					case 'is':
+						node[i].text = ' === ';
+						list.push(node[i]);
+						break;
+					case 'not is':
+						node[i].text = ' !== ';
+						list.push(node[i]);
+						break;
+					default:
+						if (i%2){
+							node[i].text = ' '+node[i].text+' ';
+						}
+						list.push(node[i]);
+						break;
+				}
+			}
+			__write.read(list);
+		};
+		ES5.LogicExpr = function(node, __write){
+			var i;
+			for (i = 1; i < node.length; i += 2){
+				switch (node[i].text){
+					case 'and':
+						node[i].text = '&&';
+						break;
+					case 'or':
+						node[i].text = '||';
+						break;
+				}
+			}
+			if (node.length == 3){
+				if (node[2].is('ExprStam')){
+					return '#0 #1 #2';
+				}
+				if (node.parent.is('NodeStam')){
+					if (node[1].text == '||'){
+						if (node[0].is('ValueExpr')){
+							return 'if (!#0) #2';
+						}
+						return 'if (!(#0)) #2';
+					}
+					return 'if (#0) #2';
+				}
+				return '#0 #1 (#2)';
+			}
+			__write.read(this.JOIN(Hash.slice(node), ' '));
+		};
+		ES5['Ternary2.5Expr'] = function(node, __write){
+			if (node.parent.is('NodeStam')){
+				return 'if (#0) #2';
+			}else {
+				if (!node[0].is('ValueExpr')){
+					var ref = allocateRefName(node.scope);
+					return '(('+ref+' = #0) != null ? '+ref+' : #2)';
+				}
+			}
+			return '(#0 != null ? #0 : #2)';
+		};
+		ES5.SeleteStam = function(node, __write){
+			switch (node[1].text){
+				case 'if':case '<-':
+					return 'if (#2) #0';
+				case 'or':case '||':
+					if (node[0].is('ValueExpr')){
+						return 'if (!#0) #2';
+					}
+					return 'if (!(#0)) #2';
+				default:
+					return 'if (#0) #2';
+			}
+		};
+		ES5.AssignmentExpr = function(node, __write){
+			var left = node[0], right = node[2];
+			if (left.type == 'ArrayPatt'){
+				return assignmentArrayPatt.call(this, __write, left, right, node);
+			}else if (left.type == 'AccessorPatt' && left[left.length-1].type == 'SlicePatt'){
+				return assignmentSlicePatt.call(this, __write, left, right, node);
+			}else if (node.parent.type == 'ArgumentsExpr'){
+				return left;
+			}else {
+				switch (node[1].text){
+					case '?=':
+						if (node.parent && node.parent.is('NodeStam')){
+							return 'if (#0 == null) #0 = #2';
+						}
+						return '(#0 == null && (#0 = #2))';
+					case '|=':
+						if (node.parent && node.parent.is('NodeStam')){
+							return 'if (!#0) #0 = #2';
+						}
+						return '(!#0 && (#0 = #2))';
+				}
+			}
+			if (node.parent.type == 'JsonExpr'){
+				if (node[0].is('IdentifierTokn')){
+					return '"#0"#1 #2';
+				}
+			}
+			return '#0 #1 #2';
+		};
+		ES5.AssignmentDecl = ES5.AssignmentExpr;
+		ES5.ParamsPatt = function(node, __write){
+			for (var i=0, item; i < node.length; i++){
+				item = node[i];
+				if (item.istoken && item.text == ','){
+					__write.add('null');
+				}else {
+					__write.read(item);
+				}
+			}
+			this.COMMA(__write);
+		};
+		ES5.SlicePatt = function(node, __write){
+			var ab = accessorSlicePatt.call(this, node);
+			if (!ab[1]){
+				__write.read('.slice(', ab[0] || '', ')');
+			}else {
+				__write.read('.slice(', ab[0] || '0', ', ', ab[1], ')');
+			}
+		};
+		ES5.MemberExpr = function(node, __write){
+			if (node[0].type == 'UnaryExpr' && node[0][0].text == '-'){
+				var parent = node.parent.clone();
+				parent.length = node.index;
+				if (parent){
+					__write.read('[#0.length#1]', [parent, node[0]]);
+				}
+			}else {
+				__write.read('[', node[0], ']');
+			}
+		};
+		ES5.MemberPatt = function(node, __write){
+			switch (node[0].text){
+				case '::':
+					node[0].text = '.prototype';
+					break;
+				case '..':
+					node[0].text = '.constructor';
+					break;
+			}
+			return '#0.#1';
+		};
+		ES5.LetDecl = function(node, __write){
+			node[0].text = 'var';
+			resetDefineVariableDecl(node[1], node.scope, 'let', 'let_');
+			return '#0 #1';
+		};
+		ES5.VarDecl = function(node, __write){
+			resetDefineVariableDecl(node[1], node.scope, 'defined');
+			return '#0 #1';
+		};
+		ES5.DoWhileStam = function(node, __write){
+			if (node[2]){
+				return '#0 #1 #2 #3';
+			}else {
+				return '#0{NodeStam(#1)break;} while (true)';
+			}
+		};
+		ES5.TryStam = function(node, __write){
+			if (node.length > 1){
+				return '#';
+			}else {
+				return '# catch (_e){}';
+			}
+		};
+		ES5.SwitchStam = function(node, __write){
+			var block = node[2],
+				block_body = this.new('NodeStam'),
+				exp_cache = [],
+				case_write,
+				sub_block;
+			for (var _i=0, item; _i < block.length; _i++){
+				item = block[_i];
+				if (!case_write) case_write = this.new(item.type);
+				if (item.type == 'CaseStam'){
+					for (var _j=0, key; _j < item[1].length; _j++){
+						key = item[1][_j];
+						case_write.read(item[0], ' ', key, ':');
+					}
+					sub_block = item[3];
+				}else {
+					case_write.read(item[0], ':');
+					sub_block = item[2];
+				}
+				if (sub_block){
+					var sub_write = ES5.SwitchCaseBlock.call(this, sub_block, this.new('NodeStam'));
+					block_body.read(case_write.read(sub_write));
+					case_write = null, sub_block = null;
+				}
+			}
+			__write.read(node[0], ' ', node[1], this.new(block.type, '{', block_body, '}'));
+		};
+		ES5.SwitchCaseBlock = function(node, __write){
+			var last = node.length-1;
+			while (node[last] && node[last].is('CommDecl')){
+				last -= 1;
+			}
+			var insert_break = true;
+			if (node[last] && node[last].is('ReturnStam', 'BreakStam', 'ContinueStam')){
+				if (node[last].type == 'ContinueStam'){
+					node[last] = null;
+				}
+				insert_break = false;
+			}
+			ES5.NodeStam.call(this, node, __write);
+			if (insert_break){
+				__write.read('\nbreak;');
+			}
+			return __write;
+		};
+		ES5.forCondition = function(node, __write){
+			var scope = node.scope,
+				exp1 = node[0],
+				exp2 = node[1],
+				exp3 = node[2],
+				$mark = exp2 && exp2.text || '->',
+				$var,
+				$i,
+				$i_text,
+				$def,
+				$temp,
+				$len,
+				$tar,
+				$tar_exp;
+			if (exp1.type == 'VarDecl'){
+				$var = true, exp1 = exp1[1];
+			}
+			if (!exp3){
+				exp3 = exp1, exp1 = null;
+			}
+			if (exp1){
+				switch (exp1.type){
+					case 'CommaExpr':case 'ArgumentsDecl':
+						$i = exp1[0], $temp = exp1[1];
+						break;
+					default:
+						$i = exp1;
+						break;
+				}
+			}
+			if ($i){
+				if ($i.type == 'AssignmentDecl' || $i.type == 'AssignmentExpr'){
+					$def = $i[2], $i = $i[0];
+				}else if ($i.type == 'ConstTokn'){
+					$def = $i, $i = null;
+				}
+				if ($i){
+					if ($i.type == 'IdentifierExpr'){
+						$i = $i[0];
+					}
+					if ($i.type != 'IdentifierTokn'){
+						tea.throw('for condition(3) statiment syntax error!', $i);
+					}
+					if (/\=|of/.test($mark)){
+						$temp = $i, $i = null;
+					}
+				}
+			}
+			if (!$i){
+				$var = true, $i = allocateVarName(scope);
+			}
+			$i_text = $i.text || $i;
+			var def_type = scope.isDefined($i_text);
+			$var = $var || !def_type || def_type == 'let';
+			if (exp3.type == 'CommaExpr' && exp3.length == 1){
+				exp3 = exp3[0];
+			}
+			switch (exp3.is('ArrayExpr', 'JsonExpr', 'AccessorExpr', 'IdentifierExpr', 'AtExpr', 'NumTokn')){
+				case 'AccessorExpr':case 'IdentifierExpr':case 'AtExpr':
+					$tar = exp3;
+					break;
+				case 'NumTokn':
+					$len = this.new('NumTokn').read(exp3);
+					break;
+				default:
+					$tar = $i_text+'_ref';
+					$tar_exp = this.new('AssignmentExpr').read($tar, ' = ', exp3);
+					break;
+			}
+			$len = $len || this.new('AssignmentExpr').read($tar, '.length');
+			$tar = this.new('IdentifierExpr').read($tar);
+			$i = this.new('IdentifierExpr').read($i);
+			return [$mark, $var, $i, $def, $temp, $len, $tar, $tar_exp];
+		};
+		ES5.ForStam = function(node, __write){
+			var block_body, condition = node[1];
+			if (condition.type == 'ForBaseConditionPatt'){
+				return '#0 #1#2';
+			}
+			var scope = node.scope,
+				_ref = ES5.forCondition.call(this, condition), $mark = _ref[0], $var = _ref[1], $i = _ref[2], $def = _ref[3], $temp = _ref[4], $len = _ref[5], $tar = _ref[6], $tar_exp = _ref[7];
+			scope.setLet('__length', $len.text);
+			scope.setLet('__index', $i.text);
+			scope.setLet('__target', $tar.text);
+			var cond_body = this.new('ConditionBody');
+			block_body = this.new('NodeStam');
+			if (/in|of/.test($mark)){
+				cond_body.read($var ? 'var ' : '', $i, ' in ', $tar);
+				if ($tar_exp){
+					__write.read(this.VAR($tar_exp), ';\n');
+				}
+				block_body.add(this.new('IfStam', 'if (!#0.hasOwnProperty(#1)) continue;\n', [$tar, $i]));
+				if ($temp){
+					block_body.add(this.new('AssignmentExpr', 'var #0 = #1[#2];\n', [$temp, $tar, $i]));
+				}
+			}else {
+				if ($mark[0] == '<'){
+					if ($def = $def || [$tar, '.length-1']){
+						$def = [$i, '=', $def];
+					}
+					cond_body.read('#0; #1 >= #2; #1--', [this.VAR($tar_exp, $def, $temp), $i, '0']);
+				}else {
+					if ($def = $def || $var && '0'){
+						$def = [$i, '=', $def];
+					}
+					cond_body.read('#0; #1 < #2; #1++', [this.VAR($tar_exp, $def, $temp), $i, $len]);
+				}
+				if ($temp){
+					block_body.add(this.new('AssignmentExpr', '#0 = #1[#2];\n', [$temp, $tar, $i]));
+				}
+			}
+			ES5.NodeStam.call(this, node[2], block_body);
+			__write.add(node[0], ' ', this.new('ForConditionPatt', '(', cond_body, ')'), this.new(node[2].type, '{', block_body, '}'));
+		};
+		ES5.PackageExpr = function(node, __write){
+			if (node.length == 2){
+				return '(function()#1)()';
+			}
+			var params = this.new('ParamsExpr'),
+				argus = this.new('ArgumentsExpr'),
+				has_ass = false;
+			if (node[1].length){
+				resetDefineVariableDecl(node[1], node.scope, 'argument');
+				for (var i=0, item; i < node[1].length; i++){
+					item = node[1][i];
+					if (item.type == 'AssignmentDecl'){
+						has_ass = true;
+						argus.read(item[0]);
+						params.read(item[2]);
+					}else {
+						argus.read('_'+i);
+						params.read(item);
+					}
+				}
+			}
+			__write.read('(function(#0)#1)(#2)', [this.COMMA(argus), node[2], this.COMMA(params)]);
+		};
+		ES5.ClassExpr = function(node, __write){
+			var _i = 1, scope = node.scope, name, extend, block, is_ass = false;
+			if (node[_i].type == 'IdentifierTokn'){
+				name = node[_i++];
+			}
+			if (node[_i].type == 'ExtendsExpr'){
+				extend = node[_i++];
+			}
+			if (!name){
+				if (node.parent.type == 'AssignmentDecl'){
+					is_ass = true;
+					name = node.parent[0];
+				}else if (node.parent.type == 'AssignmentExpr'){
+					is_ass = true;
+					name = node.parent[0][0];
+				}
+			}
+			if (!name){
+				throw tea.error(new Error(), 321, node[0]);
+			}
+			scope.name = name.text;
+			block = node[_i];
+			var old_scope = this.class_scope;
+			this.class_scope = scope;
+			var block_write = this.new('NodeStam');
+			ES5.NodeStam.call(this, block, block_write);
+			_i = 0;
+			for (; _i < block_write.length; _i++){
+				if (block_write[_i].type){
+					if (/VarDecl|LetDecl|Assignment|Require/.test(block_write[_i].type)){
+						continue;
+					}
+				}else if (typeof block_write[_i] == 'string' && /\s*(\n|;|,)\s*/.test(block_write[_i])){
+					continue;
+				}
+				break;
+			}
+			if (extend){
+				block_write.insert(_i, ES5.ExtendsExpr.call(this, extend));
+			}
+			var construct_write = this.new('ConstructorStam'),
+				construct_body = this.new('NodeStam');
+			if (scope.inits.length){
+				construct_body.read(scope.inits);
+			}
+			if (scope.construct){
+				ES5.NodeStam.call(this, scope.construct[2], construct_body);
+				construct_write.read('function #0#1{#2}\n', [name, scope.construct[1], construct_body]);
+			}else {
+				construct_write.read('function #0(){#1}\n', [name, construct_body]);
+			}
+			block_write.insert(_i, construct_write);
+			block_write.read('\nreturn #0;', [name]);
+			if (is_ass){
+				__write.read('(function(){#0})()', [block_write]);
+			}else {
+				__write.read('var #1 = (function(){#0})()', [block_write, name]);
+			}
+			this.class_scope = old_scope;
+		};
+		ES5.ExtendsExpr = function(node, __write){
+			if (!__write) __write = this.new('ExtendsExpr');
+			var scope = node.scope, name = scope.name, list = node[1];
+			__write.read('#0.prototype = new #1();\n#0.prototype.constructor = #0;\n#0.prototype.__super__ = #1.prototype;\n', [name, list[0]]);
+			if (list.length > 1){
+				__write.read('#0.__extends = function(){\n    for (var i=0; i<arguments.length; i++){\n        var _super = arguments[i].prototype;\n        for (var name in _super)\n            if (_super[name].hasOwnProperty(name))\n                this.prototype[name] = _super[name];\n    }\n};\n#0.__extends(COMMA(#1));\n', [name, Hash.slice(list, 1)]);
+			}
+			return __write;
+		};
+		ES5.SuperExpr = function(node, __write){
+			var acc = node[0], pam = node[1], supe = acc[0];
+			supe.text = 'this.__super__';
+			if (acc.length == 1){
+				supe.text += '.'+(node.scope.name || 'constructor');
+			}
+			if (pam){
+				var pam_write = this.read(pam);
+				pam_write[1].insert(0, 'this', ', ');
+				__write.read(acc, '.call', pam_write);
+			}else {
+				return '#0.call(this, arguments)';
+			}
+		};
+		ES5.AtExpr = function(node, __write){
+			var scope = node.scope;
+			if (scope.type == 'ClassExpr'){
+				node[0].text = scope.name;
+			}else {
+				scope = scope.queryParent('ClassExpr');
+				if (scope && classStaticAtSymbol(scope, node)){
+					node[0].text = scope.name;
+				}else {
+					node[0].text = 'this';
+				}
+			}
+			return '#';
+		};
+		ES5.SetterDecl = function(node, __write){
+			if (node.parent.type == 'JsonExpr'){
+				return '#0 #1#2#3';
+			}
+			var class_scope = node.scope.parent;
+			if (class_scope.type == 'ClassExpr'){
+				var type = node.type == 'SetterDecl' ? '__defineSetter__' : '__defineGetter__';
+				if (node.length < 4){
+					__write.read('#0.prototype.'+type+'("#1", function()#2)', [class_scope.name, node[1], node[2]]);
+				}else {
+					__write.read('#0.prototype.'+type+'("#1", function#2#3)', [class_scope.name, node[1], node[2], node[3]]);
+				}
+			}
+		};
+		ES5.GetterDecl = ES5.SetterDecl;
+		ES5.MethodDecl = function(node, __write){
+			if (node.parent.type == 'JsonExpr'){
+				return '"#0": function#1#2';
+			}
+			var scope = node.scope, class_scope = scope.parent;
+			switch (class_scope.type){
+				case 'ClassExpr':
+					var class_name = class_scope.name;
+					if (scope.name == 'constructor'){
+						class_scope.construct = node;
+						return '';
+					}else {
+						__write.read('#0.prototype.#1 = function #2#3', [class_name, node[0], node[1], node[2]]);
+					}
+					break;
+				default:
+					return 'function #0#1#2';
+			}
+		};
+		ES5.StaticDecl = function(node, __write){
+			var class_scope = node.scope;
+			if (class_scope.type != 'ClassExpr'){
+				class_scope = class_scope.parent;
+			}
+			var exp = node[1];
+			if (exp.type == 'ArgumentsDecl'){
+				for (var i=0, item; i < exp.length; i++){
+					item = exp[i];
+					if (item.type == 'AssignmentDecl'){
+						__write.read('#0.#1 #2 #3;', [class_scope.name, item[0], item[1], item[2]]);
+					}else {
+						__write.read('#0.#1 = null;', [class_scope.name, item]);
+					}
+					if (i < exp.length-1){
+						__write.add('\n');
+					}
+				}
+			}else {
+				__write.read('#0.#1 = function#2#3;', [class_scope.name, exp[0], exp[1], exp[2]]);
+			}
+		};
+		ES5.ProtoDecl = function(node, __write){
+			var class_scope = node.scope.queryParent('ClassExpr');
+			if (!class_scope){
+				throw tea.error(new Error(), 325, node[0]);
+			}
+			var exp = node[1], class_name = class_scope.name;
+			if (exp.type == 'ArgumentsDecl'){
+				for (var i=0, item; i < exp.length; i++){
+					item = exp[i];
+					if (item.type == 'AssignmentDecl'){
+						__write.read('#0.prototype.#1 #2 #3;', [class_name, item[0], item[1], item[2]]);
+					}else {
+						__write.read('#0.prototype.#1 = null;', [class_name, item]);
+					}
+					if (i < exp.length-1){
+						__write.add('\n');
+					}
+				}
+			}else {
+				__write.read('#0.prototype.#1 = function#2#3;', [class_name, exp[0], exp[1], exp[2]]);
+			}
+		};
+		ES5.InitDecl = function(node, __write){
+			var class_scope = node.scope;
+			if (class_scope.type != 'ClassExpr'){
+				throw tea.error(new Error(), 326, node[0]);
+			}
+			var exp = node[1], write = this.new('InitDecl');
+			if (exp.type == 'ArgumentsDecl'){
+				for (var i=0, item; i < exp.length; i++){
+					item = exp[i];
+					if (item.type == 'AssignmentDecl'){
+						write.read('this.#0 #1 #2;\n', item);
+					}else {
+						write.read('this.# = null;\n', item);
+					}
+				}
+			}else {
+				write.read('this.#0 = function#1#2;\n', exp);
+			}
+			class_scope.inits.push(write);
+			return '';
+		};
+		ES5.RequireStam = function(node, __write){
+			var format,
+				type,
+				write,
+				_format,
+				scope = tea.argv['--join'] ? node.scope.root : 0,
+				params = parseRequire(node[1], scope);
+			if (params.length > 1){
+				if (node.parent.is('AssignmentDecl', 'AssignmentExpr')){
+					if (node.parent[0].type == 'ArrayExpr'){
+						format = '#0(#1)';
+						type = 'arr';
+						write = this.new('ArrayExpr');
+					}else {
+						format = '"#2": #0(#1)';
+						type = 'json';
+						write = this.new('JsonExpr');
+					}
+				}else {
+					format = 'var #2 = #0(#1)';
+					type = 'var';
+					write = this.new('VarExpr');
+				}
+			}else {
+				write = __write;
+				format = '#0(#1)';
+			}
+			for (var i=0; i < params.length; i++){
+				_format = params[i].name ? format : '#0(#1)';
+				write.read(this.new('RequireExpr', _format, [node[0], params[i].expr, params[i].name]));
+			}
+			switch (type){
+				case 'var':
+					__write.read(this.JOIN(write, ';\n'));
+					break;
+				case 'json':
+					__write.read('{', this.JOIN(write, ', '), '}');
+					break;
+				case 'arr':
+					__write.read('[', this.JOIN(write, ', '), ']');
+					break;
+			}
+		};
+		ES5.NodeStam = function(node, __write){
+			var res;
+			if (!__write) __write = this.new('NodeStam');
+			var len = node.length-1;
+			for (var i=0, item; i < node.length; i++){
+				item = node[i];
+				res = this.read(item);
+				if (res && (res.istoken || res.length)){
+					__write.add(res);
+					if (item.type != 'CommDecl' && (item.is('AssignmentExpr', 'ClausesStam', 'CommaStam') || !/(\}|;)$/.test(res.lastText))){
+						__write.add(';');
+					}
+					if (i < len){
+						__write.add('\n');
+					}
+				}
+			}
+			nodeVarSafety.call(this, node, __write);
+			return __write;
+		};
+		function nodeVarSafety(node, __write){
+			var argv = tea.argv || {}, scope = node.scope, a = 0;
+			while (__write[a] && (__write[a].type == 'CommDecl' || __write[a] == '\n')){
+				a += 1;
+			}
+			if (!argv['--safe']){
+				var un_defineds = scope.get('undefined');
+				if (un_defineds && un_defineds.length){
+					__write.insert(a, this.VAR.apply(this, un_defineds), ';\n');
+				}
+			}
+			var argus = scope.argumentsDefine;
+			if (argus && argus.length){
+				var write = this.new('ArgumentsStam');
+				for (var i=0; i < argus.length; i++){
+					write.read('if (#0 == null) #0 #1 #2;\n', argus[i]);
+				}
+				__write.insert(0, write);
+			}
+			var exts = scope.exports;
+			if (exts && exts.length){
+				var write = this.new('ExportStam');
+				for (var i=0; i < exts.length; i++){
+					write.add('\nmodule.exports.'+exts[i]+' = '+exts[i]+';');
+				}
+				__write.add(write);
+			}
+		}
+		function assignmentSlicePatt(__write, left, right, node){
+			left.length -= 1;
+			if (left[left.length].length == 0){
+				__write.read('#0.push(#1)', [left, right]);
+			}else {
+				var ab = accessorSlicePatt.call(this, left[left.length], true);
+				__write.read('#0.splice.apply(#0, [#1, #2].concat(#3))', [left, ab[0], ab[1], right]);
+			}
+		}
+		function assignmentArrayPatt(__write, left, right, node){
+			var ref;
+			if (right.type == 'ArrayExpr'){
+				for (var i=0; i < left.length; i++){
+					if (i > 0){
+						__write.add(', ');
+					}
+					if (right[i]){
+						__write.read('#0 #1 #2', [left[i], node[1], right[i]]);
+					}else {
+						throw tea.error(new Error(), 'array pattern assignment declaration syntax error', right[i-1]);
+					}
+				}
+			}else {
+				if (right.is('IdentifierExpr')){
+					ref = right;
+				}else {
+					var ref = allocateRefName(node.scope);
+					if (node.parent.parent.type == 'VarDecl'){
+						node.scope.set('defined', ref, true);
+					}
+					__write.read(this.new('AssignmentExpr', '#0 = #1', [ref, right]));
+				}
+				for (var i=0; i < left.length; i++){
+					__write.read(this.new('AssignmentExpr', '#0 #1 #2[#3]', [left[i], node[1], ref, i+'']));
+				}
+				this.COMMA(__write);
+			}
+		}
+		function accessorSlicePatt(node, count_b){
+			var a, b;
+			if (node.length == 3){
+				a = node[0], b = node[2];
+			}else if (node.length == 2){
+				if (node[0].text == ':'){
+					a = 0, b = node[1];
+				}else {
+					a = node[0], b = 0;
+				}
+			}else if (node.length >= 1){
+				a = 0, b = 0;
+			}
+			if (count_b){
+				var parent = node.parent, write = this.new('AccessorExpr');
+				if (b){
+					write.type = 'ComputeExpr';
+					if (b[0] && b[0].text == '-'){
+						write.read(parent, '.length', b);
+					}else {
+						write.read(b, '-', a);
+					}
+					b = write;
+				}else {
+					b = write.read(parent, '.length');
+				}
+			}
+			return [a, b];
+		}
+		function resetDefineVariableDecl(decl_list, scope, type, prefix){
+			for (var i=0, left; i < decl_list.length; i++){
+				left = decl_list[i];
+				if (left.type == 'AssignmentDecl'){
+					left = left[0];
+				}
+				if (left.type == 'ArrayPatt'){
+					for (var _i=0, item; _i < left.length; _i++){
+						item = left[_i];
+						item.text = resetDefine(scope, type, item.text, prefix);
+					}
+				}else if (left.istoken){
+					left.text = resetDefine(scope, type, left.text, prefix);
+				}else {
+					decl_list[i] = resetDefine(scope, type, decl_list[i], prefix);
+				}
+			}
+		}
+		function resetDefine(scope, type, name, prefix){
+			scope.set(type, name, true);
+			if (prefix){
+				if (type == 'let'){
+					scope.lets[name] = prefix+name;
+				}
+				return prefix+name;
+			}
+			return name;
+		}
+		function allocateVarName(scope){
+			var keymap = 'ijklmnopqrstuvwxyz';
+			for (var i=0; i < keymap.length; i++){
+				if (!scope.isDefined('_'+keymap[i])){
+					var key = '_'+keymap[i];
+					scope.set('let', key);
+					return key;
+				}
+			}
+			return '__i';
+		}
+		function allocateRefName(scope){
+			var i = 0, name = '_ref', stat = scope.isDefined(name, null, 1);
+			while (true){
+				if (!stat || stat == 'let'){
+					scope.set('undefined', name);
+					return name;
+				}
+				name += i++;
+				stat = scope.isDefined(name, null, 1);
+			}
+		}
+		function classStaticAtSymbol(clas_scope, node){
+			if (clas_scope.type = 'ClassExpr'){
+				if (node.length > 1 && node[1].type == 'DotExpr'){
+					var member = node[1][0];
+					if (member.type == 'IdentifierTokn' && clas_scope.statics.indexOf(member.text) != -1){
+						var name = member.text;
+						if (clas_scope.protos.indexOf(name) == -1){
+							return name;
+						}
+					}
+				}
+			}
+			return false;
+		}
+		function parseRequire(node, scope){
+			var list = [], root_dir = node.root.filePath || '';
+			for (var i=0, item; i < node.length; i++){
+				item = node[i];
+				if (item.is('StringTokn')){
+					if (scope && Path.isPathText(item.text)){
+						var files = Path.parseFile(item.text, root_dir, ['.js', '.tea']);
+						if (!files.error){
+							for (var _i=0, file; _i < files.length; _i++){
+								file = files[_i];
+								list.push({"name": parseRequireName(file),
+									"expr": item.clone('"'+scope.addRequire(file)+'"'),
+									"file": file});
+							}
+							continue;
+						}
+						if (debug.log){
+							debug.log('** [Require: Can not join file: '+item.text+']');
+						}
+					}
+					list.push({"name": parseRequireName(item.text), "expr": item, "file": ''});
+				}else {
+					list.push({"name": '', "expr": item, "file": ''});
+				}
+			}
+			return list;
+		}
+		function parseRequireName(file){
+			return Text.getName(file);
+		}
+		module.exports = ES5;
+	});Module.register('/Users/wl/Sites/TeaJS/src/rewriter/sourcemap.tea', '../src/rewriter/sourcemap.tea', function(exports, require, module, __filename, __dirname){
+		var SourceMap = (function(){
 			var VLQ_SHIFT, VLQ_CONTINUATION_BIT, VLQ_VALUE_MASK, BASE64_CHARS;
 			VLQ_SHIFT = 5;
 			VLQ_CONTINUATION_BIT = 1<<VLQ_SHIFT;
 			VLQ_VALUE_MASK = VLQ_CONTINUATION_BIT-1;
 			BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+			function SourceMap(){
+				this.version = 3;
+				this.file = '';
+				this.sourceRoot = '';
+				this.names = [];
+				this._sources = [];
+				this._mappings = [];
+			}
+			SourceMap.prototype.__defineGetter__("sources", function(){
+				var ss = [], dir = Path.dirname(this.file);
+				for (var _i=0, file; _i < this._sources.length; _i++){
+					file = this._sources[_i];
+					ss.push(Path.relative(dir, file));
+				}
+				return ss;
+			});
+			SourceMap.prototype.__defineGetter__("mappings", function(){
+				return this._mappings.join('');
+			});
 			SourceMap.prototype.addSource = function (file){
-				var i = this.sources.indexOf(file);
+				var i = this._sources.indexOf(file);
 				if (i == -1){
-					return this.sources.push(file)-1;
+					return this._sources.push(file)-1;
 				}
 				return i;
 			}
@@ -5609,8 +6625,8 @@
 						if (item.location && item.location.fileName){
 							loc = item.location;
 							vlq = SourceMap.encodeVlq(line.length-last_col, this.addSource(loc.fileName), loc.lineNumber-last_loc_line, loc.columnNumber-last_loc_col);
-							if (add_comma) this.mappings.push(','); else add_comma = true;
-							this.mappings.push(vlq);
+							if (add_comma) this._mappings.push(','); else add_comma = true;
+							this._mappings.push(vlq);
 							last_vlq = vlq;
 							last_col = line.length;
 							last_loc_line = loc.lineNumber;
@@ -5620,7 +6636,7 @@
 					}
 					if (/\n/.test(item)){
 						while (m = item.match(/\n/)){
-							this.mappings.push(';');
+							this._mappings.push(';');
 							line_num++;
 							line = item = item.substr(m.index+1);
 						}
@@ -5634,10 +6650,10 @@
 			SourceMap.prototype.__defineGetter__("data", function(){
 				return {"version": 3,
 					"file": this.file || '',
-					"sourceRoot": this.sourceRoot || '',
+					"sourceRoot": '',
 					"sources": this.sources,
 					"names": this.names,
-					"mappings": this.mappings.join('')};
+					"mappings": this.mappings};
 			});
 			SourceMap.prototype.__defineGetter__("text", function(){
 				return Text(this.data);
@@ -5671,729 +6687,13 @@
 		})();
 		module.exports = SourceMap;
 	});
-	CreateModule("../src/tools/helper.tea", function(module, exports){
-		__require("../src/tools/debug.tea");
-		var Helpter = module.exports;
-		Helpter.getLocation = function(something){
-			switch (isClass(something)){
-				case 'Ast':
-					return this.getLocation(something.tokens(0));
-				case 'Node':
-					return this.getLocation(something.tokens(0));
-				case 'Source':
-					return this.getLocation(something.current);
-				case 'Token':
-					return this.getLocation(something.location);
-				case 'Location':
-					return something;
-			}
-		};
-		Helpter.errorPot = function(something){
-			switch (isClass(something)){
-				case 'Ast':case 'Node':case 'Source':case 'Token':
-					if (!(something = this.getLocation(something))){
-						break;
-					}
-				case 'Location':
-					var text = something.source,
-						pos = something.start,
-						code = text.slice(something.start, something.end+1),
-						file = something.fileName;
-					return this.errorPotByText(text, pos, code, file);
-				case 'Array':
-					return this.errorPotByText.apply(this, something);
-				case 'String':
-					if (arguments.length > 1){
-						return this.errorPotByText.apply(this, arguments);
-					}
-					return something;
-			}
-		};
-		Helpter.errorPotByText = function(text, pos, code, file){
-			if (pos == -1 && code){
-				pos = text.indexOf(code);
-			}
-			var line = Text.indexLine(text, pos),
-				line_text = line[0],
-				num = line[1],
-				col = line[2];
-			if (code){
-				code = code.replace(/\n/, '\\n');
-			}
-			var pot_num = num+' | ',
-				pot_shift = (pot_num+line_text.substr(0, col)).replace(/[^\s]/g, ' ')+code.replace(/./g, '^'),
-				pot_line = (line_text.substr(0, col)+print.color('#r{'+code+'}')+line_text.substr(col+code.length)).replace(/\n/, '\\n'),
-				qq_mark = (/(?:[^\\]|^)"/).test(line_text) ? "'" : '"',
-				pot_echo = qq_mark+pot_num+pot_line+'\n'+qq_mark+pot_shift;
-			if (file){
-				pot_echo = (Path.isPathText(file) ? 'At ' : 'From ')+file+':'+num+':'+col+'\n'+pot_echo.replace(/^(\'|\")/mg, '$1\t');
-			}
-			return pot_echo;
-		};
-		Helpter.atFile = function(something){
-			var location;
-			if (location = Helpter.getLocation(something)){
-				return 'at '+location.fileName+':'+location.lineNumber+':'+location.columnNumber;
-			}
-			return '';
-		};
-		Helpter.atFileByText = function(file, text, pos){
-			var line = Text.indexLine(text, pos), num = line[1], col = line[2];
-			return (Path.isPathText(file) ? 'At ' : 'From ')+file+':'+num+':'+col;
-		};
-		debug.addEvent('log', function(){
-			debug.echo(print.toString(arguments));
-		});
-		debug.addEvent('prep', function(msg, token){
-			if (token && token.istoken){
-				token = ' <--> '+Helpter.atFile(token);
-			}
-			debug.echo(print.toString(arguments).replace(/^(\s+)/mg, ' ·$1'));
-		});
-		debug.addEvent('syntax', function(){
-			debug.echo(print.toString(arguments));
-		});
-		debug.addEvent('write', function(){
-			debug.echo(print.toString(arguments));
-		});
-		debug.addEvent('token', function(){
-			debug.echo(print.toString(arguments));
-		});
-		function tokenPrinter(token, show_token){
-			if (show_token || show_token == null){
-				var type = token.types.join(',');
-				if (show_token == 'shot'){
-					type = type.replace(/[a-z]+/g, '');
-				}
-				return '['+(token.indent >= 0 ? '*' : '')+'('+(type)+') g{\''+Text(token.text)+'\'}]';
-			}
-			return '[(TOKEN) '+token.text+']';
-		}
-		function sourcePrinter(src){
-			var texts = [];
-			for (var i=0, t; i < src.length; i++){
-				t = src[i];
-				if (!t){
-					continue;
-				}
-				if (t.istoken){
-					texts.push((i && t.is('LineHead') ? '\n' : '')+tokenPrinter(t, 'shot'));
-				}else {
-					texts.push(lexemePrinter(src[i], 'shot')+(src[i].isToken('LF') ? '\n' : ''));
-				}
-			}
-			return texts.join(', ');
-		}
-		function nodePrinter(node, text, _level, _indent){
-			if (!_level) _level = 0;
-			if (!_indent) _indent = 0;
-			var O = _level%2 ? 'r{[}' : '[',
-				C = _level%2 ? 'r{]}' : ']',
-				isBlock = /BLOCK/.test(node.type) && node.length,
-				isNode = /node|block/i.test(node.type);
-			if (!text) text = '';
-			text += O+'(g{'+node.type+'}) ';
-			if (isBlock){
-				text += '\n'+print.strc('\t', _indent+1);
-			}
-			for (var i=0; i < node.length; i++){
-				if (!node[i]) continue;
-				if (i != 0){
-					text += ', ';
-				}
-				if (isNode){
-					text += '\n'+print.strc('\t', _indent+1);
-				}
-				if (node[i].length >= 0){
-					text = nodePrinter(node[i], text, (_level || 0)+1, isBlock || isNode ? _indent+1 : _indent);
-				}else if (node[i].text){
-					text += "'"+Text(node[i].text)+"'";
-				}
-			}
-			text += (isBlock || isNode ? '\n'+print.strc('\t', _indent)+C : C);
-			if (_level == 0){
-				text = text.replace(/^(\s+)((?:\*\*\*\ \]\ \*\*\*|\])+\,)\s*/mg, '$1$2\n$1');
-			}
-			return text;
-		}
-		function macroPrinter(macro){
-			var text;
-			text = '[(Macro - '+macro.type+') '+macro.name+(macro.params ? '('+macro.params.join(',')+')' : '')+' "'+Text(macro.body.length > 30 ? macro.body.substr(0, 30)+'...' : macro.body)+'"'+']';
-			return text;
-		}
-		function scopePrinter(scope){
-			var temp, texts = [];
-			for (var key in scope){
-				if (!scope.hasOwnProperty(key)) continue;
-				var item = scope[key];
-				if (key == 'node' || key == 'top' || key == '_top_' || item == null){
-					continue;
-				}
-				if (key == 'variables'){
-					var v_types = {};
-					for (var name in item){
-						if (!item.hasOwnProperty(name)) continue;
-						var type = item[name];
-						if (!v_types[type]) v_types[type] = [];
-						v_types[type].push(name);
-					}
-					var v_text = [];
-					for (var type in v_types){
-						if (!v_types.hasOwnProperty(type)) continue;
-						var varbs = v_types[type];
-						v_text.push(type+' : ["'+varbs.join('", "')+'"]');
-					}
-					if (v_text.length){
-						texts.push(key+' :\n'+v_text.join(',\n').replace(/^/mg, '\t'));
-					}
-					continue;
-				}
-				if (key == 'argumentsDefine'){
-					var sub_text = [];
-					for (var j=0; j < item.length; j++){
-						sub_text.push(print.toText(item[j]).replace(/^/mg, '\t'));
-					}
-					if (sub_text.length){
-						texts.push(key+' : [\n'+sub_text.join(',\n')+']');
-					}
-					continue;
-				}
-				if (key == 'sub' || key == 'letScope'){
-					var sub_text = [];
-					for (var k in item){
-						if (!item.hasOwnProperty(k)) continue;
-						sub_text.push(k+' : '+scopePrinter(item[k]));
-					}
-					if (sub_text.length){
-						texts.push(key+' : [\n'+sub_text.join(',\n').replace(/^/mg, '\t')+']');
-					}
-					continue;
-				}
-				if (temp = print.toString([item])){
-					if (temp.length > 2){
-						texts.push(key+' : '+temp);
-					}
-				}
-			}
-			return '[\n'+texts.join('\n').replace(/^/mg, '\t')+']';
-		}
-		function writerPrinter(data, level, _circular_cache){
-			if (!_circular_cache){
-				_circular_cache = [];
-			}
-			_circular_cache.push(data);
-			var texts = [];
-			for (var i=0, item; i < data.length; i++){
-				item = data[i];
-				if (item.istoken){
-					texts.push("'"+Text(item.text)+"'");
-				}else if (typeof item == 'string'){
-					texts.push("'"+Text(item)+"'");
-				}else {
-					if (_circular_cache.indexOf(item) != -1){
-						return '[Circular]';
-					}
-					texts.push(writerPrinter(item, (level || 0)+1, _circular_cache));
-				}
-			}
-			var text = '[('+data.type+') '+texts.join('·')+']';
-			return text;
-		}
-		function SyntaxPrinter(sre, __level){
-			var text = [];
-			for (var i=0, r; i < sre.length; i++){
-				r = sre[i];
-				if (r.type == 'Or'){
-					if (text.length){
-						text.push('|');
-					}
-					text.push((__level%2 ? 'd{' : 'w{')+SyntaxPrinter(r, (__level || 0))+'}');
-				}else if (r.type == 'Sub'){
-					text.push("("+(r.assertion)+SyntaxPrinter(r.key, (__level || 0)+1)+')');
-				}else {
-					text.push("[("+(r.type)+")"+(r.key)+r.quantifier+"]");
-				}
-			}
-			return text.join(' ');
-		}
-		print.register('Token', tokenPrinter);
-		print.register('Source', sourcePrinter);
-		print.register('Node', nodePrinter);
-		print.register('Ast', nodePrinter);
-		print.register('Macro', macroPrinter);
-		print.register('Scope', scopePrinter);
-		print.register('Writer', writerPrinter);
-		print.register('SyntaxReg', SyntaxPrinter);
-	});
-	CreateModule("../src/tools/debug.tea", function(module, exports){
-		__require("../src/tools/printer.tea");
-		var debug_lv = 0, debug_event_listener = [];
-		global.debug = function(e){
-			var text;
-			if (arguments.length == 0 || e instanceof Error){
-				text = debug.stacksToText(e);
-			}else {
-				text = print.toString(arguments, '~ ');
-			}
-			debug.echo(text, new Error(), true);
-		};
-		debug.echo = function(text, error, show_line_info){
-			if (show_line_info || (debug_lv&64) == 64){
-				var at_line = debug.line(error || new Error(), true);
-				text = text.replace(/(\n|$)/, '<-->'+at_line+'$1');
-			}
-			print(text);
-		};
-		debug.line = function(err, ret_str){
-			var stacks = debug.stacks(err || (new Error)), stack = stacks[0];
-			if (ret_str){
-				return stacks[0].filetext;
-			}
-			if (debug.log){
-				debug.log(stacks[0].filetext);
-			}
-		};
-		debug.eventMap = {"all" : 0};
-		debug.addEvent = function(name, shot_name, func){
-			if (typeof shot_name == 'function'){
-				func = shot_name, shot_name = null;
-			}
-			var num = this.eventMap.all+1;
-			this.eventMap.all += num;
-			this.eventMap[name] = num;
-			if (shot_name){
-				this.eventMap[shot_name] = num;
-			}
-			this['__'+name] = func;
-		};
-		debug.onEvent = function(part, fn){
-			if (fn){
-				var lv = parseDebugConf(part);
-				if ((debug_lv&lv) == lv){
-					fn(debug_lv);
-				}else {
-					debug_event_listener.push([lv, fn]);
-				}
-			}else {
-				var lv = typeof part == 'number' ? part : this.eventMap[part];
-				return (debug_lv&(lv || 0)) == lv;
-			}
-		};
-		debug.disable = function(part){
-			debug_lv = parseDebugConf(part);
-			for (var name in this.eventMap){
-				if (!this.eventMap.hasOwnProperty(name)) continue;
-				if (debug[name] && (debug_lv&this.eventMap[name]) != this.eventMap[name]){
-					debug[name] = null;
-				}
-			}
-		};
-		debug.enable = function(part){
-			debug_lv = parseDebugConf(part);
-			var open_list = [];
-			for (var name in this.eventMap){
-				if (!this.eventMap.hasOwnProperty(name)) continue;
-				if (debug['__'+name]){
-					if ((debug_lv&this.eventMap[name]) == this.eventMap[name]){
-						debug[name] = debug['__'+name];
-						open_list.push(name);
-					}else {
-						debug[name] = null;
-					}
-				}
-			}
-			if (open_list.length){
-				print('* Debug enable: "'+open_list.join('", "')+'"');
-			}
-			for (var i=debug_event_listener.length-1, item; i >= 0; i--){
-				item = debug_event_listener[i];
-				if ((debug_lv&item[0]) == item[0]){
-					item[1](argvj_debug_level);
-				}
-			}
-		};
-		debug.stacks = function(err, shift){
-			var stacks;
-			if (isArray(err)) return err;
-			if (typeof err == 'number'){
-				shift = err, err = null;
-			}
-			if (typeof err == 'string'){
-				stacks = err.split('\n');
-			}else {
-				err = err || new Error();
-				stacks = err.stack.split('\n');
-			}
-			var i = 1, ret = [], m, tmp;
-			if (err && err.name == 'Error'){
-				while (i < stacks.length && /at (.*Function.debug|.*Function.print|.*?TeaError|.*?tea\.throw)/i.test(stacks[i])){
-					i++;
-				}
-			}
-			for (; i < stacks.length; i++){
-				if (stacks[i].indexOf('anonymous') != -1){
-					continue;
-				}
-				if (m = stacks[i].match(/at (.*?) \((.*?)\)$/)){
-					tmp = m[2].split(':');
-					ret.push({"fileName": tmp[0],
-						"lineNumber": tmp[1],
-						"columnNumber": tmp[2],
-						"code": m[1],
-						"source": stacks[i],
-						"filetext": m[2]});
-				}
-			}
-			if (shift){
-				ret = ret.slice(shift);
-			}
-			ret.message = stacks[0];
-			return ret;
-		};
-		debug.stacksToText = function(stacks, msg, name){
-			stacks = debug.stacks(stacks || new Error);
-			var text = msg === false ? [] : ['['+(name || 'Tea error stack')+']'+(msg && '\n'+msg || '')];
-			for (var i=0, stack; i < stacks.length; i++){
-				stack = stacks[i];
-				if (typeof stacks[i] == 'string'){
-					text.push(stacks[i]);
-				}else {
-					text.push(" · "+(stack.code)+" <-> File \""+(stack.fileName)+"\", <->line "+(stack.lineNumber));
-				}
-			}
-			text = text.join('\n');
-			return print.toText(text);
-		};
-		debug.__defineGetter__('level', function(){return debug_lv});
-		function parseDebugConf(part){
-			var e = debug_lv;
-			if (typeof part == 'number'){
-				e = part;
-			}else if (part){
-				for (var i_ref = part.replace(/\W+/g, ' ').trim().split(' '), i=0, name; i < i_ref.length; i++){
-					name = i_ref[i];
-					if (debug.eventMap[name]){
-						e += debug.eventMap[name];
-					}
-				}
-			}
-			return e;
-		}
-	});
-	CreateModule("../src/tools/printer.tea", function(module, exports){
-		__require("../src/tools/utils.tea");
-		var std_width = process.stdout.columns,
-			is_terminal = !!std_width,
-			max_print_width = 0,
-			register_printer = {};
-		global.print = function(){
-			if (!print.stdout.apply(print, arguments)){
-				process.stdout.write("\n");
-			}
-		};
-		print.stdout = function(){
-			process.stdout.write(this.toText.apply(this, arguments));
-		};
-		print.toText = function(){
-			var text;
-			text = this.toString(Array.prototype.slice.call(arguments));
-			text = text.replace(/(.|\n)\u0008/g, '');
-			text = this.color(text);
-			text = this.flex(text);
-			text = text.replace(/\((.*) x(\d+)\)/g, function($0, $1, $2){return print.strc($1, parseInt($2))});
-			text = text.replace(/\[border\:(.*?)(\:end\]|$)/g, function($0, $1){return print.border($1)});
-			max_print_width = Math.max(max_print_width, Text.width(text) || 4);
-			text = this.line(text);
-			return text;
-		};
-		print.toString = function(args, prefix, postfix){
-			var text = classToString(Hash.slice(args));
-			if (prefix) text = text.replace(/^/mg, prefix);
-			if (postfix) text = text.replace(/$/mg, postfix);
-			return text;
-		};
-		print.line = function(text){
-			if (/^([\W\ x]){4}$/mg.test(text)){
-				var the_width = std_width || max_print_width;
-				text = text.replace(/^([\W\ x])\1{3}$/mg, function($0, $1){return print.strc($1, the_width)});
-			}
-			return text;
-		};
-		print.flex = function(text, min_width){
-			var col_width, mark;
-			while (/^(.*?)(?:<-{1,2}>)(.*)$/mg.test(text)){
-				col_width = min_width || 80, mark = false;
-				text = text.replace(/^(.*?)(<-{1,2}>|$)/mg, function($0, $1, $2){
-					mark = mark || $2 && $2.length == 4;
-					if (col_width < $1.length && ($2 || mark)){
-						col_width = $1.length;
-					}
-					return $0;
-				});
-				text = text.replace(/^(.*?)(?:<-{1,2}>)(.*)$/mg, function($0, $1, $2){return $1+print.strc(' ', col_width-$1.length)+$2});
-			}
-			return text;
-		};
-		print.border = function(){
-			var text = print.toText.apply(this, arguments).replace(/\t/g, '    '),
-				text_width = Text.width(text),
-				lines = text.split('\n'),
-				c = is_terminal ? '\033[96m' : '',
-				e = is_terminal ? '\033[0m' : '';
-			for (var i=0; i < lines.length; i++){
-				lines[i] = c+'|  '+e+lines[i]+print.strc(' ', text_width-lines[i].length)+c+'  |'+e;
-			}
-			lines.unshift(c+print.strc('-', text_width+6)+e);
-			lines.push(c+print.strc('-', text_width+6)+e);
-			return lines.join('\n');
-		};
-		print.cellText = function(text1, text2, separator, ret_str){
-			var texts1 = text1.replace(/\t/g, tab_size).split('\n'),
-				text1_w = Text.width(text1),
-				texts2 = text2.replace(/\t/g, tab_size).split('\n'),
-				len = Math.max(texts1.length, texts2.length),
-				echos = [];
-			separator = separator || '    ';
-			for (var i = 0; i < len; i++){
-				var t1 = texts1[i] || '', t2 = texts2[i] || '';
-				echos.push((t1+print.strc(' ', text1_w-t1.length))+separator+t2);
-			}
-			if (ret_str){
-				return echos.join('\n');
-			}
-			console.log(echos.join('\n'));
-		};
-		print.strc = function(str, num){
-			var tmp = [];
-			num = Math.max(num || 0, 0);
-			while (num--){
-				tmp.push(str);
-			}
-			return tmp.join('');
-		};
-		print.color = function(text){
-			if (!/\b[rbgcwd]\{/.test(text)){
-				return text;
-			}
-			var m,
-				tmp = [],
-				cc,
-				cc_order = [],
-				cc_table = {"r": '\033[91m',
-					"b": '\033[96m',
-					"g": '\033[92m',
-					"c": '\033[36m',
-					"d": '\033[90m',
-					"w": '\033[37m'};
-			while (m = text.match(/(?:\b|\#)([rbgcwd])\{|([^\\])\}/)){
-				tmp.push(text.substr(0, m.index+(m[2] ? 1 : 0)));
-				if (is_terminal){
-					if (m[2]){
-						if (cc_order.length){
-							tmp.push('\033[0m');
-							cc_order.pop();
-							if (cc_order.length){
-								tmp.push(cc_order[cc_order.length-1]);
-							}
-						}
-					}else {
-						cc = cc_table[m[1]] || '';
-						tmp.push(cc);
-						cc_order.push(cc);
-					}
-				}
-				text = text.substr(m.index+m[0].length);
-			}
-			if (text){
-				tmp.push(text);
-			}
-			if (cc_order.length){
-				tmp.push('\033[0m');
-			}
-			return tmp.join('');
-		};
-		print.register = function(name, printer){
-			if (printer){
-				register_printer[name] = printer;
-			}
-		};
-		function classToString(obj, igArray){
-			var type;
-			switch (type = isClass(obj)){
-				case 'String':case 'Number':case 'Boolean':case 'Undefined':
-					return obj;
-				case 'Array':
-					if (!igArray){
-						var text = [];
-						for (var i=0; i < obj.length; i++){
-							text.push(classToString(obj[i], true));
-						}
-						return text.join(' ');
-					}
-					break;
-				case 'Object':case 'Function':
-					if (!obj) return 'null';
-					break;
-				default:
-					if (register_printer.hasOwnProperty(type)){
-						return register_printer[type](obj);
-					}
-					break;
-			}
-			return Text(obj);
-		}
-	});
-	CreateModule("../src/error.tea", function(module, exports){
-		var helper = __require("../src/tools/helper.tea");
-		var TeaError = (function(){
-			function TeaError(err, msg, target, name, err_shift){
-				var sub, stacks;
-				if (msg instanceof Error){
-					err = msg, msg = target, target = name, name = err_shift, err_shift = arguments[5];
-				}
-				if (!(err instanceof Error)){
-					name = target, target = msg, msg = err, err = new Error(), err_shift = 2;
-				}
-				if (err.type == 'TeaError'){
-					sub = err, err = new Error(), err_shift = 2;
-				}
-				if (typeof msg == 'object'){
-					err_shift = name, name = target, target = msg, msg = '';
-				}
-				stacks = debug.stacks(err, err_shift);
-				name = '['+(name && name[0].toUpperCase()+name.substr(1) || 'Tea error')+']';
-				if (typeof msg == 'number') msg = err_code[msg];
-				msg = msg ? msg[0].toUpperCase()+msg.substr(1) : stacks.message;
-				var error = new Error(msg);
-				error.type = 'TeaError';
-				error.name = print.toText(name);
-				error.target = target;
-				error.stacks = stacks;
-				error.__defineGetter__('text', toString);
-				error.__defineGetter__('stack', printError);
-				if (sub){
-					sub.top = error;
-					return sub;
-				}
-				return error;
-			}
-			var err_code = {101 : 'Array expression miss right "]" token!',
-					102 : 'Json expression miss right "}" token!',
-					103 : 'Compel expression miss right ")" token!',
-					104 : 'member expression miss right "]" token',
-					105 : 'params expression miss right ")" token',
-					106 : 'switch expression miss right "}" token',
-					107 : 'for expression miss right "}" token',
-					108 : 'for expression miss right expression',
-					109 : 'export expression right expression syntax error',
-					110 : 'block statement miss right "}" token',
-					201 : 'unexpected dot expression',
-					202 : 'unexpected params expression',
-					203 : 'unexpected json expression assign',
-					204 : 'unexpected assignment declaration expression',
-					208 : 'unexpected assignment expression',
-					205 : 'unexpected comma expression',
-					206 : 'unexpected selete right pattern expression',
-					207 : 'unexpected selete left pattern expression',
-					208 : 'unexpected control Clauses',
-					209 : 'unexpected token ILLEGAL',
-					210 : 'unexpected break expression',
-					211 : 'unexpected continue expression',
-					212 : 'unexpected token ILLEGAL',
-					213 : 'unexpected for condition expression left token',
-					214 : 'unexpected compel expression',
-					215 : 'unexpected expression',
-					301 : 'getter or setter statement syntax error',
-					302 : 'method statement syntax error',
-					303 : 'if statement syntax error',
-					304 : 'while statement syntax error',
-					305 : 'with statement syntax error',
-					306 : 'do while statement syntax error',
-					307 : 'try while statement syntax error',
-					308 : 'switch while statement syntax error',
-					309 : 'for statement syntax error',
-					311 : 'condition statement syntax error',
-					312 : 'switch case or default statement syntax error',
-					313 : 'case or default expression syntax error',
-					314 : 'extends expression syntax error',
-					315 : 'array pattern assignment declaration syntax error',
-					316 : 'var declaration statement syntax error',
-					317 : 'let declaration statement syntax error',
-					318 : 'const declaration statement syntax error',
-					319 : 'arguments statement syntax error',
-					320 : 'indent illegal',
-					321 : 'class declaration statement syntax error! miss name',
-					322 : 'get declaration statement illegal',
-					323 : 'set declaration statement illegal',
-					324 : 'static declaration statement illegal',
-					325 : '*proto declaration statement illegal',
-					326 : '*init declaration statement illegal',
-					402 : 'block statement illegal',
-					401 : 'const declaration not supported',
-					403 : 'yield declaration not supported',
-					501 : 'define token statement illegal'};
-			TeaError.code = err_code;
-			function toString(){
-				var texts = [], stacks = [];
-				texts.push(this.name);
-				stacks.push(debug.stacksToText(this.stacks));
-				if (this.target){
-					var bug_pot = helper.errorPot(this.target);
-					texts.push(('\n'+bug_pot+'\n->  '+this.message+'\n').replace(/^/mg, '\t'));
-				}else {
-					texts.push(this.message);
-				}
-				var top = this.top, top_texts = [];
-				while (top){
-					top_texts.push('   '+top.name);
-					if (top.target){
-						var bug_pot = helper.errorPot(top.target);
-						top_texts.push((bug_pot+'\n->  '+top.message).replace(/^/mg, '\t'));
-					}else {
-						top_texts.push(top.message);
-					}
-					texts.push(top_texts.join('\n'));
-					stacks.push(debug.stacksToText(top.stacks, false));
-					top = top.top;
-				}
-				texts.push('----', stacks.join('\n'));
-				return texts.join('\n');
-			}
-			function printError(){
-				print(this.text);
-				process.exit(1);
-			}
-			return TeaError;
-		})();
-		module.exports = TeaError;
-	});
-    global = typeof(window) != 'undefined' ? window : global;
-    global['__require'] = __require;
 })();
-var help_text;
-__require("../src/tea.tea");
+
+var ctx;
+var Tea = require("../src/tea.tea");
 var ChildProcess = require("child_process");
-help_text = "r{** g{Tea} w{script help} *************************************************************}\n\
-  # parameter:\n\
-    -f,--file  <file>                  输入文件\n\
-    -p,--path  <project dir>           项目目录\n\
-    -o,--out   <output>                输出文件 或 目标目录\n\
-    -e,--eval  <tea script snippet>    编译一段 tea script 文本\n\
-    -j,--join                          合并 require 文件\n\
-    -m,--map                           生成 source map 文件\n\
-    -h,--help                          显示帮助\n\
-    -v,--verbose                       显示编译信息\n\
-    -r,--run                           执行输入件\n\
-    -d,--define                        宏定义文件\n\
-    -s,--safe                          只编译，不会对变量自动声名等\n\
-    --clear                            清理注释\n\
-    --tab <number>                     设置 tab size\n\
-    --token                            输出编译的 token 解析\n\
-    --ast                              输出 ast 结构\n\
-    --nopp                             不进行预编译\n\
-    --debug                            显示调试信息 log/prep/syntax/write/all";
 if (!module.parent){
-	tea.argv.parse(process.argv, null, help_text);
+	tea.argv.parse(process.argv);
 	if (tea.argv['--tab']){
 		tea.tabSize(tea.argv['--tab']);
 	}
@@ -6402,7 +6702,9 @@ if (!module.parent){
 		tea.exit();
 	}
 	if (!tea.argv['--file'] && !tea.argv['--path'] && !tea.argv['--eval']){
-		print('* g{Are you r{NongShaLei}!!}');
+		if (process.argv.length > 2){
+			print('* g{Are you r{NongShaLei}!!}');
+		}
 		tea.argv.showHelp();
 		tea.exit();
 	}
@@ -6412,14 +6714,13 @@ if (!module.parent){
 			print('* g{Cant find define file as r{"'+tea.argv['--define']+'"}!!}');
 			tea.exit();
 		}
-		tea.context.defaultPreprocessor(define_file);
+		tea.preprocess.setDefault(define_file);
 	}
 	if (tea.argv['--debug']){
 		debug.enable(tea.argv['--debug'] === true ? 'all' : tea.argv['--debug']);
 	}else if (tea.argv['--verbose']){
 		debug.enable('log');
 	}
-	var ctx;
 	if (tea.argv['--eval']){
 		ctx = tea.context({"text": tea.argv['--eval'], "file": 'by tea eval cmd'});
 	}else {
@@ -6455,10 +6756,10 @@ if (!module.parent){
 		}
 	}
 	if (tea.argv['--token']){
-		print('* r{The parse source}');
-		console.log(print.border(ctx.sourceText).replace(/^/mg, '\t'));
 		print('* r{The parse tokens}');
 		console.log(print.toText(ctx.source).replace(/^/mg, '\t'));
+		print('* r{The parse source}');
+		console.log(print.border(ctx.source.join()).replace(/^/mg, '\t'));
 	}
 	if (tea.argv['--ast']){
 		print('* r{The root node}');

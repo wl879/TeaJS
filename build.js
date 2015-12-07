@@ -3,7 +3,7 @@ var child_process, binVers, binIndex;
 require("./lib/tools/utils.js");
 require("./lib/tools/printer.js");
 child_process = require('child_process');
-binVers = [['lib', './lib/index.js'], ['beta', './bin/tea.js'], ['0.1.12', './bin/tea.v0.1.12.js']];
+binVers = [ ['lib', './lib/index.js'], ['beta', './bin/tea.js'], ['0.1.12', './bin/tea.v0.1.12.js']];
 binIndex = 0;
 function Exec(cmd, callback){
 	child_process.exec(cmd, {"maxBuffer": 5000*1024}, function(err, stdout, stderr){
@@ -54,7 +54,7 @@ if (!module.parent){
 	}else {
 		argv = process.argv.slice();
 	}
-	var tea_argv = '-d ./src/define.c ', succeed = null;
+	var tea_argv = '-d ./src/define.tea ', succeed = null;
 	switch (argv[0]){
 		case 'install':
 			switch (argv[1]){

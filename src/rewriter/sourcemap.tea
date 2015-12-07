@@ -10,14 +10,25 @@ class SourceMap:
 		@.version = 3;
 		@.file = '';
 		@.sourceRoot = '';
-		@.sources = [];
 		@.names = [];
-		@.mappings = [];
+
+		@._sources = [];
+		@._mappings = [];
+
+	get sources:
+		var ss = [];
+		var dir = Path.dirname( @.file );
+		for file => @._sources:
+			ss.push( Path.relative(dir, file) );
+		return ss;
+
+	get mappings:
+		return @._mappings.join('');
 
 	addSource(file):
-		var i = @.sources.indexOf( file );
+		var i = @._sources.indexOf( file );
 		if i == -1:
-			return @.sources.push( file ) - 1;
+			return @._sources.push( file ) - 1;
 		return i;
 
 	addName (name):
@@ -37,8 +48,8 @@ class SourceMap:
 					vlq = @.encodeVlq(line.length - last_col, @.addSource(loc.fileName), loc.lineNumber - last_loc_line, loc.columnNumber - last_loc_col);
 					// if item.type == 'IdentifierTokn':
 					// 	vlq += @.encodeVlq( @.addName(item.text) );
-					add_comma ? @.mappings.push(',') : add_comma = true;					
-					@.mappings.push(vlq);
+					add_comma ? @._mappings.push(',') : add_comma = true;					
+					@._mappings.push(vlq);
 
 					last_vlq       = vlq;
 					last_col      = line.length;
@@ -48,7 +59,7 @@ class SourceMap:
 
 			if /\n/.test(item):
 				while m = item.match(/\n/):
-					@.mappings.push(';');
+					@._mappings.push(';');
 					line_num ++;
 					line = item = item.substr(m.index+1);
 				add_comma = last_col = 0;
@@ -60,10 +71,10 @@ class SourceMap:
 		return {
 			version   : 3,
 			file      : @.file || '',
-			sourceRoot: @.sourceRoot || '',
+			sourceRoot: '',
 			sources   : @.sources,
 			names     : @.names,
-			mappings  : @.mappings.join('')
+			mappings  : @.mappings
 		}
 
 	get text:

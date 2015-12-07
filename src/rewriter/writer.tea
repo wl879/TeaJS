@@ -1,3 +1,4 @@
+var Beautify = require "./beautify.js";
 
 class Writer:
 
@@ -6,6 +7,9 @@ class Writer:
 		@.type   = type && type.type || type;
 		@.reader = reader;
 		@.iswriter = true
+
+	get text:
+		return @.listToText( Beautify(@) );
 
 	get lastText:
 		var last = @;
@@ -57,41 +61,27 @@ class Writer:
 					@[@.length++] = item;
 		return @;
 
-	body (left, right, not_indent):
-		var body = @.reader.new('Body');
-		if left:
-			@.read(left);
-		@.add(body);
-		if right:
-			@.read(right);
-		body.notIndent = not_indent;
-		return body;
-
-	get text:
-		return @.toText();
-
-	toText( ):
-		var texts = [];
-		for item => @:
-			!item -> continue;
-			if item.iswriter:
-				texts.push( item.toText());
-			else if item.istoken:
-				texts.push( item.text );
-			else if /string|number|undefined|boolean/.test(typeof(item)):
-				texts.push( item );
-			else:
-				Err 'bad writer data!!'+isClass(item);
-		return texts.join('');
-
-	toList( ):
+	toList( not_beautify ):
+		if !not_beautify:
+			return Beautify(@);
 		var list = [];
 		for item => @:
 			!item -> continue;
 			if item.iswriter:
-				list.push.apply(list, item.toList());
+				list.push.apply(list, item.toList( true ));
 			else:
 				list.push(item);
 		return list;
+
+	static listToText(list):
+		var texts = [];
+		for item => list:
+			if item.istoken:
+				texts.push(item.text);
+			else if item.iswriter || isArray(item):
+				texts.push( @.listToText(item) );
+			else:
+				texts.push(item);
+		return texts.join('');
 
 module.exports = Writer;

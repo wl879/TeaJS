@@ -110,7 +110,7 @@ debug.stacksToText = function(stacks, msg, name):
 		if typeof stacks[i] == 'string':
 			text.push(stacks[i]);
 		else:
-			text.push(" · ${stack.code} <-> File \"${stack.fileName}\", <->line ${stack.lineNumber}" );
+			text.push(" · {{stack.code}} <-> File \"{{stack.fileName}}\", <->line {{stack.lineNumber}}" );
 	text = text.join('\n');
 	return print.toText(text);
 

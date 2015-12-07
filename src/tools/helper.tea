@@ -207,9 +207,9 @@ function SyntaxPrinter( sre, __level ):
 				text.push( '|' )
 			text.push( (__level%2?'d{':'w{')+SyntaxPrinter(r, (__level||0) )+'}' );
 		else r.type == 'Sub':
-			text.push( "(${r.assertion}"+SyntaxPrinter(r.key, (__level||0)+1)+')' );
+			text.push( "({{r.assertion}}"+SyntaxPrinter(r.key, (__level||0)+1)+')' );
 		else:
-			text.push( "[(${r.type})${r.key}"+r.quantifier+"]" );
+			text.push( "[({{r.type}}){{r.key}}"+r.quantifier+"]" );
 	return text.join(' ');
 
 print.register('Token', tokenPrinter);

@@ -1,31 +1,10 @@
 #!/usr/bin/env node
 require "./tea.js", "child_process";
 
-help_text = """"
-r{** g{Tea} w{script help} *************************************************************}
-  # parameter:
-	-f,--file  <file>                  输入文件
-	-p,--path  <project dir>           项目目录
-	-o,--out   <output>                输出文件 或 目标目录
-	-e,--eval  <tea script snippet>    编译一段 tea script 文本
-	-j,--join                          合并 require 文件
-	-m,--map                           生成 source map 文件
-	-h,--help                          显示帮助
-	-v,--verbose                       显示编译信息
-	-r,--run                           执行输入件
-	-d,--define                        宏定义文件
-	-s,--safe                          只编译，不会对变量自动声名等
-	--clear                            清理注释
-	--tab <number>                     设置 tab size
-	--token                            输出编译的 token 解析
-	--ast                              输出 ast 结构
-	--nopp                             不进行预编译
-	--debug                            显示调试信息 log/prep/syntax/write/all
-"""";
-
 if !module.parent:
 
-	tea.argv.parse(process.argv, null, help_text);
+	tea.argv.parse( process.argv );
+
 	if tea.argv['--tab']:
 		tea.tabSize( tea.argv['--tab'] );
 
@@ -34,7 +13,8 @@ if !module.parent:
 		tea.exit();
 
 	if !tea.argv['--file'] && !tea.argv['--path'] && !tea.argv['--eval']:
-		print '* g{Are you r{NongShaLei}!!}';
+		if process.argv.length > 2:
+			print '* g{Are you r{NongShaLei}!!}';
 		tea.argv.showHelp();
 		tea.exit();
 
@@ -43,7 +23,8 @@ if !module.parent:
 		if !define_file:
 			print '* g{Cant find define file as r{"'+tea.argv['--define']+'"}!!}';
 			tea.exit();
-		tea.context.defaultPreprocessor(define_file);
+
+		tea.preprocess.setDefault(define_file);
 
 	if tea.argv['--debug']:
 		debug.enable( tea.argv['--debug'] === true ? 'all' : tea.argv['--debug'] );
@@ -51,7 +32,6 @@ if !module.parent:
 		debug.enable( 'log' );
 
 
-	var ctx;
 	if tea.argv['--eval']:
 		ctx = tea.context( {text: tea.argv['--eval'], file:'by tea eval cmd'});
 
@@ -76,10 +56,10 @@ if !module.parent:
 			tea.exit();
 
 	if tea.argv['--token']:
-		print '* r{The parse source}'
-		console.log( print.border( ctx.sourceText ).replace(/^/mg, '\t'));
 		print '* r{The parse tokens}';
 		console.log( print.toText(ctx.source).replace(/^/mg, '\t') );
+		print '* r{The parse source}'
+		console.log( print.border(ctx.source.join()).replace(/^/mg, '\t'));
 
 	if tea.argv['--ast']:
 		print '* r{The root node}';
