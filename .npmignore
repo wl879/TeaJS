@@ -1,7 +1,6 @@
-
-/plugin
-/src
-/test
-/bin/tea.*.js
+plugin
+src
+test
+bin/tea.*.js
 build.js
 .onsave
