@@ -1,46 +1,30 @@
-[param]
-# fold: tea.*
-debug: console clear
-build: /usr/local/bin/node $ROOT/build.js
-testp: $ROOT/test
-plugin: $ROOT/plugin
-tml: TeaJS.tmLanguage
-teabin: /usr/local/bin/node $ROOT/bin/tea.js
-tealib: /usr/local/bin/node $ROOT/lib/index.js
 
-[cmd]
-# plugin
-cmd: ${tealib} -f $FILE -o ${plugin}/${tml}.json --debug log && plutil -convert xml1 ${plugin}/${tml}.json -o ${plugin}/${tml} && cat ${plugin}/${tml} > ${plugin}/ln.${tml}
-watch: plugin\/.*\.tea
+VAR:
+    build  : /usr/local/bin/node $ROOT/build.js
+    test   : $ROOT/test
+    plugin : $ROOT/plugin
+    tml    : TeaJS.tmLanguage
+    node   : /usr/local/bin/node
+    bin    : /usr/local/bin/node $ROOT/bin/tea.js
+    lib    : /usr/local/bin/node $ROOT/lib/index.js
+    y2p    : $ROOT/plugin/y2p.rb
 
-[cmd]
-cmd: ${build} lib $FILE
-watch: src\/.*(?!build|define)\.(js|tea)
+DEBUG: refresh
 
-[cmd]
-cmd: ${teabin} -f $FILE -o $ROOT -v
-watch: build\.tea
+LISTENER:
+    -   CMD: $build lib $FILE
+        WATCH: src/[(?!utils)]*.tea
+    -   CMD: $build util $FILE
+        WATCH: src/utils/*.[(js|tea)]
 
-[cmd]
-cmd: ${tealib} -f $FILE -o $FILEDIR
-watch: test\/.*\.tea
+    # packaging
+    -   CMD: $build packaging
+        WATCH: package.json
+    # test
+    -   CMD: $bin -f $FILE -o $FILEDIR -v --test
+        WATCH: test/[*/].tea
+    -   CMD: $node $test/index.js $FILE
+        WATCH: src/*.tea
 
-[cmd]
-cmd: ${build} test tmp
-watch: test\/.*\.tea
-
-[cmd]
-cmd: ${build} test token
-watch: src\/(tokens|preprocess)\/.*\.tea
-
-[cmd]
-cmd: ${build} test syntax
-watch: src\/(syntax)\/.*\.tea
-
-[cmd]
-cmd: ${build} test writer
-watch: src\/(rewriter)\/(?!sourcemap).*\.tea
-
-[cmd]
-cmd: ${tealib} -f $ROOT/test/test_map.tea -o $ROOT/test/test_map.js -j -v -m
-watch: src\/rewriter\/sourcemap\.tea|test\/test_map\.tea
+    -   CMD: $y2p $FILE > $FILEDIR/TeaJS.sublime-plugin/TeaJS.tmLanguage
+        WATCH: plugin/TeaJS.tmLanguage.yaml

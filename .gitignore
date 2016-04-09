@@ -4,6 +4,6 @@ todo.md
 *.tmp.js
 node_modules
 build.tea
-bin/tea.v0.1.12.js
+bin/tea.*.js
 index.html
 node_modules
