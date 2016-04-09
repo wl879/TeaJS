@@ -1,0 +1,19 @@
+#define VER
+{
+#script
+if pk = SText.readFile('./package.json'):
+	if m = pk.match(/\"version\"\s*:\s*\"([\w\.]+)\"/):
+		write m[1];
+#end
+}
+
+#define CMDHELP
+{
+#script
+if md = SText.readFile('./README.md'):
+	if m = md.match(/```console([\w\W]*?)```/):
+		write m[1];
+#end
+}
+
+#define Err() throw Error.create(ARGR..., new Error())

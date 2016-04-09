@@ -1,0 +1,160 @@
+
+Node = require "./node.js";
+
+class Token extends Node:
+
+	static map = {
+		types     : {},
+		literals  : {},
+		complexs  : [],
+		complexre : null
+	};
+
+	constructor(text, types, location):
+		if !types || types as 'number':
+			instance = @.create(text, types, location);
+			text     = instance.text;
+			types    = instance.types;
+			location = instance.location;
+			if instance.error:
+				@.error = instance.error;
+		@.text     = text;
+		@.types    = types;
+		@.indent   = -1;
+		@.location = location || null;
+	
+	get types:
+		return @._types;
+
+	set types(types):
+		if types:
+			@._types = Jsop.toArray(types);
+			@.type = @._types[0];
+		return @._types;
+
+	get fileName:
+		return @.location && @.location.fileName;
+
+	get start:
+		return @.location && @.location.start;
+
+	get end:
+		return @.location && @.location.end;
+
+	// rewrite
+	@::isToken  = true
+	
+	clone(text, types):
+		var token = new Token(text || @.text, types || @.types, @.location);
+		token.parent = @.parent;
+		token.indent = @.indent;
+		token.scope = @.scope;
+		return token;
+
+	static define(types, literals):
+		map = @.map;
+		if !literals || !literals.length:
+			for type => types:
+				map.types[type] |= [];
+
+		for literal => literals:
+			if literal in map.types && /^[A-Z]\w+$/.test(literal):
+				@.define(types, map.types[literal]);
+				continue;
+
+			if /\w\W|\W\w/.test(literal):
+				literal_re = literal.replace(/(\W)/g, '\\$1');
+				if map.complexs.indexOf(literal_re) == -1:
+					map.complexs.push(literal_re);
+
+			for type => types:
+				map.types[type] |= [];
+				if map.types[type].indexOf(literal) == -1:
+					map.types[type].push(literal);
+
+			if tmp = map.literals[literal]:
+				for type => types:
+					if tmp.indexOf(type) == -1:
+						tmp.push(type) 
+			else:
+				map.literals[literal] = types.slice();
+
+		if map.complexs.length:
+			map.complexs.sort( (a, b) => b.length - a.length );
+			map.complexre = new RegExp('^(?:'+map.complexs.join('|')+')(?!\\w)', 'g');
+
+	static create(text, index = 0, location):
+		if not text = text.substr(index):
+			Err 'create token object of param is empty!';
+
+		token_literals   = @.map.literals;
+		do:
+			if text in token_literals:
+				code = text;
+				break;
+
+			token_complex_re = @.map.complexre;
+			if token_complex_re && (match = text.match(token_complex_re)):
+				if match[0] in token_literals:
+					code = match[0];
+					break;
+
+			if match = text.match(/^\n/):
+				code = match[0];
+				break;
+			
+			if match = text.match(/^[\r\t\f\ ]+/):
+				code = match[0], types = ['BLANK'];
+				break;
+				
+			if match = text.match(/^\#+\w+/):
+				code = match[0], types = ['TAG'];
+				break;
+
+			if match = text.match(/^(0[xX][0-9a-fA-F]+|(?:\.\d+|\d+(?:\.\d+)?)(?:e\-?\d+)?)/):
+				code = match[0], types = ['NUMBER', 'CONST'];
+				break;
+			
+			if match = text.match(/^([\$a-zA-Z_][\w\$]*)/):
+				code = match[0];
+				if not match[0] in token_literals:
+					types = ['IDENTIFIER'];
+				break;
+			
+			if not match = text.match(/^[^\w\_\s]+/):
+				return {error:'tokenize parse error! unexpected token like as "'+text.slice(0, 5)+'"'};
+			
+			code = match[0];
+			while code:
+				if code in token_literals:
+					break;
+				code = code.slice(0, -1);
+
+			if !code:
+				code = match[0][0], types = ['CHARACTER'];
+
+			if code == '\\':
+				code = text.substr(0, 2);
+				types = ['SYMBOL'];
+
+			break;
+
+		types |= token_literals[code];
+		if !types:
+			return {error:'tokenize parse error! unexpected token like as "'+code+'"'};
+
+		return new Token(code, types || token_literals[code], location && location.fission(code, index) );
+
+	static tokenize(text, index = 0, opt):
+		list = [], len = text.length;
+		while index < len:
+			if tokn = Token.create(text, index):
+				if tokn.error:
+					Err tokn.error, [text, index, text[index]];
+				list.push( opt == 'code list' ? tokn.text : tokn);
+				index += tokn.text.length;
+			else:
+				break;
+		return list;
+
+module.exports = Token;

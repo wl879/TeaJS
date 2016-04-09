@@ -1,83 +1,121 @@
 
-## Tea Js
+# TeaJS
 
-它的诞生确实因为 coffee script，本是一个工具，却各有主义，tea 把原本的清水，加了一点点点缀，让人可以静下心来享受，所以享用一杯 tea 时，它不是去附加更多，而是慢速，品味，调整自身。
-
-思绪有点错乱，简单说，就是 coffee script 为什么与 js 语法完全不同，那可好，就把 coffee script 优点拿出来，与 js 可以混编吧。还有，js 现在是越来越流行，也越来越强大，所以它也开始须要预处理的功能也加上，既然加了预处理，能就在处理时也可以自定义语法糖，加上。加了很多，但它还是 js 的语法，这比较重要，就不重复三遍了！！
-
----
-
-### 简介
-
-* 把 tea 编译为 javascript
-* 支持 javascript 语法，可以混合编写你的代码 
-* 加入类似 C 语言的宏定义，预编译功能
-* 自己定义语法糖，定义常用代码块
-* 自动声明 "忘记" 声明的变量
-* 使用类似 python 代码缩进语法
+-
 
 
-### 参数
----
+又一种新的预编译 javascript 脚本语言，用一种友好的方式开发面向客户端的 javascript 程序。
 
-> ##### 命令行参数
 
-```
+-
 
-	-f,--file  <file>                  输入文件
-	-p,--path  <file dir>              项目目录
-	-o,--out   <out file>              输出文件 或 目标目录
-	-e,--eval  <tea script snippet>    编译一段 tea script 文本
-	-j,--join                          合并 require 文件
-	-m,--map                           生成 source map 文件
-	-h,--help                          显示帮助
-	-v,--verbose                       显示编译信息
-	-r,--run                           执行输入件
-	-d,--define                        宏定义文件
-	-s,--safe                          只编译，不会对变量自动声名等
-	--test                             测试代码
-	--clear                            清理注释
-	--tab <number>                     设置 tab size
-	--token                            输出编译的 token 解析
-	--ast                              输出 ast 结构
-	--debug [log/prep/all]             显示调试信息
 
-```
+### 介绍
+
+-
+
+> #### 命令行参数
+
+
+```console
+    -h, --help                           显示帮助
+    -f, --file    <file path>            编译文件路径
+    -p, --path    <project dir>          项目目录
+    -o, --out     <output path>          输出文件 或 目标目录
+    -e, --eval    <Tea script snippet>   编译一段字符串
+    -d, --define  <file path>            宏定义文件路径，默认加载项目下的 __define.tea 文件
+    -m, --map     [source output path]   生成 source map 文件
+    -c, --concat                         合并文件
+    -v, --verbose                        显示编译信息
+    -s, --safe                           安全模式编译
+        --clear                          清理注释
+        --tab     <number>               设置 tab size
+        --token                          输出 token 解析
+        --ast                            输出 ast 解析
+        --nopp                           不进行预编译
+        --test                           编译后运行
+    ... 自定义参数，用于预编译时判断与读取(使用Argv['--name']读取)
+``` 
 
 
 ### 预编译
----
 
-> ##### 逻辑控制语句
+-
+
+此功能基本与 C 语言中的预编译相似，可以定义宏，逻辑控制。同时还扩展了 模板功能，语法糖自定义功能
+
+
+> #### 宏定义
+
 
 ```c
     
-    #if -ios
+    // 宏
+    #define PI 3.1415926
         
-        console.log( 'Yes, I am Siri' );
+    // 宏函数
+    #define DEG(rad) rad*(180/3.14)
+        
+    // 多行模式
+    #define RAD(deg)
+    {
+        deg*(PI/180)
+    }
+    
+    // 宏模板
+    #define FILE(deg)
+    {
+        #script
+            // write 或 echo 方法输出内容
+            write readFile(__filename)
+        #end
+    }
+    
+    #undef RAD
+    
+```
+
+
+
+> #### 定义语法糖
+
+
+```c
+    // 定义语句声名，独立的一段代码，以分号或换行结束，例如: var/if 等语句
+    #stam name <grammar pattern> standard pattern
+
+    // 定义表达式，可以做为值返回代码，例如: a = 10, a + 100;
+    #expr name <grammar pattern> standard pattern 
+```
+
+* [grammar pattern](#user-content-GrammarPattern)  定义语法解析
+* [standard pattern](#user-content-StandardPattern) 定义输出解析
+
+
+> #### 逻辑控制语句
+
+```c
+    #if --ios
+        
+        console.log( 'Yes, I am Apple' );
             
-    #elif -android
+    #elif --android
     
         console.log( 'Aha, I am Google' )
                 
     #endif
-
 ```
     
- * `if -main`              //返回编译文件是否为根文件
- * `if -root`              //返回根文件路径
- * `if -file`              //返回当前文件路径
- * `if -argv_name`         //返回运行命令中参数的值
- * `if global_variable`    //返回运行命令中的全局参数
- * `if condition_exp`      //返回条件表达式的返回值，例：-file == 'a.js'
- * `ifdef macro_anme `     //返回宏是否被定义
+ * `__main`              //返回编译文件是否为根文件
+ * `__root`              //返回根文件路径
+ * `__file`              //返回当前文件路径
+ * `__version`           //返回当前文件路径
 
-> ##### 动态设置命令参数
+
+> #### 动态设置命令参数
 
 ```c
-
     #argv --name value
-
 ```
  
  * `--name` 为参数名
@@ -85,230 +123,134 @@
  
 
 
-> ##### 动态运行脚本
+> #### 动态运行脚本
 
 ```javascript
-    
-    #run
+    #script
     
         for(var i=0; i<100; i++){
             write 'num_'+i+' = '+i;
         }
         
-    #endrun
-
+    #end
 ```
- 
- * `write` 方法可以向编译文件中写入一段代码
- 
 
-
-> ##### 取源文件中的行号
-
-```javascript
-
-    console.log('The source line number is '+#line)
-
-```
     
-> ##### 引入文件
+> #### 引入文件
+
+
+仅引入文件代码，不解析引入文件内的路径关系
+
 
 ```c
-
-    #include a/b/c.js
-        
     #include "a/b/c.js"
-        
-    #include a/b/c.js, "d/e/f.js"
-
 ```
 
 
-### 宏定义
----
+### 语法
 
-> ##### 定义
+-
 
-```c
-    
-    // 宏声名
-    #define PI 3.1415926
-        
-    // 宏函数声名
-    #define DEG(rad) rad*(180/3.14)
-        
-    // 多行宏声名
-    #define RAD(deg)
-    """"
-        deg*(PI/180)
-    """"
-    
-    // 可执行宏声名
-    #define RAD(deg)
-    """"
-        #script
-            console.log('macro RAD return'+deg*(PI/180));
-            write deg*(PI/180)
-        #end
-    """"
-    
-```
-    
- * `""""` 可定义多行
- * `#scritp` `#end` 可运行 js 脚本，内部变量 `arguments`/`source`/`context`/`self`
- * `write` 为输出语句
+> #### 字符串:
 
-
-> ##### 定义 Token
-
-```c
-    #token type value1,value2
-
-```
-
-> ##### 定义语法糖
-
-```c
-    #expr name /grammar pattern/ writer
-    #stat name /grammar pattern/ writer
-
-```
-
-### 语法糖
----
-
-
-> ##### 字符串:
-
-```js
-
-
-    "string support ${variable}
-      and support multline type
-      but not hold format
-    "
-     // "string support "+variable+"\n and support multline type\n but not hold format\n"
-    
+支持换行格式，双引号支持嵌入变量
  
-     """string support multline type
-          like this
-          and hold format
-     """
-     // "string support multline type\n\
-     //     like this\n\
-     //     and hold format\n"
-     
-     
-     '''like [""""] type
-          but not support ${variable}
-     '''
-     // 'like [""""] type\n\
-     //     but not support ${variable}\n'
-     
-     
-     """"code type text""""
-     
-     ''''code type text''''
-     
-     `code type text` 
+```js
+    // 不保留换行符，输出为单行。
+    "abc" 'abc'
+    
+    // 保留换行格式，输出为多行, 对字符转义。
+    """abc""" '''abc'''
+    
+    // 支持换行格式，保留换行符, 输出为单行。
+    """"abc"""" ''''abc''''
+    
+    // 保留换行符, 输出为单行, 对字符转义。
+    `abc` 
 ```
 
- * 支持换行格式，双引号支持嵌入变量
- * `"` `'` 支持换行格式，不保留与原 js 处理一致。
- * `"""` `'''` 支持换行格式，并保留换行符。
- * `""""` `''''` ``` ` ``` 代码块模式，转义内容使输入与书写的内容一致
 
-> ##### tea 保留字符
+> #### 链式操作
 
 ```js
-    a as b                  // a instanceof b;
-    a as "b"                // typeof a == "b";
-    a in b                  // b && b.hasOwnProperty(a);
-    a in [47, 92, 13]       // a == 47 || a == 92 || a == 13;
-    b of a                  // Array.prototype.indexOf.call(a, b) >= 0;
-    a is b                  // a === b;
-    a not is b              // a !== b;
-    a and b                 // a && b;
-    a or b                  // a || b;
-    not a && b              // !(a && b);
-    a ** b                  // Math.pow(a, b);
-    a \ b                   // Math.floor(a/b);
-    @.member                // this.member;
-    object::={}             // object.prototype = {};
-    object::name            // object.prototype.name;
-    object..name            // object.constructor.name;
+    object::={}                 // object.prototype = {};
+    object::name                // object.prototype.name;
+    object..up()..down()        // object.up();
+                                // object.down();
 ```
 
-> ##### 数组与字符串切分简写
+> #### tea 保留字符
 
 ```js
-    string[3:-2]            // string.slice(3, -2);
-    arr[-2:]                // arr.slice(-2);
-    arr[:1]                 // arr.slice(0, 1);
-    arr[]                   // arr.slice();
-    arr[-1]                 // arr[arr.length-1];
+    a as b                       // a instanceof b;
+    a as "b"                     // typeof a == "b";
+    a in b                       // b && b.hasOwnProperty(a);
+    a in [47, 92, 13]            // a == 47 || a == 92 || a == 13;
+    b of a                       // Array.prototype.indexOf.call(a, b) >= 0;
+    a is b                       // a === b;
+    a not is b                   // a !== b;
+    a and b                      // a && b;
+    a or b                       // a || b;
+    not a && b                   // !(a && b);
+    a ** b                       // Math.pow(a, b);
+    a \ b                        // Math.floor(a/b);
 ```
 
-> ##### 支持声明语句的逻辑表达式
+> #### 数组与字符串切分简写
 
 ```js
-    a && b = c || d         // a && (b = c || d);
-    a && a = b              // a && (a = b);
-    a && continue           // if(a) continue;
+    arr[3:-2]                    // arr.slice(3, -2);
+    arr[]                        // arr.slice();
+    arr[-1]                      // arr[arr.length-1];
 ```
 
-> ##### 增强的赋值语句
+> #### 支持声明语句的逻辑表达式
 
 ```js
-    a[1:-1] = b             // a.splice.apply(a, [1, a.length-1-1].concat(b));
-    a[] = b                 // a.push(b);
-    a |= b                  // a || (a = b);
-    a ?= b                  // if(!a && a!=0) a = b;
-    [a, b] = c()            // _ref = c(), a = _ref[0], b = _ref[1];
+    a && b = c || d              // a && (b = c || d);
+    a && a = b                   // a && (a = b);
+    a && continue                // if(a) continue;
 ```
 
-> ##### 2.5 元表达式
+> #### 增强的赋值语句
 
 ```js
-    a if b                  // if(b) a;
-    a && b ? c              // if (a && b) c;
-    a = b+1 ? c             // a = ((_ref = b+1) != null ? _ref : c);
-    var a = b ? c, e = 2;   // var a = (b != null ? b : c), e = 2;
-    return a ? b            // return (a != null ? a : b);
-    a == b -> return c      // if (a == b) return c;
-    var a = 2 <- a && b     // if(a && b) var a = 2;
-    a ? break : continue    // if (a) break; else continue;
+    a[1:-1] = b                  // a.splice.apply(a, [1, a.length-1-1].concat(b));
+    a[] = b                      // a.push(b);
+    a |= b                       // a || (a = b);
+    a ?= b                       // if(!a && a!=0) a = b;
+    [a, b] = c()                 // _ref = c(), a = _ref[0], b = _ref[1];
 ```
 
-> ##### 函数调用的省略括号
+> #### 2.5 元表达式
 
-```js    
-    fn a, b                 // fn(a, b);
-    arr.map(b, (a, b):a-b)  // arr.map(b, function(a, b){return a-b});
-    fn(, ,a)                // fn(undefined, undefined,a);
+```js
+    a if b                       // if(b) a;
+    a && b ? c                   // if (a && b) c;
+    a = b+1 ? c                  // a = ((_ref = b+1) != null ? _ref : c);
+    var a = b ? c, e = 2;        // var a = (b != null ? b : c), e = 2;
+    return a ? b                 // return (a != null ? a : b);
+    a == b -> return c           // if (a == b) return c;
+    var a = 2 <- a && b          // if(a && b) var a = 2;
+    a ? break : continue         // if (a) break; else continue;
 ```
 
-> ##### 函数声明简写
+> #### 函数声明简写
+
+* 支持箭头函数声明
+* 支持声明带缺省的函数参数
     
 ```js
-    function(a, b=2){}          // function(a, b){  if (b == null) b = 2; }
-    fn = (a, b): return a > b;  // fn = function(a, b){return a > b};
+    function(a, b=2){}           // function(a, b){  if (b == null) b = 2; }
+    fn = (a, b) => a > b;        // fn = function(a, b){return a > b};
 ```
 
-> ##### json 声明
 
-```js
-  {                                        // {
-    a:1,                                   //     a : 1,
-    set name():                            //     set name(){},
-    ,                                      //     b : 2,
-    b:2,                                   //     "set" : function (a){
-    set(a):                                //         console.log('what is set!!');
-        console.log('what is set!!');      //     }
-  }                                        // };  
-```
+> #### if / while / do 语句
 
-> ##### if / while / do / break / continue 语句
+* 支持缩进的代码块
+* `if`、`while`、`do` 等语句扩号可以省略
+* `else if` 语句可以简写成 else
     
 ```js
     if a && b:                   // if (a && b){
@@ -318,19 +260,9 @@
     else c && d:                 // }else if (c && d){
         block3                   //     block3;
                                  // }
-    while a and b:               // while (a && b){
-        block4                   //     block4;
-                                 // }
-    do:                          // do{
-        block5                   //     block5;
-    while a and b;               // }while (a && b);
-    do:                          // do{
-        block6                   //     block6;
-                                 //     break;
-                                 // }while (true);
 ```
     
-> ##### for 语句
+> #### for 语句
 
 ```js
     
@@ -358,69 +290,28 @@
     
 ```
 
-> ##### switch 语句
+> #### switch 语句
+
+* `break` 设为默值，当结尾为 `continue` 时，break 无效 
+* `case` 语句可以设多个值用逗号分隔
 
 ```js
     switch a:                       // switch (a){   
         case 'a','b','c':           //     case 'a':case 'b':case 'c': 
-            block1;                 //         block1;  
+            console.log('abc')      //         console.log('abc')
         case 'd':                   //     break;      
-            block2;                 //     case 'd':   
-            continue;               //         block2;     
-        case ( a < 3):              //     default:
-            block3;                 //         if ((a < 3)){ 
-        case (a > 10):              //             block3;
-            block4;                 //             break;
-        default:                    //         }else if ((a > 10)){ 
-            block5;                 //             block4;
-                                    //             break; 
-                                    //         }
-                                    //         block5;           
-                                    //     break;
+            console.log('d')        //     case 'd':   
+            continue;               //         console.log('d')
+        default:                    //     default 
+            console.log('efg')      //         console.log('efg')
                                     // }
 ```
 
-> ##### class/pacage/exports 语句
+> #### class/pacage/exports 语句
 
-```js
-    class Person:                            // var Person = (function(){
-        constructor(sex="man"):              //     var total;
-            this.sex = sex;                  //     function Person(sex){
-                                             //         if (sex == null) sex = "man";
-        set name(name):                      //         this.sex = sex;
-            @._name = name;                  //     }
-                                             //     Person.prototype.__defineSetter__("name", function (name){
-        say(word):                           //         this._name = name;
-            console.log(word);               //     });
-                                             //     Person.prototype.say = function (word){
-        static total = 0;                    //         console.log(word);
-                                             //     }
-                                             //     total = 0
-                                             //     Person.__defineGetter__("total", function(){return total});
-                                             //     Person.__defineSetter__("total", function(_value_){return total = _value_});
-                                             //     return Person;
-                                             // })();
-    class Girl extends Person:               //  var Girl = (function(){
-        constructor():                       //      var create;
-            super('female');                 //      function Girl(){
-            Person.total ++;                 //          this.__super__.constructor.call(this,'female');
-        static create():                     //          Person.total++;
-            return new Girl();               //      }
-        @.create()                           //      Girl.prototype = new Person();
-                                             //      Girl.prototype.constructor = Girl;
-                                             //      Girl.prototype.__super__ = Person.prototype;
-                                             //      Girl.create = create = function (){
-                                             //          return new Girl();
-                                             //      }
-                                             //      Girl.create();
-                                             //      return Girl;
-                                             //  })();
-    package($=jQurey):                       //  (function($){
-        conaole.log(123);                    //      conaole.log(123);
-                                             //  })(jQurey);
-```
 
-> ##### require 声明
+
+> #### require 声明
 
 ```js
   require "./*.js";
@@ -428,50 +319,71 @@
 ```
 
 -
-### 自定认语法匹配模式
----
- 
-#### 定义解析规则
 
-> ##### IdentifierTok (={ig} ExprStam{err:error_msg})?
+ 
+### GrammarPattern
+
+> 示例
+
+下面示例中，可以获取到类似 JSX 中的 <> 语法
+ 
+
+```js
+#expr SyntaxPatt <\<...\>>
+{
+	#script
+		text = node.text;
+		text = '"'+SText(text, '"')+'"';
+		return new Card('STRING', text);
+	#end
+}
 
 ```
-    #expr `IdentifierTok ( ={ig} #ExprStam{err:error_msg} )?`
-                           ①    ⑤ ③⑥        ②        ④    
+
+> 字段
+
+* `()` 子匹配
+	* `?:` 忽略匹配结果
+	* `?!` 测试匹配，如果匹配成功则算为失败匹配，反之则继续匹配
+	* `?=` 测试匹配，不匹配结果
+* `[case → pattern]`    路由格式
+* `[pattern pattern]`   “或” 格式的快捷调用
+* `&==[type]`           判断最后匹配节点类型 
+* `#method(arguments)`  调用方法
+
+> 匹配设置:
+
+
+* `?`          匹配 1 个或 0 个
+* `+`          匹配至少 1 个
+* `*`          匹配 0 个或多个
+* `+?` `*?`    非贪婪匹配
+* `!`          测试匹配，如果匹配成功则算为失败匹配，反之则继续匹配
+* `\n`         匹配换行符
+* `∆err_code`  匹配失败抛出错误信息
+* `∅`          忽略匹配结果
+* `→`          测试匹配，不匹配结果
+
+
+
+> 命名
+
+* `@@=` 替换 表达式的返回节点名称
+* `@@`  设置 表达式的返回节点名称
+* `@=`  替换 表达式 字段 匹配的节点名称 
+* `@?`  检测匹配的结果，为数组时打包为节点
+* `@~`  将以匹配的结果打包为节点
+* `@:`  设置 表达式 字段 匹配的节点名称 
+
+
+> 内部方法
+
+* `#INDENT` 无参数，检查缩进层级
+* `#CONCAT(a, b, types)` 搜索 a 与 b 之间的 token，将其合并为一个 token，types 定义其类型，多个用空格分隔
+
+
+### StandardPattern
+
 ```
-     
- * ① 大写字段, 化表 token 类型
- 
- * ② #EXPRESSION 加#号的段字代表解析器
- 
- * ③ 字符串(特殊字符如：空格、引号、等，使用 \\ 转义)
- 
- > * 使用字符相等的方式匹配
- > * `/regeaq text/` 使有正则匹配 source lexeme 内容
- 
- * ④ `[?*+]` 匹配模式. `?`:有1个或没有. `*`: 有多个或没有. `+`: 至少有1个
- 
- * ⑤ `()` 子匹配表达式
- 
- > * (:name) 强制当前子节点名 | (::name) 当匹配为多个时设置节点名 | (:::name) 改变父节点名
- > * (?=) (?!) (?:) (?) 忽略匹配
-
- * ⑥ `{e,ig,n:name,lf}` 附加参数
-
- > * `e ` 当匹配失败时 throw 错误信息
- > * `ig` 忽略匹配结果
- > * `n ` 设置匹配结果为节点，值为节点名
- > * `lf` 此匹配字段以LF为结束
-
-
-
-#### 定义输出规则
-
-
-
-
-
-
-
-
-
+    
+```

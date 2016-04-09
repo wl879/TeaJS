@@ -1,0 +1,22 @@
+
+Card = require "../../../core/card";
+
+module.exports = function(node, params):
+	list   = [];
+	vars   = @.handle.variables;
+	right  = node[2];
+	left   = node[0];
+	if not right.is('Variable', 'AccessExpr'):
+		list.push( @.pattern('@ref = @', right), ',' );
+		right = vars.ref;
+	vars.right = right;
+	left_len = left.length;
+	for i -> left:
+		list.push( parseItem.call(@, left[i], right, vars, left_len), ',' );
+	list.pop();
+	return new Card('ArrayAssignExpr', list);
+
+function parseItem(left, right, variables, left_len):
+	if left.type == 'AssignExpr':
+		return @.pattern( '@2 = @right["@0"]', left );
+	return @.pattern( '@ = @right["@"]', left );

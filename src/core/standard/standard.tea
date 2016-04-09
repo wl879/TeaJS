@@ -1,0 +1,187 @@
+
+class Standard:
+
+	require "../card.js", "./pattern.js", "../scope.js";
+
+	base = {};
+	
+	constructor( version, prepor ):
+		@.prepor = prepor;
+		if version as 'Object':
+			@.standard  = version;
+			@.version   = '';
+		else:
+			@.standard  = Standard[ version ];
+			@.version   = version;
+		@.handle     = {};
+
+	read(node, loop, __read):
+		if !node || (!node.isSyntax && !node.isToken):
+			return node;
+
+		// cache block
+		if !loop && !__read && node.type == 'BlockNode':
+			if ref = cacheBlockNode(@, node):
+				return ref;
+
+		_handle = @.handle;
+		if _handle.target != node:
+			@.handle = {target:node, up: _handle, variables: {} };
+		
+		if !loop:
+			if Scope.test( node ):
+				node.scope.check(node);
+			if ref = checkStandard(@, node.type, node):
+				if ref.isSyntax:
+					ref = @.read(ref, ref == node);
+
+		if ref == null && node.isSyntax:
+			ref = new Card( node.type );
+			for i, item -> node:
+				if item:
+					ref.add( @.read( item ) );
+
+		checkBlockNode(@, node, ref, loop);
+
+		@.handle = _handle;
+
+		return ref ? node;
+
+	parser(name, node, params, __try):
+		if @.standard[name] || base[name]:
+			return checkStandard(@, name, node, params);
+		else if !__try:
+			Err 5003, name, node;
+
+	pattern(patt, node, type):
+		if /#|@/.test(patt):
+			card = Pattern.parse(@, patt, node);
+			if type:
+				card.type = type;
+			return card;
+		if type:
+			return new Card(type, patt);
+		return patt;
+
+	static es5 = base;
+
+	function cacheBlockNode(std, node):
+		scope = node.scope;
+		if scope.type == 'Function' || scope.type == 'Class':
+			parent = scope.parent;
+			card = new Card('Cache');
+			parent.cachePush( 'blocks', [card, node, std.handle] );
+			return card;
+
+	function checkBlockNode(std, node):
+
+		// if ref:
+		// 	if ref.type == 'Root' || ref.type == 'Block':
+		// 		block = ref;
+		// 	else if ref[1] && ref[1].type == 'Block':
+		// 		block = ref[1];		
+		// 	if block:
+		// 		console.log('?????????', ref.type, loop)
+
+		scope = node.scope;
+		if scope.target != node:
+			return;
+		if blocks = scope.cache.blocks:
+			if blocks.length:
+				for i, data -> blocks:
+					card       = data[0];
+					node       = data[1];
+					std.handle = data[2];
+					card.add( std.read(node, false, true) );
+					checkBlockNode( std, node.scope.target );
+				blocks.length = 0;
+
+	function checkStandard(std, name, node, params):
+		ref = null;
+		setHandle(std.handle, 'standard', name);
+
+		if std.prepor && std.prepor.standards[name]:
+			ref = std.prepor.standards[name].parse( std, node );
+		// 	std_conds = std.prepor.get(name, 'statement', 'expression'):
+		// 	if std_conds.read:
+		// 		ref = std_conds.read(std, node);
+				// ref = checkPattern(std, ref, node, params);
+
+		if !ref:
+			if sub_std = std.standard[name]:
+				setHandle(std.handle, 'version', std.version);
+				ref = checkCondition(std, sub_std, node, params);
+
+			if ref === undefined && std.standard != base:
+				if sub_std = base[name]:
+					setHandle(std.handle, 'version', 'base');
+					ref = checkCondition(std, sub_std, node, params);
+
+		if ref === undefined:
+			if !sub_std:
+				return node;
+
+		return ref;
+
+	function checkCondition(std, sub_std, node, params):
+		
+		if sub_std.isStandard === 'list':
+			list = [];
+			for i -> sub_std:
+				if ref = checkCondition(std, sub_std[i], node, params):
+					list.push(ref);
+			return list.length ? list : "";
+
+		for cond in sub_std:
+			if cond in ['isStandard', 'default']:
+				continue;
+
+			setHandle(std.handle, 'condition', cond);
+			setHandle(std.handle, 'pattern', sub_std[cond]);
+			if parseCondition(std, cond, node):
+				if (ref = checkPattern(std, sub_std[cond], node, params)) == undefined:
+					continue;
+				break;
+	
+		if ref == undefined:
+			if sub_std['default']:
+				ref = checkPattern(std, sub_std['default'], node, params);
+		return ref;
+
+	function checkPattern(std, patt, node, params):
+
+		if patt && patt.error:
+			Err patt.error, node;
+
+		if patt && patt.isStandard:
+			return checkCondition(std, patt, node, params);
+
+		if patt && patt as 'function':
+			patt = patt.call(std, node, params);
+
+		if patt && patt as 'string':
+			patt = Pattern.parse(std, patt, node);
+
+		return patt;
+
+	function parseCondition(std, text, node):
+		return Pattern.parse(std, Pattern.compile(text, 'Logic'), node);
+
+	function setHandle(handle, name, value):
+		if ! /standard|version|condition|pattern/.test(name):
+			handle.variables[name] = value;
+		else:
+			handle[name] = value;
+			switch name:
+				case 'standard':
+					handle.version   = null;
+					continue;
+				case 'version':
+					handle.condition = null;
+					continue;
+				case 'condition':
+					handle.pattern   = null;
+		return value;
+
+
+module.exports = Standard;

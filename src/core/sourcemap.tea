@@ -1,0 +1,109 @@
+
+class SourceMap:
+
+	VLQ_SHIFT            = 5;
+	VLQ_CONTINUATION_BIT = 1 << VLQ_SHIFT;
+	VLQ_VALUE_MASK       = VLQ_CONTINUATION_BIT - 1;
+	BASE64_CHARS         = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+	
+	constructor():
+		@.version = 3;
+		@.file = '';
+		@.sourceRoot = '';
+		@.names = [];
+		@._sources = [];
+		@._mappings = [];
+
+	parse( card ):
+		list          = card.toList();
+		sources       = @._sources;
+		line          = '';
+		line_num      = 1;
+		add_comma     = null;
+		last_vlq      = null;
+		last_col      = 0;
+		last_loc_line = 1;
+		last_loc_col  = 0;
+		for i, item -> list:
+			if item.isToken:
+				if item.location && item.location.fileName:
+					loc = item.location;
+					vlq = encodeVlq(line.length - last_col,
+									sourceId(sources, loc.fileName),
+									loc.lineNumber - last_loc_line,
+									loc.columnNumber - last_loc_col);
+
+					add_comma ? @._mappings.push(',') : add_comma = true;					
+					@._mappings.push(vlq);
+
+					last_vlq       = vlq;
+					last_col      = line.length;
+					last_loc_line = loc.lineNumber;
+					last_loc_col  = loc.columnNumber;
+				item = item.text;
+
+			if /\n/.test(item):
+				while m = item.match(/\n/):
+					@._mappings.push(';');
+					line_num ++;
+					line = item = item.substr(m.index+1);
+				add_comma = last_col = 0;
+			else:
+				line += item;
+		return @;
+
+	addName (name):
+		var i = @.names.indexOf( name );
+		if i == -1:
+			return @.names.push( name ) - 1;
+		return i;
+
+	get sources:
+		var ss = [];
+		var dir = Fp.dirName( @.file );
+		for file => @._sources:
+			ss.push( Fp.relative(dir, file) );
+		return ss;
+
+	get mappings:
+		return @._mappings.join('');
+
+	get text:
+		data = {
+			version   : 3,
+			file      : @.file || '',
+			sourceRoot: '',
+			sources   : @.sources,
+			names     : @.names,
+			mappings  : @.mappings
+		}
+		return SText( data );
+
+	function sourceId(sources, filename):
+		i =sources.indexOf( filename );
+		if i == -1:
+			return sources.push( filename ) - 1;
+		return i;
+
+	function encodeVlq():
+		vlq = [];
+		for value => arguments:
+			signBit = value < 0 ? 1 : 0;
+			valueToEncode = (+value << 1) + signBit;
+			answer = '';
+			while valueToEncode || !answer:
+				nextChunk = valueToEncode & VLQ_VALUE_MASK;
+				valueToEncode = valueToEncode >> VLQ_SHIFT;
+				if (valueToEncode) {
+					nextChunk = nextChunk | VLQ_CONTINUATION_BIT;
+				}
+				answer += encodeBase64(nextChunk);
+			vlq.push( answer );
+		return vlq.join('');
+
+	function encodeBase64(value):
+		if BASE64_CHARS[value]:
+			return BASE64_CHARS[value];
+		Err "Cannot Base64 encode value: " + value;
+
+module.exports = SourceMap;

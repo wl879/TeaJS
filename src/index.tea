@@ -1,106 +1,140 @@
 #!/usr/bin/env node
-require "./tea.js", "child_process";
+
+require "./tea.js";
+
+cmd_help = """
+* <r:TeaJS:> version <g:VER:>
+CMDHELP
+""";
 
 if !module.parent:
+	(function(){
 
-	tea.argv.parse( process.argv );
+		Argv.parse( process.argv, cmd_help );
 
-	if tea.argv['--tab']:
-		tea.tabSize( tea.argv['--tab'] );
+		if Argv['--help']:
+			print Argv.help();
+			Tea.exit();
 
-	if tea.argv['--help']:
-		tea.argv.showHelp();
-		tea.exit();
+		if Argv['--tab']:
+			Tea.tabsize( parseInt(Argv['--tab']) );
 
-	if !tea.argv['--file'] && !tea.argv['--path'] && !tea.argv['--eval']:
-		if process.argv.length > 2:
-			print '* g{Are you r{NongShaLei}!!}';
-		tea.argv.showHelp();
-		tea.exit();
+		if Argv['--define']:
+			files = checkPath( Argv['--define'], Argv['--path'] );
+			if !files:
+				print '* <g:Cant find define file as <r:"'+Argv['--define']+'":>!!:>';
+				Tea.exit();
+			Tea.prep.load( files );
 
-	if tea.argv['--define']:
-		var define_file = tea.checkFile(tea.argv['--define']);
-		if !define_file:
-			print '* g{Cant find define file as r{"'+tea.argv['--define']+'"}!!}';
-			tea.exit();
+		if Argv['--eval'] && Argv['--eval'].length:
+			ctx = Tea.context(null, Argv['--eval']);
+			nextStep(ctx);
+			return;
 
-		tea.preprocess.setDefault(define_file);
+		if Argv['--file'] || Argv['--path']:
+			checkDefine( Argv['--path'] || Fp.dirName(Argv['--file']) );
+			files = checkPath( Argv['--file'], Argv['--path'] );
+			for file => files:
+				ctx = Tea.context(file);
+				nextStep(ctx);
+			return;
 
-	if tea.argv['--debug']:
-		debug.enable( tea.argv['--debug'] === true ? 'all' : tea.argv['--debug'] );
-	else if tea.argv['--verbose']:
-		debug.enable( 'log' );
+		Argv.pipe(function(chunk){
+			if !chunk:
+				print '\n* Are you <g:NongShaLei??????:>\n';
+				print Argv.help();
+				Tea.exit();
+			ctx = Tea.context(null, chunk);
+			nextStep(ctx);
+			return;
+		});
+	})();
+	
+	function nextStep(ctx):
+		Tea.log('* <g:Load:>  : '+(ctx.fileName||'by stdin'));
 
+		if Argv['--token']:
+			print ctx.fileName;
+			print ctx.source;
+		if Argv['--ast']:
+			print ctx.fileName;
+			print ctx.AST;
+		if Argv['--ast'] || Argv['--token']:
+			return;
 
-	if tea.argv['--eval']:
-		ctx = tea.context( {text: tea.argv['--eval'], file:'by tea eval cmd'});
+		if Argv['--out']:
+			out = checkOut(Argv['--out'], Argv['--path'], ctx.fileName);
+			ctx.output(out, Argv['--map']);
+			Tea.log('* <g:Output:>: '+out);
 
-	else:
-		if tea.argv.file:
-			tea_log '* b{Compile:} d{"'+tea.argv.file+'"}';
-			ctx = tea.context( tea.argv);
-		else if tea.argv.dir:
-			tea_log '* g{Building folder:} "'+tea.argv.dir+'"';
-			var file_list = Path.scanAllPath( tea.argv.dir, /\.js$|\.tea$/, 10).allfiles;
-			if file_list.length:
-				for i, file -> file_list:
-					tea_log '  * b{Compile:} d{"'+file+'"}';
-					ctx = tea.context( tea.argv.copy({file:file}) );
-					ctx.echo();
-					tea_log '  * g{Output to:} "'+ctx.argv.out+'"';
-			else:
-				print "* r{The folder not find file!!}";
-			tea.exit();
-		else:
-			print '"g{Cant find r{"'+tea.argv.file+'"} file}"';
-			tea.exit();
+		if Argv['--test']:
+			runTest(ctx);
+		else if !Argv['--out']:
+			console.log( ctx.output() );
 
-	if tea.argv['--token']:
-		print '* r{The parse tokens}';
-		console.log( print.toText(ctx.source).replace(/^/mg, '\t') );
-		print '* r{The parse source}'
-		console.log( print.border(ctx.source.join()).replace(/^/mg, '\t'));
-
-	if tea.argv['--ast']:
-		print '* r{The root node}';
-		console.log( print.toText(ctx.ast).replace(/^/mg, '\t') );
-		print '* r{The node space}';
-		console.log( print.toText(ctx.scope).replace(/^/mg, '\t') );
-
-	if tea.argv['--token'] || tea.argv['--ast']:
-		tea.exit();
-
-	// --------------------------------------------------------
-
-	if tea.argv['--out']:
-		if tea.argv['--map']:
-			ctx.echo( tea.argv.out, tea.argv['--map'] );
-			tea_log '* g{Output and source map to} : "'+ tea.argv.out+'"';
-		else:
-			ctx.echo( tea.argv.out );
-			tea_log '* g{Output to} : "'+ tea.argv.out+'"';
-		
-	if tea.argv['--test']:
-		var cmds = [], cmd, temp_file;
-		if !tea.argv['--out']:
-			temp_file = tea.argv.file.replace(/\.(js|tea)$/g, '')+'.tmp.js'; 
-			ctx.echo( temp_file );
+	function runTest(ctx, param):
+		child_process = require "child_process";
+		out = ctx.outfile;
+		cmds = [];
+		if !out:
+			temp_file = ctx.fileName.replace(/\.(js|tea)$/ig, '')+'.tmp.js';
+			ctx.output( temp_file );
 			cmds.push( 'node', temp_file );
 		else:
-			cmds.push( 'node', tea.argv.out );
-		if typeof ctx.argv['--test'] =='string':
-			cmds = cmds.concat( tea.argv['--test'].split(' ') );
-
-		print('** r{Test exec}: g{'+cmds.join(' '))+'}';
-		ChildProcess.exec( cmds.join(' '), {maxBuffer: 50000*1024}, function(err, stdout, stderr):
-			var out = stdout+''+stderr;
-			console.log(out.replace(/^/mg, '  | '));
+			cmds.push( 'node', out );
+		if param as 'string':
+			cmds = cmds.concat( param.split(' ') );
+		Tea.log('* <r:Test:>  : '+cmds.join(' '));
+		child_process.exec( cmds.join(' '), {maxBuffer: 50000*1024}, function(err, stdout, stderr):
+			text = stdout+''+stderr;
+			print text.replace(/^/mg, '\t  | ');
 			if temp_file:
-				ChildProcess.execSync('rm -rf '+temp_file);
-			tea.exit();
+				child_process.execSync('rm -rf '+temp_file);
+			Tea.exit();
 		);
-		
-	else:
-		if !tea.argv['--out']:
-			console.log( ctx.rewriter.text );
-		tea.exit();
+
+	function checkPath(file, path, out):
+		if path:
+			path = Fp.resolve(path);
+		if file:
+			files = []
+			file_list = [];
+			if isArray(file):
+				for i -> file:
+					file_list.push( Fp.resolve(path, file[i]) );
+			else:
+				file_list.push( Fp.resolve(path, file) );
+			for i, file -> file_list:
+				if /[^\w\/]/.test(file) || Fp.isDir(file):
+					temp = Fp.checkFiles(file, null, ['index.tea']);
+					files.push.apply( files, temp );
+				else if Fp.isFile(file):
+					files.push(file);
+				else if Fp.isFile( file + '.tea' ):
+					files.push(file + '.tea');
+		else:
+			files = Fp.scanFile(path, /\.tea/, 100);
+		for i, file <- files:
+			if /(__define\.tea)$/.test(file):
+				files.splice(i, 1);
+		return files;
+
+	function checkOut(out, path, file):			
+		out = Fp.resolve(out, true);
+		if Fp.isDir(out) || /\/$/.test(out):
+			if path:
+				out = Fp.join(out, Fp.relative(Fp.resolve(path), Fp.resolve(file)));
+			else:
+				out = Fp.join(out, Fp.baseName(file));
+			out = out.replace(/\.tea$/, checkExt());
+		return out;
+
+	function checkExt():
+		switch Argv['--std']:
+			case 'es5', 'es6': default:
+				return '.js';
+
+	function checkDefine( path ):
+		file = Fp.join( Fp.resolve(path), '__define.tea' );
+		if Fp.isFile(file):
+			Tea.prep.load( file );

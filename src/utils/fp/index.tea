@@ -1,0 +1,202 @@
+
+Fs   = require "fs";
+Path = require "path";
+
+export dirName  = Path.dirname;
+export fileName = Path.filename;
+export baseName = Path.basename;
+export extName = Path.extname;
+export join     = Path.join;
+
+export name(to):
+	return Path.parse(to).name;
+
+export relative(from, to):
+	if from:
+		to = Path.relative(from, to);
+		if !/^[\/\.]/.test(to):
+			to = './'+to;
+	return to;
+
+export resolve(from, to, check_dir):
+	if !to:
+		to = from, from = null;
+	else to === true:
+		check_dir = to, to = from, from = null;
+	to = to.replace(/^`+|^'+|^"+|"+$|'+$|`+$/g, '').trim();
+	if !/^(\~|\/|\.)/.test(to):
+		to = './'+to;
+	from = from ? Path.resolve(from, to) : Path.resolve(to);
+	if check_dir && /\/$/.test(to):
+		from += '/';
+	return from; 
+
+
+export mkdir(to, mode):
+	if !Fs.existsSync(to):
+		base_dir = Path.dirname(to);
+		if !Fs.existsSync(base_dir):
+			mkdir(base_dir, mode);
+		return Fs.mkdirSync(to, mode || 0755);
+
+export isExist(to):
+	return Fs.existsSync( to );
+
+export isFile(to):
+	return Fs.existsSync( to ) && Fs.statSync(to).isFile();
+
+export isDir(to):
+	return Fs.existsSync( to ) && Fs.statSync(to).isDirectory();
+
+export scanDir(to, filter, deep, reverse):
+	res = scanPath( to, filter, deep, reverse);
+	return getherDirs(res.dirs);
+
+export scanFile(to, filter, deep, reverse):
+	res = scanPath( to, [null, filter], deep, reverse);
+	return getherFiles(res);
+
+export scanPath(to, filter, deep, reverse):
+	res = {files:[], dirs:{}};
+
+	if typeof filter == 'number':
+		reverse = deep, deep = filter, filter = null;
+
+	if isArray(filter):
+		dir_filter = filter[0];
+		file_filter = filter[1];
+	else:
+		dir_filter = filter;
+		file_filter = filter;
+	dir_filter = wildcard(dir_filter, true);;
+	file_filter = wildcard(file_filter, true);;
+
+	if isFile(to):
+		res.files.push(to);
+		return res;
+	
+	if !isDir(to):
+		return res;
+	dir_list = Fs.readdirSync(to);
+	for i, tmp -> dir_list:
+		tmp = Path.join(to, tmp);
+		if Fs.statSync(tmp).isDirectory():
+			if testFilter(dir_filter, tmp, reverse):
+				continue;
+			if deep:
+				res.dirs[tmp] = scanPath(tmp, filter, deep-1, reverse);
+			else:
+				res.dirs[tmp] = 0;
+		else:
+			if testFilter(file_filter, tmp, reverse):
+				continue;
+			res.files.push( tmp );
+	return res;
+
+
+export checkFiles(to, from, def_file):
+	if Array.isArray(from):
+		def_file = from, from = null;
+	res = checkPath(to, from);
+	files = res.files;
+	if res.error:
+		files.error = res.error;
+	else if def_file && !files.length && res.dirs.length:
+		dirs = res.dirs;
+		for dir => dirs:
+			for name => def_file:
+				file = Path.join(dir, name);
+				if isFile( file ):
+					files.push(file);
+	else:
+		for i, file <= files:
+			if /\/\..+$/.test(file):
+				files.splice(i, 1);
+	return files;
+
+export checkDirs(to, from):
+	res = checkPath(to, from);
+	dirs = res.dirs;
+	if res.error:
+		dirs.error = res.error;
+	return dirs;
+
+export checkPath(to, from):
+	to    = resolve(from, to, true);
+	res   = {files:[], dirs:[]};
+
+	if isDir(to):
+		res.dirs.push( to )
+		return res;
+	if isFile(to):
+		res.files.push( to )
+		return res;
+
+	names = to.split('/');
+	len   = names.length - 1;
+	dirs  = [''];
+	files = [];
+	for i, name -> names:
+		if !name && i != 0:
+			break;
+		wc = wildcard(name);
+		tmp = [];
+		for dir => dirs:
+			if wc:
+				scan = scanPath(dir, wc);
+				tmp.push.apply(tmp, Object.keys( scan.dirs ) );
+				if i == len:
+					files = scan.files;
+				continue;
+			else:
+				if isDir( dir + name+'/' ):
+					tmp.push(dir + name+'/');
+				if i == len && isFile( dir + name ):
+					files.push( dir + name );
+		dirs = tmp;
+		if !dirs.length && !files.length:
+			res.error      = {};
+			res.error.path = names.slice(0, i+1).join('/')
+			res.error.msg  = 'Dir "'+res.error.path+'" is not exist!';
+			break;
+	res.dirs  = dirs;
+	res.files = files;
+	return res;
+
+function wildcard(str, force):
+	if !str || str as RegExp:
+		return str;
+	if force || /([^\\]|^)[\*\?]/.test(str):
+		str = str.replace(/\./g, '\\.');
+		str = str.replace(/([^\\]|^)\?/g, '$1.');
+		str = str.replace(/([^\\]|^)\*/g, '$1.*?');
+		try:
+			return new RegExp('^'+str+'$');
+
+function testFile(to, names):
+	if names && names.length:
+		for name => names:
+			name = Path.join(to, name);
+			if isFile( name ):
+				return name;
+	else if isFile( to ):
+		return to;
+
+function testFilter(filter, path, reverse):
+	if filter && (reverse ? filter.test(path) : !filter.test(path)):
+		return true;
+	return false;
+
+function getherDirs( dirs ):
+	list = [];
+	for dir in dirs:
+		list.push( dir );
+		list.push.apply(list, getherDirs( dirs[dir].dirs ) );
+	return list;
+
+function getherFiles( res ):
+	list = res.files.slice();
+	if res.dirs:
+		for dir, data in res.dirs:
+			list.push.apply(list, getherFiles( data ) );
+	return list;

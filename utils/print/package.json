@@ -1,0 +1,24 @@
+{
+	"name"        : "print",
+	
+	"version"     : "1.0.0",
+
+	"author"      : "Liang Wang",
+	
+	"devDependencies" : {
+		"sText"  : "*"
+	},
+
+	"description" : "x",
+
+	"keywords"    : [ "javascript", "text", "script", "teajs" ],
+	
+	"repository"  : {
+        "type"    : "git",
+        "url"     : "https://github.com/wl879/TeaJS.git"
+    },
+    
+	"main"        : "./index.js",
+
+	"license"     : "MIT"
+}

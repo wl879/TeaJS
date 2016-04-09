@@ -1,0 +1,153 @@
+
+class Argv:
+	_conf_re = /^\s*(\-\w)?(?:, *)?(\-\-[\w\-]+)?\ +(\<[^\>]+\>|\[[^\]]+\]|"[^"]+"|'[^']+'|\w+?\b)?\s*(.*)$/mg;
+	_desc    = {};
+	_config  = {};
+	constructor (argv, desc):
+		@.length = 0;
+		if argv || desc:
+			@.parse(argv, desc)
+
+	parse (argv, desc):
+		if desc:
+			Argv.desc( desc );
+		if argv:
+			last_name = '';
+			for i, name -> argv:
+				if i === 0:
+					if /^node$|bin.*?node$/.test(name):
+						i += 1;
+						continue;
+					if name[0] != '-':
+						continue;
+
+				if name[0] == '-':
+					last_name = '';
+					name      = checkName(@, name);
+					type      = _config[name];
+					if type == 'boolean':
+						@[name] = true;
+						continue;
+					value = argv[i+1];
+					if !value || value[0] == '-':
+						if type == 'important':
+							throw '[Important argv]\n\n  '+_desc[name];
+						value = true;
+					else:
+						i += 1;
+					@[name] = value;
+					last_name = name;
+
+				else if last_name:
+					if !Array.isArray(@[last_name]):
+						@[last_name] = [@[last_name]];
+					@[last_name].push(name);
+
+				else if !@['--file']:
+					@['--file'] = name;
+					last_name = '--file';
+				else:
+					@[@.length++] = name;
+		return @;
+
+	pipe ( callback, timeout ):
+		Argv.readPipe(callback, timeout);
+		return @;
+	
+	set( desc ):
+		Argv.desc(desc);
+		return @;
+
+	add (short, long, desc, type):
+		Argv.add(short, long, desc, type);
+		return @;
+		
+	help( com = 'help' ):
+		return print.toText(_desc[com]);
+
+	static desc( desc, temp = _conf_re):
+		if desc as 'string':
+			opt = [];
+			temp.lastIndex = 0;
+			while m = temp.exec(desc):
+				opt.push([m[1], m[2], m[3], m[4]]);
+			_desc.help = desc;
+
+		else if Array.isArray(desc):
+			opt = desc;
+
+		if opt && opt.length:
+			for i, item -> opt:
+				[short, long, type, desc] = item;
+				if short || long:
+					switch type && type[0]:
+						case '[':
+							type = 'default';
+						case '<':
+							type = 'important';
+						case '"', "'":
+							type = type.slict(1, -1);
+						default:
+							if type:
+								if !desc:
+									desc = type, type = null;
+								else if type == 'false':
+									type = false;
+								else if type == 'true':
+									type = true;
+							else:
+								type = 'boolean';
+					Argv.add(short, long, desc, type);
+
+	static add(short, long, desc, type):
+		if short && short.substr(0,2) == '--':
+			desc = long, long = short, short = null;
+		if !long:
+			long = short, short = null;
+		if desc:
+			desc = short+', '+long+' '+type+'      '+desc
+			short && _desc[short] = desc;
+			_desc[long] = desc;
+		
+		if type:
+			short && _config[short] = type;
+			_config[long] = type;
+
+		if short && long && short != long:
+			Argv.prototype.__defineGetter__(short, function(){return @[long];});
+			Argv.prototype.__defineSetter__(short, function(v){return @[long] = v;});
+
+		if type != null && type != 'default' && type != 'important' && type != 'boolean' && type != 'number':
+			Argv.prototype[long] = type;
+
+	static readPipe(callback, timeout = 100):
+		process.stdin.setEncoding('utf8');
+		process.stdin.on('readable', function(){
+			chunk = process.stdin.read();
+			process.stdin.destroy();
+			process.stdin.resume();
+			clearTimeout(timing);
+			callback( chunk );
+		});
+		timing = setTimeout(function(){
+			process.stdin.destroy();
+			process.stdin.resume();
+			callback( null );
+		}, timeout);
+
+	static create(argv, desc):
+		return new Argv(argv, desc);
+
+	function checkName(self, name):
+		if name[1] != '-' && name.length > 2:
+			for i = 1; i < name.length-1; i++:
+				temp = '-'+name[i];
+				type = _config[temp];
+				if type == 'important':
+					throw '[Important argv]\n\n  '+_desc[temp];
+				self[temp] = true;
+			name = '-'+name[-1];
+		return name;
+
+module.exports = Argv;
+

@@ -1,6 +1,6 @@
 {
 	"name"        : "tea-js",
-	"version"     : "0.1.20",
+	"version"     : "0.2.0",
 	"author"      : "Liang Wang",
 	"description" : "Unfancy JavaScript like coffeescript",
 	"keywords"    : ["javascript", "language", "teascript", "compiler" ],

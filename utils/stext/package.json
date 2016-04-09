@@ -1,0 +1,20 @@
+{
+	"name"        : "sText",
+	
+	"version"     : "1.0.0",
+
+	"author"      : "Liang Wang",
+	
+	"description" : "Some methods processing for string like script text",
+
+	"keywords"    : [ "javascript", "text", "script", "teajs" ],
+	
+	"repository"  : {
+        "type"    : "git",
+        "url"     : "https://github.com/wl879/TeaJS.git"
+    },
+    
+	"main"        : "./index.js",
+
+	"license"     : "MIT"
+}

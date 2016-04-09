@@ -1,74 +1,199 @@
-require "./tools/utils.js";
 
-global.tab_size = '    ';
-global.tea      = module.exports;
-tea.teapath     = Path.dirname(__filename);
-tea.argv        = require "./argv.js";
-tea.helper      = require "./tools/helper.js";
-tea.error       = require './error.js';
-tea.preprocess  = require "./preprocess";
-tea.syntax      = require "./syntax";
-tea.rewriter    = require './rewriter';
-tea.context     = tea.preprocess.context;
-tea.source      = tea.syntax.source;
-tea.defineToken = tea.syntax.token.define;
+require "../utils";
+class Tea:
 
-tea.tabSize = function(size):
-	global.tab_size = print.strc(' ', parseInt(size));
+	Helper     = require "./helper";
+	Token      = require "./core/token";
+	Source     = require "./core/source";
+	SourceMap  = require "./core/sourcemap";
+	Syntax     = require "./core/syntax";
+	Scope      = require "./core/scope";
+	Card       = require "./core/card";
+	Grammar    = require "./core/grammar";
+	Standard   = require "./core/standard";
+	Preprocess = require "./preprocess";
+	require "./settings";
+	
+	constructor(file, text, prepor, std, outfile, map):
+		this.fileName = file;
+		this.dirName  = Fp.dirName(this.fileName)
+		this.std      = std || Argv['--std'] || 'es5';
+		this.outfile  = outfile;
+		this.outmap   = map;
+		if text && text.isSource:
+			this._source = text;
+		else:
+			this.sourcetext = text || SText.readFile(file);
 
-tea.exit = function(msg, target, name):
-	tea_log '* r{Tea exit - Run time:} b{'+tea.runTimes('ms')+'}';
-	if arguments.length:
-		print tea.error(new Error(), msg, target, name).text;
-	process.exit();
+		this.prepor = Preprocess.create(prepor);
 
-tea.runTimes = function(unit):
-	var t = Date.now() - RunTimeAtLoaded;
-	switch unit:
-		case 's':
-			return t/1000+'s';
-		case 'ms':
-			return t+'ms';
-	return t;
+	get source():
+		if !this._source:
+			this._source = Tea.source(this.sourcetext, this.fileName, this.prepor);
+		return this._source;
 
-tea.compile = function(src, por):
-	if src as 'string':
-		src = tea.source(src, null, por);
-	if src:
-		if ast = tea.syntax.parse(src, por):
-			if write = tea.rewriter.read(ast, por):
-				return write.text;
-	return '';
+	get AST():
+		if !this._ast:
+			this._ast = Tea.AST(this.source, this.prepor);
+		return this._ast;
 
-tea.checkFile  = function(file):
-	var _file = Path.resolve(file);
-	if !Path.isFile(_file):
-		if @.argv.dir:
-			_file = Path.resolve(@.argv.dir, file);
-			if Path.isFile(_file):
-				return _file;
-		if @.path:
-			_file = Path.resolve(@.argv.path, file);
-			if Path.isFile(_file):
-				return _file;
-	else:
-		return _file;
+	get CAST():
+		if !this._cast:
+			std        = this.std;
+			dirname    = this.dirName;
+			main       = Tea.CAST(this.AST, std, this.prepor);
+			this._cast = main;
+			if Argv['--concat'] && (list = main.scope.cache.require) && list.length:
+				requires = {};
+				for file => list:
+					if !requires[file]:
+						Tea.log('* <r:Concat require:> : <d:'+file+':>');
+						if !/\.tea/.test(file):
+							requires[file] = {
+								"fileName" : file,
+								"CAST"     : concatFromJs(list, file, std)
+							};
+						else:
+							requires[file] = {
+								"fileName" : file,
+								"CAST"     : concatFromTea(list, file, std)
+							};
+				this._cast = Preprocess.concatModule(this, Jsop.toArray(requires) );
+		return this._cast;
 
-tea.countOutput = function(file):
-	var pathdata = Path.countPath(file, tea.argv.path, tea.argv.outdir );
-	return pathdata.out;
+	get scope():
+		if !this.AST.scope:
+			return Tea.scope(this.AST);
+		return this.AST.scope;
 
-// tea.different = function(text1, text2):
-		// var s1 = new Source(text1, 'Dfiferent text one('+ID()+')'),
-		// 	s2 = new Source(text2, 'Dfiferent text two('+ID()+')');
-		// s1 = Hash.slice(s1).filter( (l) -> l.type != 'BLANK' && l.type != 'LF');
-		// s2 = Hash.slice(s2).filter( (l) -> l.type != 'BLANK' && l.type != 'LF');
-		// for i -> s1:
-		// 	if s1[i].text != s2[i].text:
-		// 		var info = (s1[i] && @.errorPot(s1[i]))
-		// 					+'\n****\n'+
-		// 				   (s2[i] && @.errorPot(s2[i]));
-		// 		return '[Text compare]\n'+print.border(info).replace(/^/mg, '  ');
-		// return false;
+	sourcemap(file):
+		map = new SourceMap();
+		map.sourceRoot = this.fileName;
+		map.parse( this.CAST );
+		if file:
+			map.file = file;
+			SText.writeFile( map.text, Fp.resolve( this.dirName, file ), 'UTF-8');
+		return map;
 
-var RunTimeAtLoaded = Date.now(); 
+	output(file, map):
+		script = this.CAST.toScript();
+		file |= this.outfile;
+		map  |= this.outmap
+		if file:
+			file = Fp.resolve( this.dirName, file );
+		if map:
+			map = Fp.resolve(Fp.dirName(file), map as 'string' ? map : file+'.map' );
+			script += '\n\n//# sourceMappingURL='+ (file ? Fp.relative(Fp.dirName(file), map) : map);
+			this.sourcemap(map);
+			this.outmap = map;
+		if file:
+			SText.writeFile(script, file, 'UTF-8');
+			this.outfile = file;
+		return script;
+
+	// static
+	Tea.argv     = Argv;
+	Tea.filename = __filename;
+	Tea.dirname  = __dirname;
+	Tea.prep     = Preprocess;
+	Tea.version  = "VER";
+	
+	static context(file, text, prepor, stdv):
+		return new Tea(file, text, prepor, stdv);
+
+	static compile(text, prepor, from, stdv):
+		ctx = new Tea(from, text, prepor, stdv);
+		return ctx.output();
+
+	// core method
+
+	static source(text, file, prepor):
+		src = new Source(text, file);
+		if prepor !== false:
+			src.prepor = Preprocess.gather(src, prepor);
+		return src;
+
+	static scope(ast, check_define):
+		return Scope.init(ast, check_define);
+		
+	static grammar(type, src, prepor):
+		prepor     |= src.prepor;
+		grammar       = Grammar.create( prepor );
+		syntax        = grammar.parser(type, src);
+		syntax.source = src;
+		return syntax;
+
+	static standard(version = 'es5', syntax, prepor):
+		prepor  |= syntax.source && syntax.source.prepor;
+		scope      = Tea.scope(syntax);
+		std        = Standard.create(version, prepor);
+		card       = std.read( syntax );
+		card.scope = scope;
+		return card;
+
+	static card():
+		return Jsop.newClass(Card, arguments);
+
+	static AST(src, prepor):
+		return Tea.grammar('Root', src.refresh(0), prepor);
+	
+	static CAST(ast, version, prepor):
+		return Tea.standard(version, ast, prepor);
+
+	// tools
+	static tabsize(num):
+		SText.tabsize = SText.cope(' ', num);
+
+	static exit(state = 0):
+		print '* <r:TeaJS:> exit - Used time <b:'+Tea.uptime('ms')+':>';
+		process.exit( state );
+
+	static uptime(unit):
+		t = process.uptime();
+		switch unit:
+			case 's':
+				return t+'s';
+			case 'ms':
+				return t*1000+'ms';
+		return t*1000;
+
+	static memory(unit):
+		data = process.memoryUsage();
+		rss = data.rss;
+		switch unit:
+			case 'kb':
+				return Math.floor(data.rss*100/1024)/100 + ' KB';
+			case 'mb':
+				return Math.floor(data.rss*100/1024/1024)/100 + ' MB';
+		return rss;
+
+	static log():
+		if Tea.argv['--verbose']:
+			Tea.log = Helper.log;
+			Tea.log.apply( null, arguments);
+
+	function concatFromJs(list, file, std):
+		src = Tea.source(null, file, false);
+		while true:
+			src.index = src.indexOf('require',  ++src.index);
+			if src.index >= 0:
+				if node = Tea.grammar('RequireExpr', src):
+					concatRequire(list, Tea.standard(std, node));
+				continue;
+			break;
+		return Tea.card('Source', Jsop.toArray(src));
+
+	function concatFromTea(list, file, std):
+		prepor = Tea.prep.create();
+		src    = Tea.source(null, file, prepor);
+		node   = Tea.AST(src, prepor);
+		card   = Tea.CAST(node, std, prepor);
+		concatRequire(list, card);
+		return card;
+
+	function concatRequire(list, card):
+		if scope = card.scope:
+			if scope.cache.require && scope.cache.require.length:
+				list.push.apply(list, scope.cache.require);
+
+module.exports = global.Tea = Tea;

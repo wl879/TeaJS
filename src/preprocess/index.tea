@@ -1,10 +1,45 @@
 
-var Context = require "./context.js";
+Processor = require "./prepor";
+Gatherer  = require "./gatherer";
+Template  = require "./template.js";
+Source    = require "../core/source.js";
 
-export context(argv, extend):
-	return new Context( argv, extend );
+bases = new Processor();
 
-export setDefault():
-	Context.defaultProcessor.apply(Context, arguments);
+export create( something ):
+	prepor = new Processor();
+	prepor.extend( bases );
+	if something:
+		if something.isSource:
+			gather(something, prepor);
+		else:
+			prepor.extend( something );
+			prepor.parent = something;
+	return prepor;
+
+export gather(src, prepor):
+	prepor |= new Processor();
+	for i, token -> src:
+		if !token:
+			continue;
+		if Gatherer[token.type]:
+			i = Gatherer[token.type](prepor, src, i) || i;
+	src.refresh(0);
+	return prepor;
+
+export concatModule(main, list):
+	return Template.concatModule(main, list);
 
 
+export load(files):
+	if files as 'string':
+		files = [files];
+	for file => files:
+		if src = new Source(null, file):
+			if prepor = gather(src):
+				extend(prepor);
+	return bases;
+
+export extend( prepor ):
+	bases.extend( prepor );
+	return bases;

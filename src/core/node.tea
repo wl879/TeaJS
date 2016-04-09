@@ -1,0 +1,107 @@
+
+class Node:
+	
+	array = Array.prototype;
+
+	get index():
+		return !@.parent ? -1 : array.indexOf.call( @.parent, @ );
+
+	get root():
+		p = @;
+		circular = [];
+		while p.parent:
+			if circular.indexOf(p.parent) != -1:
+				Err 3, p;
+			p = p.parent;
+			circular.push( p );
+		return p;
+
+	find( type ):
+		list = [];
+		for i, node -> @:
+			if node.type == type:
+				list.push(node);
+			else if node.isSyntax:
+				if _list = node.find(type):
+					list.push.apply(list, _list);
+		if list.length:
+			return list;
+
+	query( type ):
+		p = @.parent;
+		while p && !p.is.apply(p, arguments):
+			if p.is('Block'):
+				return;
+			p = p.parent;
+		return p;
+
+	tokens(index):
+		if @.isToken:
+			return index ? null : (index == 0 ? @ : [@]);
+		var tokens = [];
+		for i -> @:
+			if !@[i]:
+				continue;
+			if @[i].isToken:
+				tokens.push(@[i]);
+			else:
+				tokens.push.apply(tokens, @[i].tokens());
+			if index === 0:
+				return tokens[0];
+		if typeof index == 'number':
+			return tokens[ index < 0 ? tokens.length + index : index ];
+		return tokens;
+
+	each(fn, __that, __indexs = []):
+		that = __that || @;
+		if @.isToken:
+			fn.call(that,  @, __indexs.concat(0));
+		else:
+			for i, node -> @:
+				if node:
+					ref = fn.call(that, node, __indexs.concat(i));
+					if ref === 0:
+						continue;
+					if ref === false:
+						return __that ? false : @;
+					if node.isSyntax && node.each(fn, that, __indexs.concat(i)) === false:
+						return __that ? false : @;
+		return @;
+
+	is():
+		types = @.types || [@.type];
+		for item => arguments:
+			if item == 'HEAD' &&  @.indent >= 0:
+				return item;
+			else if types.indexOf(item) != -1:
+				return item;
+			else if Node.isType(types[0], item):
+				return item;
+		return false;
+
+	static map = {};
+
+	static define(types, names):
+		node_map = @.map;
+		for name => names:
+			if name in node_map:
+				@.define(types, node_map[name]);
+			for type => types:
+				node_map[type] |= [];
+				node_map[type].push(name) if node_map[type].indexOf(name) == -1;
+
+	static isType(name, type):
+		node_map = @.map;
+		if !type:
+			if node_map['Expression'].indexOf(name) != -1:
+				return 'Expression';
+			if node_map['Declaration'].indexOf(name) != -1:
+				return 'Declaration';
+			if node_map['Statement'].indexOf(name) != -1:
+				return 'Statement';
+			return false;
+		return name == type || node_map[type] && node_map[type].indexOf(name) != -1;
+
+	@::isNode = true;
+
+module.exports = Node;

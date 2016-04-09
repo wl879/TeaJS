@@ -1,0 +1,279 @@
+
+class Source:
+
+	Token      = require "./token.js";
+	Location   = require "./location.js";
+	re_cache   = {};
+
+	constructor(text, file):
+		@.index    = 0;
+		@.length   = 0;
+		if arguments.length:
+			@.read(text, file);
+
+	get current:
+		return @.get(@.index);
+
+	get string:
+		return @.join();
+
+	get peek:
+		return @.get( @.nextIndex(@.index, true) );
+
+	get prev:
+		return @.get( @.prevIndex(@.index, true) );
+
+	read(text, file):
+		loc  = new Location(file, text);
+		text = loc.source;
+		file = loc.fileName;
+		@.index    = 0;
+		@.length   = 0;
+		i    = 0;
+		len  = text.length;
+		while i < len && token = Token.create(text, i, loc):
+			if token.error:
+				Err token.error, [text, i, text[i], file];
+			i = token.location.end + 1;
+			@.add( token );
+		return @.refresh();
+
+	get(index):
+		return @[index] || new Token('\4');
+
+	add(token):
+		if !token || !token.isToken:
+			Err 'Add the wrong parameters('+isClass(token)+'), Only to can add Lexeme object';
+		@[@.length++] = token;
+		return @;
+
+	back( opt, catch_comm ):
+		while opt > 1:
+			@.index = @.prevIndex(@.index, opt--, catch_comm);
+		@.index = @.prevIndex(@.index, opt, catch_comm);
+		return @;
+
+	next( opt, catch_comm ):
+		while opt > 1:
+			@.index = @.nextIndex(@.index, opt--, catch_comm);
+		@.index = @.nextIndex(@.index, opt, catch_comm);
+		return @;
+
+	nextIndex(index, ig_lf, catch_comm):
+		return countIndex(1, @, index, ig_lf, catch_comm);
+
+	prevIndex(index, ig_lf, catch_comm):
+		return countIndex(-1, @, index, ig_lf, catch_comm);
+
+	delete(a, b = a):
+		for var i=a; i <= b; i++:
+			@[i] = null;
+		return @;
+
+	insert(pos = 0, value, del_len = 0):
+		if value as 'string':
+			value = new Source(value, 'preprocess/insert');
+		else if value.isToken:
+			value = [value];
+		list = [pos, del_len];
+		if indent = @.lineIndent(pos):
+			indent = SText.copy(' ', indent);
+
+		for token => value:
+			if !token || token.type == 'EOT':
+				continue;
+			if indent && token.indent >= 0:
+				if token.is('BLANK'):
+					token.text += indent;
+					token.indent = token.text.length;
+				else:
+					token.indent = null;
+					head_token = token.clone(indent, ['BLANK']);
+					head_token.indent = indent.length;
+					list.push( head_token );
+			list.push( token );
+		Array::splice.apply(@, list);
+		return @;
+
+	clone(a, b):
+		src = new Source();
+		a = a < 0 ? @.length + a : (a || 0);
+		b = b < 0 ? @.length + b : (b || @.length-1);
+		for i = a; i <= b; i++:
+			if @[i]:
+				src.add( @[i] );
+		if b != @.length -1:
+			src.add( new Token('\4') );
+		return src;
+
+	indexPair(s1, s2, index, not_throw_error):
+		index = index ? @.index;
+		var ab = indexPair(@, s1, s2, index);
+		if !ab && !not_throw_error:
+			Err 1004, s2, @[index];
+		return ab;
+
+	indexLine(index):
+		index = index ? @.index;
+		var a = index, b = index, len = @.length-2;
+		while a > len || (a > 0 && @[a-1] && @[a-1].type != 'LF'):
+			a --;
+		while b < len && (!@[b] || @[b].type != 'LF'):
+			b ++;
+		return [(a > len ? len : a), (b > len ? len : b), index];
+
+	indexOf(target, index = 0):
+		if not is_re = target as RegExp:
+			is_str = target as 'string';
+		for i = index -> @:
+			if !@[i]:
+				continue;
+			if is_re:
+				if target.test(@[i].text):
+					return i;
+			else if is_str:
+				if @[i].text == target:
+					return i;
+			else if @[i] == target:
+				return i;
+
+	matchOf( re, index = 0):
+		var a, b;
+		if m = @.string.match(re):
+			for i = index, tk -> @:
+				if !tk: continue;
+				if tk.start == m.index:
+					a = i;
+				if tk.end == m.index+m[0].length:
+					b = i;
+				if a != null && b != null:
+					return [a, b]
+	
+	lineIndent(index):
+		index = index ? @.index;
+		while index >= 0:
+			if  @[index] && @[index].indent >= 0:
+				return @[index].indent;
+			index --;
+		return -1;
+
+	trimIndent(a, b, len):
+		a = a < 0 ? @.length + a : (a || 0);
+		b = b < 0 ? @.length + b : (b || @.length-1);
+		
+		if len == null:
+			for i = a; i <= b; i++:
+				token = @[i];
+				if token && token.indent >= 0:
+					if len == null || token.indent < len:
+						len = token.indent;
+
+		if len > 0:
+			for i = a; i <= b; i++:
+				token = @[i];
+				if token && token.indent >= 0:
+					token.indent = Math.max( token.indent-len, 0 );
+					if token.type = 'BLANK':
+						token.text = token.text.substr(0, token.indent);
+		return @;
+
+	refresh( index ):
+		if index as 'number':
+			@.index = index;
+		target = @[@.index];
+		clearSource(@);
+		for i, token <- @:
+			token.indent = -1;
+			if !i || (token.type == 'LF' && (token = @[i+1])):
+				if token.type == 'BLANK':
+					token.text = SText.spaceTab(token.text);
+					token.indent = token.text.length;
+				else:
+					token.indent = 0;
+		if target != @[@.index]:
+			index = @.indexOf(target);
+			if index >= 0:
+				@.index = index
+		return @;
+
+	join(a, b):
+		if isArray(a):
+			b = a[1], a = a[0];
+		a = a < 0 ? @.length + a : (a || 0),
+		b = b < 0 ? @.length + b : (b || b === 0 ? b : @.length);
+		var texts = [];
+		for var i=a; i <= b; i++:
+			@[i] && @[i].text != '\4' -> texts.push( @[i].text );
+		return texts.join('');
+
+	@::isSource = true;
+
+	function countIndex(ori, src, index, ig_lf, catch_comm):
+		var len = src.length - 1, type;
+		while (index += ori) >=0 && index <= len:
+			type = src[index] && src[index].type;
+			if !type || type == 'BLANK' || (!catch_comm && type == 'COMMENT') || (ig_lf && type == 'LF'):
+				continue;
+			return index;
+		if ori > 0:
+			return index > len ? len : index;
+		return index < 0 ? 0 : index;
+
+	function indexPair(src, s1, s2, index):
+		s1_re = re_cache[s1] || (re_cache[s1] = new RegExp('^('+SText.re(s1)+')$'));
+		s2_re = re_cache[s2] || (re_cache[s2] = new RegExp('^('+SText.re(s2)+')$'));
+		len  = src.length;
+		a    =- 1;
+		jump = 0;
+		while index < len:
+			if src[index]:
+				text = src[index].text;
+				if text == '\\':
+					index += 2;
+					continue;
+				if s1_re.test( text ):
+					if a == -1:
+						a = index;
+					else if s1 == s2 || s2_re.test( text ):
+						return [a, index];
+					else:
+						jump += 1;
+				else if s2_re.test( text ) && a != -1:
+					if jump == 0:
+						return [a, index];
+					jump -= 1;
+			index += 1;
+
+	function clearSource(src):
+		len = src.length;
+		for i, token -> src:
+			if !token: continue;
+			if token.type == 'EOT':
+				src[i] = null;
+				continue;
+			if token.is('HEAD'):
+				a = i;
+				while i < len:
+					if !src[i]:
+						i ++;
+						continue;
+					if src[i].type == 'LF':
+						if src[a].indent >= 0:
+							src.delete(a, i);
+						else:
+							src.delete(a, i-1);
+						break;
+					if src[i].is('BLANK', 'END'):
+						i++;
+						continue;
+					break;
+
+		list = [];
+		for i, token -> src:
+			if token: list.push(token);
+			src[i] = null;
+		src.length = 0;
+		Array::push.apply(src, list);
+		return src.add( new Token('\4') );
+
+module.exports = Source;

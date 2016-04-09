@@ -1,0 +1,26 @@
+
+class Person:
+	constructor(sex='man'):
+		this.sex = sex;
+		super(sex);
+
+	prototype a = 1;
+
+	property b = 2;
+	
+	say(word):
+		super.a(word);
+		console.log(word);
+
+	static total = 0;
+
+Girl = class a extends Person:
+
+	constructor():
+		super('female');
+		Person.total ++;
+
+	static create(a = 100):
+		return new Girl( (a) => b);
+	
+	@.create()

@@ -1,6 +1,7 @@
+var argv, source_file, param, m, file_keys, target, test_map, temp;
 require("../lib/tea.js");
-var argv = process.argv.slice();
-while (argv[0] && Path.basename(argv[0]) != Path.basename(__filename)){
+argv = process.argv.slice();
+while (argv[0] && Fp.baseName(argv[0]) != Fp.baseName(__filename)){
 	argv.shift();
 }
 if (argv.length){
@@ -8,80 +9,48 @@ if (argv.length){
 }else {
 	argv = process.argv.slice();
 }
-function start(file){
-	var m,
-		c_src,
-		text = Text.readFile(file),
-		ctx = tea.context({"file": file}),
-		src = ctx.source,
-		res = {},
-		last = src.length,
-		is_split = false,
-		n = 0;
-	for (var i=src.length-1; i >= 0; i--){
-		if (src[i].type == 'CommDecl'){
-			is_split = true;
-			if (m = src[i].text.match(/\/\/\s*#:(\w+)?/)){
-				c_src = src.clone(i+2, last);
-				res[m[1] || n++] = {"title": src[i].text, "src": c_src, "ctx": tea.context({"source": c_src})};
-				last = i-1;
-			}
-		}
-	}
-	res['all'] = {"src": src, "ctx": ctx, "title": file};
-	return res;
+source_file = {};
+for (var i_ref = Fp.scanFile(__dirname+'/source'), i=0, file; i < i_ref.length; i++){
+	file = i_ref[i];
+	source_file[Fp.name(file)] = file;
 }
-try {
-	switch (argv[0]){
-		case 'tmp':
-			var res = start(Path.resolve('./test/tmp/tmp.js'));
-			break;
-		case 'syntax':
-			debug.enable('log+syntax');
-			tea.argv['--reg'] = true;
-			var res = start(Path.resolve('./test/tmp/source.js'));
-			for (var i in res){
-				if (!res.hasOwnProperty(i)) continue;
-				var item = res[i];
-				if (i == 'all'){
-					continue;
-				}
-				print(item.title);
-				print(item.src);
-				print(item.ctx.ast);
-				print(item.ctx.scope);
-				console.log(item.ctx.rewriter.text);
-				break;
+if (argv[0]){
+	param = argv[0];
+	if (m = param.match(/src\/(\w+)\//)){
+		file_keys = Object.keys(source_file);
+		target = m[1];
+		test_map = {'preprocess' : ['pre-p'],
+			'string' : ['string'],
+			'settings' : ['pre-p' || file_keys[Math.floor(Math.random()*1000)%file_keys.length]]};
+		if (0 && test_map[target]){
+			temp = {};
+			for (var _i=0, name; _i < test_map[target].length; _i++){
+				name = test_map[target][_i];
+				temp[name] = source_file[name];
 			}
-			break;
-		case 'prepp':case 'token':
-			debug.enable('log+prep');
-			var res = start(Path.resolve('./test/tmp/prepp.js'));
-			// print res.all.src;
-			// print '====';
-			// console.log( res.all.ctx.rewriter.text );
-			break;
-		case 'writer':
-			debug.enable('log+write');
-			// var ctx = tea.context({file:'./src/rewriter/reader.tea'});
-			// // print ctx.ast;
-			// print ctx.rewriter;
-			debug.enable('log+syntax');
-			var res = start(Path.resolve('./test/tmp/source.js'));
-			for (var i in res){
-				if (!res.hasOwnProperty(i)) continue;
-				var item = res[i];
-				if (i == 'all'){
-					continue;
-				}
-				print(item.title);
-				// print item.src;
-				print.cellText(item.src.join(), item.ctx.rewriter.text, ' --> ');
-				print(item.ctx.ast);
-				break;
-			}
-			break;
+			source_file = temp;
+		}
+	}else if (source_file[param]){
+		temp = {};
+		temp[param] = source_file[param];
+		source_file = temp;
 	}
-}catch (e) {
-	console.log(e.stack);
+}
+source_file = {'require' : source_file['try']};
+for (var name in source_file){
+	if (!source_file.hasOwnProperty(name)) continue;
+	var file = source_file[name];
+	runTest(file);
+}
+function runTest(file, text){
+	var ctx;
+	print("<-->");
+	console.log('[Test source file] '+file);
+	ctx = Tea.context(file, text);
+	print(ctx.source);
+	// print '<-->'
+	print(ctx.AST);
+	// print ctx.CAST;
+	print(ctx.scope);
+	print.bd(ctx.output());
 }

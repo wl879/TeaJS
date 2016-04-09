@@ -1,0 +1,291 @@
+
+class Pattern:
+	
+	Asset  = require "./asset.js";
+	Syntax = require "../syntax";
+	cache  = Jsop.data();
+
+	constructor( str ):
+		@.length = 0;
+		@.minLimit = 0;
+		if str:
+			@.string = str;
+			or_list  = splitPattern(str);
+
+			if or_list.length == 1:
+				@.type = 'Pattern';
+				asset_list = or_list[0];
+				for i -> asset_list:
+					@.add( compileAsset(asset_list[i]) );
+				
+			else:
+				@.type = 'Or';
+				for asset_list => or_list:
+					patt        = new Pattern();
+					patt.string = asset_list.join(' ');
+					for i -> asset_list:
+						 patt.add( compileAsset(asset_list[i]) );
+					@.add( patt );
+
+	add():
+		for asset => arguments:
+			@[@.length ++] = asset;
+			if asset.isPattern:
+				if asset.minLimit:
+					@.minLimit = 1;
+			else:
+				@.minLimit += !asset.config.mode || asset.config.mode[0] == '+' ? 1 : 0;
+		return @;
+
+	parse(grm, src, params):
+		handle        = grm.handle;
+		_params       = handle.params;
+		handle.params = params;
+		
+		if handle.debug:
+			print( '['+handle.name+' syntax debug]' );
+			print.indent();
+		res = checkPattern(@, src, grm, true);
+		
+		if handle.debug:
+			print.back();
+			print( '['+handle.name+' syntax debug end]\n' );
+
+		handle.params = _params;
+		if handle.error:
+			return {error: handle.error};
+		return res;
+
+	@::isPattern = true;
+
+	static compile(str):
+		if !cache[str]:
+			return cache[str] = new Pattern(str);
+		return cache[str];
+
+	static parse(grm, patt, src, params):
+		if patt as 'string':
+			patt = Pattern.compile(patt);
+		return patt.parse(grm, src, params);
+
+	function splitPattern(str):
+		str     = str.replace(/\s+(→)/g, '$1');
+		str     = str.replace(/(^| |,)(\[|\(|\{|\]|\)|\})(∅|→|\\n\n|:\d+|\+\?|\*\?|\+|\*|\!|\?)( |$)/g, '$1\\$2$3$4');
+		or_list = SText.split(str, '|');
+		for i, item -> or_list:
+			or_list[i] = SText.split(item, ' ', true);
+		return or_list;
+
+	function compileAsset(str):
+		asset = Asset.compile(str);
+		if asset.type == 'Sub':
+			if !asset.content.isPattern:
+				asset.content = Pattern.compile(asset.content);
+		return asset;
+ 
+	// parse pattern
+
+	function checkPattern(patt, src, grm, __root):
+		start_index = src.index;
+		if patt.type == 'Or':
+			for i -> patt:
+				src.index = start_index;
+				if res = parsePattern(patt[i], src, grm, __root):
+					break;
+				if grm.handle.error:
+					return false;
+		else:
+			res = parsePattern(patt, src, grm, __root);
+
+		if res:
+			if res.isEmpty:
+				return res;
+			return checkPack(patt, grm, res, null, __root);
+
+		src.index = start_index;
+		return false;
+
+	function parsePattern(patt, src, grm, __root):
+		start_index      = valid_index = src.index;
+		res_list         = [];
+		res_list.matched = 0;
+		total_ig         = 0;
+		test_up          = false;
+		handle           = grm.handle;
+		handle.cache     = res_list if __root;
+
+		for i, asset -> patt:
+			test_up    = false;
+			step_index = src.index;
+			ref        = parseAsset(asset, src, grm);
+			handle.error && return false;
+			config     = asset.config;
+
+			if ref:
+				if config.mode == '!':
+					return grm.error(config.error, src.current);
+
+				res_list.matched ++;
+
+				if config.test || ref.isTest:
+					test_up = true;
+					checkPack(asset, grm, ref, res_list);
+					src.index  = step_index;
+					continue;
+
+				if config.mode == '*' || config.mode == '+':
+					ref = matchMore(asset, src, grm, ref, config.smallest ? patt[ i+1 ] : null);
+
+				if ref === true:
+					checkPack(asset, grm, ref, res_list);
+					valid_index = src.index;
+					total_ig ++;
+					continue;
+				
+				valid_index = src.index;
+				if !ref.isEmpty:
+					grm.next(src, !config.lf);
+
+				if config.ig:
+					checkPack(asset, grm, ref, res_list);
+					total_ig ++;
+					continue;
+			
+				ref = checkPack(asset, grm, ref, res_list);
+				if ref.isToken || ref.isSyntax:
+					res_list.push(ref);
+				else if ref.length:
+					res_list.push.apply(res_list, ref);
+
+			else:
+				if config.mode == '?' || config.mode == '*' || config.mode == '!':
+					src.index = step_index;
+					if config.pack == 'check empty':
+						res_list.push( new Syntax(config.name) );
+					continue;
+
+				if asset.type == 'Sub' && asset.content.minLimit == 0:
+					src.index = step_index;
+					continue;
+
+				return grm.error(config.error, src[step_index-1]);
+
+		src.index = valid_index;
+
+		if res_list.matched:
+			if res_list.length == 1 && patt.length == 1:
+				res_list = res_list[0];
+			if res_list.length === 0 && start_index === src.index && total_ig === 0:
+				res_list.isEmpty = true;
+				if patt.length == 1 && test_up:
+					res_list.isTest = true;
+			return res_list;
+		 src.index = start_index;
+
+	function parseAsset(asset, src, grm):
+		start_index = src.index;
+		handle      = grm.handle;
+		if start_index >= src.length:
+			return false;
+
+		if asset.type == 'Sub':
+			if handle.debug:
+				print.indent();
+			ref = checkPattern(asset.content, src, grm);
+			if handle.debug:
+				print.back();
+		else:
+			ref = asset.parse(src, grm);
+
+		if handle.debug:
+			print( '[Asset] =', !!ref, asset, [ref ? src.join(start_index, src.index) : src[start_index].text ] );
+
+		if ref && !grm.handle.error:
+			if ref === true || ref.isSyntax || ref.isToken || ref.length || ref.matched:
+				return ref;
+			return true;
+
+		src.index = start_index;
+		return false;
+
+	function matchMore(asset, src, grm, res, next_asset):
+		step_index = src.index;
+		res_list   = res.isToken || res.isSyntax ? [res] : res;
+		while res = matchNext(asset, src, grm, next_asset):
+			if step_index == src.index:
+				return res_list;
+			step_index = src.index;
+			if res_list === true:
+				continue;
+			if res.isToken || res.isSyntax:
+				res_list.push( res );
+			else if res.length:
+				res_list.push.apply(res_list, res);
+
+		src.index = step_index;
+		return res_list;
+
+	function matchNext(asset, src, grm, next_asset):
+		start_index = src.index;
+		if next_asset:
+			grm.handle.try = true;
+			grm.next(src, !asset.config.lf);
+			next = parseAsset(next_asset, src, grm);
+			grm.handle.try = false;
+
+		src.index = start_index;
+		if !next:
+			grm.next(src, !asset.config.lf);
+			if res = parseAsset(asset, src, grm):
+				return res
+		src.index = start_index;
+		return false;
+		
+	function checkPack(asset, grm, res, res_list, __root):
+		handle = grm.handle;
+
+		if not config = asset.config:
+			if handle.packName && handle.pattern == asset:
+				config = {name: handle.packName, pack: handle.packMode};
+		
+		if !config || not name = config.name:
+			return res;
+
+		switch config.pack:
+			case 'rename pattern':
+				handle.packMode = 'rename response';
+				handle.packName = name;
+
+			case 'pattern name':
+				handle.packMode = 'response name';
+				handle.packName = name;
+
+
+			case 'check response':
+				if res && !res.isSyntax && res.length > 1:
+					return new Syntax(name, res);			
+
+			case 'packing matched':
+				res_cache = handle.cache;
+				if res_cache.length:
+					if res_list && res_cache != res_list:
+						res_cache[0] = new Syntax(name, res_cache, res_list, res);
+						res_list.length = 0;
+					else:
+						res_cache[0] = new Syntax(name, res_cache, res);
+					res_cache.length = 1;
+				return true;
+
+			case 'response name':
+				return new Syntax(name, res);
+					
+			case 'rename response':
+				if !res.isSyntax && res.length == 1:
+					res = res[0];
+				if res.isSyntax:
+					res.type = name;
+				else:
+					return new Syntax(name, res);
+		return res;
+
+module.exports = Pattern;

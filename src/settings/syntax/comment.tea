@@ -1,0 +1,29 @@
+module.exports = function(src, params):
+	token = src.current;
+	if token.type == 'COMMENT':
+		comm_token = token;
+	else:
+		switch token.text:
+			case '/*':
+				ab = src.indexPair('/*', '*/', src.index, true);
+			case '#!':
+				Err 1119, token;
+			case '//':
+				ab = src.indexPair(token.text, '\n', src.index, true) || [src.index, src.length-1];
+				ab[1] = ab[1] -1;
+			default:
+				return;
+		if ab && ab[0] == src.index:
+			src.index = ab[1];
+			comm_token = token.clone( src.join(ab[0], ab[1]), ['COMMENT']);
+			comm_token.location.code = comm_token.text;
+			comm_token.location.end = src[ab[1]].location.end;
+		else:
+			Err 1118, src.current;
+	if comm_token:
+		handle = @.handle;
+		if handle.name == 'Block' || handle.name == 'Root':
+			handle.comms |= [];
+			if handle.comms.indexOf(comm_token) == -1:
+				handle.comms.push(comm_token);
+		return comm_token;

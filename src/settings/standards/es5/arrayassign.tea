@@ -1,0 +1,51 @@
+
+Card = require "../../../core/card";
+
+module.exports = function(node, params):
+	list   = [];
+	vars   = @.handle.variables;
+	right  = node[2];
+	left   = node[0];
+	parser = parseItem;
+	if not right.is('ArrayExpr', 'Variable', 'AccessExpr'):
+		list.push( @.pattern('@ref = @', right), ',' );
+		right = vars.ref;
+	else if right.type == 'ArrayExpr':
+		parser = parseArrayRight;
+	
+	left_len = left.length;
+	for i -> left:
+		list.push( parser.call(@, left[i], right, vars, left_len), ',' );
+	list.pop();
+	if node.parent.is('ArgusStam'):
+		return list;
+	return new Card('ArrayAssignExpr', list);
+
+function parseItem(left, right, variables, left_len):
+	index           = variables.index || 0;
+	variables.index = index + 1;
+	
+	if left.type == 'RestExpr':
+		if left_len > index + 1:
+			variables.slice = true;
+			return @.pattern( '@[0] = [].slice.call(@[1], @[2], @[1].length - @[3])', [left, right, index, left_len - index - 1], 'AssignExpr' );
+		else:
+			return @.pattern( '@[0] = [].slice.call(@[1], @[2])', [left, right, index+''], 'AssignExpr' );
+
+	if variables.slice:
+		return @.pattern( '@[0] = @[1][@[1].length - @[2]]', [left, right, left_len - index], 'AssignExpr' );
+
+	return @.pattern( '@[0] = @[1][@[2]]', [left, right, index+''], 'AssignExpr' );
+
+function parseArrayRight(left, right, variables, left_len):
+	index           = variables.index || 0;
+	variables.index = index + 1;
+	if index >= right.length:
+		return @.read(left);
+	if left.type == 'RestExpr':
+		if left_len > index + 1:
+			variables.index = right.length - (left_len - index - 1);
+			return @.pattern( '@[0] = [#COMMA(@[1])]', [left, Jsop.toArray(right, index, variables.index) ] );
+		else:
+			return @.pattern( '@[0] = [#COMMA(@[1])]', [left, Jsop.toArray(right, index) ] );
+	return @.pattern( '@[0] = @[1]', [left, right[index]] );

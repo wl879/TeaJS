@@ -1,0 +1,34 @@
+
+Card = require "../../../core/card";
+
+module.exports = function(node, param):
+	list = [];
+	for i -> node:
+		list.push( parseItem.call(@, node[i]), ',' );
+	list.pop();
+	return new Card('ArgusExpr', '(', list, ')');
+
+function parseItem(node, params):
+	type = node.type;
+	vars = @.handle.variables;
+	if type == 'RestExpr':
+		index = node.index;
+		if node.parent.length > index + 1:
+			vars['i'] = node.parent.length - index - 1;
+			@.pattern('#HEAD(`@[0] = [].slice.call(arguments, @[index], -@i)`)', node);
+		else:
+			@.pattern('#HEAD(`@[0] = [].slice.call(arguments, @[index])`)', node);
+		return @.read( node, true );
+
+	if type == 'AssignExpr':
+		if vars['i']:
+			@.pattern('#HEAD(`@[0] = arguments[arguments.length - @i]`)', node);
+			vars['i'] --;
+		@.pattern('#HEAD(`if (@[0] == null) @`)', node);
+		return @.read( node[0] );
+
+	if vars['i']:
+		@.pattern('@ = arguments[arguments.length - @i]`)', node);
+		vars['i'] --;
+
+	return @.read(node);

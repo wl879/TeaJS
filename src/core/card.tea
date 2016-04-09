@@ -1,0 +1,216 @@
+
+class Card:
+	
+	not_semicolon = /^(COMMENT|IfStam|WhileStam|DoWhileStam|WithStam|ForStam|SwitchStam|CaseStam|DefaultStam)$/
+	width_limit = 80;
+
+	constructor(type):
+		@.type     = type || '';
+		@.length   = 0;
+		if arguments.length > 1:
+			@.add.apply( @, Jsop.toArray(arguments, 1) );
+
+	@::isCard = true;
+
+	add():
+		for item => arguments:
+			if !item:
+				continue;
+			if item.isToken:
+				if !item.is('EOT'):
+					@[ @.length++ ] = item;
+				continue;
+			type = typeof item;
+			if item.isCard || type == 'string':
+				@[ @.length++ ] = item;
+				continue;
+			if type == 'number':
+				@[ @.length++ ] = item+'';
+				continue;
+			if isArray(item):
+				@.add.apply(@, item);
+				continue;
+			Err 5004, isClass(item);
+		return @;
+
+	insert(pos):
+		args = Jsop.toArray(arguments, 1);
+		for i = pos -> @:
+			args.push( @[i] );
+		@.length = pos;
+		@.add.apply(@, args);
+		return @;
+
+	delete(a, b = a):
+		Array::splice.call(@, a, b-a+1);
+		return @;
+
+	get text:
+		return @.toScript();
+
+	toScript():
+		if ! @._formated:
+			format(@);
+		return toText( @ );
+
+	toList():
+		list = [];
+		for item => @:
+			!item -> continue;
+			if item.isCard:
+				list.push.apply(list, item.toList());
+			else:
+				list.push(item);
+		return list;
+
+	function toText(list):
+		var texts = [];
+		for item => list:
+			if item.isToken:
+				if item.is('EOT'):
+					continue;
+				texts.push(item.text);
+			else if item.isCard || isArray(item):
+				texts.push( toText(item) );
+			else:
+				texts.push(item);
+		return texts.join('');
+
+	function countText(card):
+		texts = [];
+		for item => card:
+			if !item:
+				continue;
+			if item.isToken:
+				texts.push(item.text);
+			else if item.isCard:
+				texts.push(countText(item));
+			else:
+				texts.push(item);
+		return texts.join('');
+
+	function countTextLen(card, limit):
+		len = 0;
+		for item => card:
+			if limit && len >= limit:
+				return len;
+			if item.isToken:
+				len += item.text.length;
+			else if item.isCard || isArray(item):
+				len += countTextLen(item, limit && limit - len);
+			else:
+				len += item.length;;
+		return len;
+
+	function format(card):
+		each(card);
+		if card.type == 'Root':
+			if card.length:
+				lineFeed(card);
+		return card;
+
+	function each(card):
+		parent = card.type;
+		for i, item -> card:
+			if !item:
+				continue;
+			switch item.type:
+				case 'COMMENT':
+					if Argv['--clear']:
+						card[i] = null;
+
+				case 'ArrayExpr':
+					formatArray(item);
+
+				case 'JsonExpr':
+					formatJson(item);
+
+				case 'VarStam', 'ConstStam', 'LetStam':
+					formatVar(item);
+
+				case 'Block':
+					if item.length:
+						each(item);
+						lineFeed(item, parent);
+						indentLine(item, parent);
+						if card.type == 'BlockNode':
+							item.add('\n');
+						else if card[i+1] as 'string' && /^\s*}/.test( card[i+1] ):
+							item.add('\n');
+				default:
+					if item.isCard:
+						each(item);
+					else if item == ',':
+						card[i] = ', ';
+		return card;
+
+	function lineFeed(card, parent):
+		for i, line <- card:
+			if line:
+				if !not_semicolon.test(line.type) && parent != 'Block':
+					card.insert(i+1, ';');
+				if i || parent && parent != 'Block':
+					card.insert(i, '\n');
+			
+	function indentLine(card, parent):
+		for i, item -> card:
+			if item == '\n':
+				card[i] = '\n\t';
+				continue;
+			else if i === 0 && parent:
+				card.insert(0, '\t');
+				continue;
+			if item.isToken:
+				if !item.is('STRING'):
+					card[i] = item.text.replace(/\n/g, '\n\t');
+				continue;
+			if item.isCard:
+				indentLine(item);
+				continue;
+			if item as 'string':
+				card[i] = item.replace(/\n/g, '\n\t');
+		return card;
+
+	function formatArray(card):
+		comma = card[1];
+		if comma && comma.type == 'CommaExpr':
+			if countTextLen(comma, width_limit) >= width_limit:
+				for i -> comma:
+					if comma[i].isCard:
+						each(comma[i]);
+					else if comma[i] == ', ' || comma[i] == ',':
+						comma[i] = ',\n';
+				comma.insert(0, '\n');
+				indentLine(comma);
+				return;
+		each(card);
+
+	function formatJson(card):
+		comma = card[1];
+		if comma && comma.type == 'CommaExpr':
+			if countTextLen(comma, width_limit) >= width_limit:
+				for i -> comma:
+					if comma[i].isCard:
+						each(comma[i]);
+					else if comma[i] == ', ' || comma[i] == ',':
+						comma[i] = ',\n';
+				comma.insert(0, '\n');
+				indentLine(comma);
+				return;
+		each(card);
+
+	function formatVar(card):
+		comma = card[1];
+		if comma && comma.type == 'CommaExpr':
+			text = countText(comma);
+			if /\=/.test(text) && text.length >= width_limit:
+				for i -> comma:
+					if comma[i].isCard:
+						each(comma[i]);
+					else if comma[i] == ', ' || comma[i] == ',':
+						comma[i] = ',\n';
+				indentLine(comma);
+				return;
+		each(card);
+
+module.exports = Card;

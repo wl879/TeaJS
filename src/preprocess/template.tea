@@ -1,99 +1,166 @@
 
-export regexp(str):
-	str = str.replace(/([^\\]|^)\\i/g, '$1(?:[\\$_a-zA-Z]\\w+)');
-	str = str.replace(/(\\?[\(\"\'\{\[])\.{3}(\\?[\)\"\'\}\]])/g, `(?:$1(?:\\\\|\\$1|\\$2|$1(?:\\\\|\\$1|\\$2|[^$2]+)*$2|[^$2]+)*$2)`);
-	str = str.replace(/\s*\n\s*/g, '');
-	return str;
+Card      = require "../core/card.js";
+Syntax    = require "../core/syntax.js";
+Token     = require "../core/token.js";
+Grammar   = require "../core/grammar";
+Standard  = require "../core/standard";
+readFile  = SText.readFile;
+writeFile = SText.writeFile;
 
-export slices(str):
-	var str_slices = [], tmp_re = /([^\\]|^)(\{\{|\$[a-zA-Z]+)/;
-	while m = str.match(tmp_re):
-		str_slices.push( str.slice(0, m.index+m[1].length) );
-		if m[2] == '{{':
-			if not ab = Text.indexPair(str, m.index, '{{', '}}', true):
-				break;
-			str_slices.push( str.slice(ab[0]+2, ab[1]) );
-			str = str.substr(ab[1]+2);
-		else:
-			str_slices.push( m[2] );
-			str = str.substr( m.index+m[0].length );
-	if str:
-		str_slices.push( str );
-	return str_slices;
-
-export string(str):	
-	var symbol = str.match(/^('+|"+|`+)/)[1],
-		qq = symbol[0] == '`' ? "'" : symbol[0];
-	str = str.slice(symbol.length, -symbol.length);
-	if !str:
-		return qq+str+qq;
-	if /\n/.test(str):
-		str = Text.trimIndent(str);
-	if qq == '"':
-		var str_slices = [];
-		for i, item -> slices(str):
-			if !item: continue;
-			if i % 2:
-				if /[^\w\s\$\_]/.test(item):
-					str_slices.push( '('+item+')' );
-				else:
-					str_slices.push( item );
+export create(text, args):
+	temps = [];
+	if text.indexOf('#script') != -1:
+		while (a = text.indexOf('#script')) != -1:
+			if ab = SText.indexPair(text, '#script', '#end', a):
+				b = ab[1];
 			else:
-				str_slices.push( '"' + escapeString(symbol, item) + '"' );
-		str = str_slices.join('+').replace(/^\"\"\+|\+\"\"$/g, '');
+				b = text.length;
+			if a:
+				temps.push( text.substr(0, a) );
+
+			if script = createScript( text.slice(a + 7, b), args ):
+				temps.push( script );
+			text = text.substr(b + 4);
+		if text:
+			temps.push(text);
 	else:
-		str = qq + escapeString(symbol, str) +qq;
-	return str;
+		temps = [text];
+	return temps;
 
-export run(text, args, param, prep):
-	if param:
-		return func(text, args, true, prep).apply(@, param);
+export createScript(script, args = [], prepor):
+
+	script = Tea.compile(script, prepor);
+	temp = "
+		(function(${args.join(',')}){
+			var __output__  = '', echo = write;
+			function write(){
+				for(var i=0; i<arguments.length; i++)
+					__output__ += arguments[i];
+			}
+			${script};
+			return __output__;
+		})";
+	return eval( temp );
+
+export runScript(script, scope, prepor):
+	args   = [];
+	params = [];
+	if scope:
+		for key, value in scope:
+			args.push( key );
+			params.push( value );
+	fn = createScript(script, args, prepor);
+	return fn.apply(null, params);
+
+export concatModule( main, list ):
+	dirname  = main.dirName;
+	root     = new Card('Root');
+	if  main.CAST[0].type == 'COMMENT' && /\#\!/.test(main.CAST[0].text):
+		root.add( main.CAST[0] );
+	root.add( createModuleTmp() );
+	for ctx => list:
+		root.add( createModuleCard( Fp.relative(dirname, ctx.fileName), ctx.CAST, false ) );
+	root.add( createModuleCard( Fp.relative(dirname,  main.fileName), main.CAST, true ) );
+	return root;
+
+function createModuleTmp():
+	tmp = "
+		var Module = (function(){
+			_cache = {};
+			_main  = new Module();
+			function Module(filename, dirname){
+				this.id = filename;
+				this.filename = filename;
+				this.dirname = dirname;
+				this.exports = {};
+				this.loaded = false;
+				this.children = [];
+				this.parent = null;
+			};
+			Module.prototype.require = function(file){
+				var id = resolve(this.dirname, file);
+				var mod = _cache[id];
+				if (!mod && !/\.js/.test(id)){
+					if(mod = _cache[id+'.js'])
+						id = id+'.js';
+				}
+				if (!mod){
+					if(mod = _cache[id+'/index.js'])
+						id = id+'/index.js';
+				}
+				if (mod){
+					this.children.push(id);
+					return mod.loaded ? mod.exports : mod.load(this);
+				}
+				this.children.push(file);
+				return module.require(file);
+			};
+			Module.prototype.load = function(parent){
+				this.loaded = true;
+				if(parent) this.parent = parent;
+				this.creater();
+				module.constructor._cache[this.id] = this;
+				return this.exports;
+			};
+			Module.prototype.register = function(creater){
+				var id = this.id;
+				if (!_cache[id]){
+					_cache[id] = this;
+					this.creater = creater;
+				}
+			};
+			Module.makeRequire = function(module){
+				function require(path){
+					return module.require(path);
+				};
+				require.main = _main;
+				require.resolve = function(path){return resolve(module.dirname, path)};
+				require.extensions = null;
+				require.cache = null;
+				return require;
+			};
+			Module.main = function(filename, dirname){
+				_main.id = '.';
+				_main.filename = filename;
+				_main.dirname = dirname;
+				_main.parent  = module.parent;
+				return _main;
+			};
+			function resolve(from, to){
+				if(/^(\\~|\\/)/.test(to)) return to;
+				if (from && from != '.') to = from + '/' + to;
+				var m = null;
+				while( m = to.match(/\\/[^\\/]+?\\/\\.\\.\\/|\\/\\.\\//) ){
+					to = to.substr(0, m.index) + to.substr(m.index+m[0].length-1);
+				}
+				return to;
+			};
+			return Module;
+		})()";
+	return new Card('Module', tmp) 
+
+function createModuleCard(file, block, main):
+	file = file.replace(/\.tea$/, '.js');
+	if block[0].type == 'COMMENT' && /\#\!/.test(block[0].text):
+		block.delete(0);
+	if block.type == 'Root':
+		block.type = 'Block';
 	else:
-		return func(text, args, , prep);
-
-export func(text, args, create, prep):
-	args = args ? args.join(',') : '';
-	script = compile(text, prep);
-	script = "
-		function({{args}}){
-		var __write  = '';
-		function write(){for(var i=0; i<arguments.length; i++) __write += arguments[i]};
-		{{script}};
-		return __write;
-		}";
-	if create:
-		eval( 'create = '+script);
-		return create;
-	return script;
-	
-export compile(text, prep):
-	if !test(text):
-		return tea.compile(text, prep);
-	snippets = [];
-	for i, item -> slices(text):
-		if !item: continue;
-		snippets.push( i % 2 ? item : "write '{{item}}';" );
-	script = tea.compile(snippets.join('\n'), prep);
-	return script;
-
-export test(text):
-	return /([^\\]|^)\{\{/.test(text);
-
-function escapeString(symbol, str):
-	switch symbol:
-		case '""""', '`', "''''":
-			str = Text(str, symbol[0]).replace(/([^\\]|^)(\\{2,4,6,8})?\\n/g, '$1$2\\n\\\n');
-
-		case '"""', "'''":
-			str = str.replace(/([^\\]|^)\n/g, '$1\\n').replace(/^\n/mg, '\\n\\\n');
-		case '"', "'": default:
-			str = str.replace(/([^\\]|^)\n|^\n/g, '$1\\n');
-	if symbol[0] == '"':
-		if symbol.length > 1:
-			str = str.replace(/([^\\])"/g, '$1\\"');
-		str = str.replace(/\\'/g, "'");
-	else:
-		if symbol.length > 1:
-			str = str.replace(/([^\\])'/g, "$1\\'");
-		str = str.replace(/\\"/g, '"');
-	return str;
+		block = new Card('Block', block);
+	block = new Card('Block', block);
+	mod = new Card('Module');
+	mod.add(
+		main ? "module.exports = " : "",
+		"
+		(function(_filename, _dirname, main){
+			var module  = ${main ? 'Module.main(_filename, _dirname)' : 'new Module(_filename, _dirname)'};
+			var require = Module.makeRequire(module);
+			var exports = module.exports;
+			module.register(function(){",
+				block,
+		"	});",
+		main ? "\n	return module.load();" : "\n	return module.exports;",
+		"\n})",
+		"('${file}', '${Fp.dirName(file)}', ${main})"
+	);
+	return mod;

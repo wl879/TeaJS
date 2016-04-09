@@ -1,4515 +1,312 @@
 #!/usr/bin/env node
-(function (){
-	var _require, __modules, Module;
-	if (!global && typeof (window) != 'undefined'){
-		global = window;
-	}
-	_require = require;
-	require = function(key){
-		var mod = __modules[key];
-		if (mod){
-			if (mod.loaded){
-				return mod.exports;
-			}
-			return mod.load();
-		}else {
-			return module.require(key);
-		}
-	};
-	__modules = {};
-	Module = function(filename, creater){
-		this.id = filename;
-		this.exports = {};
-		this.filename = filename;
-		this.loaded = false;
-		this.creater = creater;
-		this.require = require;
-	};
-	Module.prototype.load = function(){
-		this.loaded = true;
-		this.creater(this.exports, require, this, this.filename, this.filename.replace(/\/.+$/g, ''));
-		module.constructor._cache[this.filename] = this;
-		return this.exports;
-	};
-	Module.register = function(filename, key, creater){
-		if (!(__modules.hasOwnProperty(key))){
-			__modules[key] = new Module(filename, creater);
-		}
-	};
-	Module.register('/Users/wl/Sites/TeaJS/src/tea.tea', '../src/tea.tea', function(exports, require, module, __filename, __dirname){
-		require("../src/tools/utils.tea");
-		global.tab_size = '    ';
-		global.tea = module.exports;
-		tea.teapath = Path.dirname(__filename);
-		tea.argv = require("../src/argv.tea");
-		tea.helper = require("../src/tools/helper.tea");
-		tea.error = require("../src/error.tea");
-		tea.preprocess = require("../src/preprocess/index.tea");
-		tea.syntax = require("../src/syntax/index.tea");
-		tea.rewriter = require("../src/rewriter/index.tea");
-		tea.context = tea.preprocess.context;
-		tea.source = tea.syntax.source;
-		tea.defineToken = tea.syntax.token.define;
-		tea.tabSize = function(size){
-			global.tab_size = print.strc(' ', parseInt(size));
-		};
-		tea.exit = function(msg, target, name){
-			if (debug.log){
-				debug.log('* r{Tea exit - Run time:} b{'+tea.runTimes('ms')+'}');
-			}
-			if (arguments.length){
-				print(tea.error(new Error(), msg, target, name).text);
-			}
-			process.exit();
-		};
-		tea.runTimes = function(unit){
-			var t = Date.now()-RunTimeAtLoaded;
-			switch (unit){
-				case 's':
-					return t/1000+'s';
-				case 'ms':
-					return t+'ms';
-			}
-			return t;
-		};
-		tea.compile = function(src, por){
-			var ast, write;
-			if (typeof src == 'string'){
-				src = tea.source(src, null, por);
-			}
-			if (src){
-				if (ast = tea.syntax.parse(src, por)){
-					if (write = tea.rewriter.read(ast, por)){
-						return write.text;
-					}
-				}
-			}
-			return '';
-		};
-		tea.checkFile = function(file){
-			var _file = Path.resolve(file);
-			if (!Path.isFile(_file)){
-				if (this.argv.dir){
-					_file = Path.resolve(this.argv.dir, file);
-					if (Path.isFile(_file)){
-						return _file;
-					}
-				}
-				if (this.path){
-					_file = Path.resolve(this.argv.path, file);
-					if (Path.isFile(_file)){
-						return _file;
-					}
-				}
-			}else {
-				return _file;
-			}
-		};
-		tea.countOutput = function(file){
-			var pathdata = Path.countPath(file, tea.argv.path, tea.argv.outdir);
-			return pathdata.out;
-		};
-		var RunTimeAtLoaded = Date.now();
-	});Module.register('/Users/wl/Sites/TeaJS/src/tools/utils.tea', '../src/tools/utils.tea', function(exports, require, module, __filename, __dirname){
-		var Fs = require('fs');
-		var Path = require('path');
-		var Util = require('util');
-		var Crypto = require('crypto');
-		var _id_index = 0,
-			_pair_token = {'(' : ')', '[' : ']', '{' : '}', '/' : '/', '\'' : '\'', '"' : '"'},
-			_pair_re = /\(|\[|\{|\/|'|"/g;
-		global.tab_size = '    ';
-		global.ID = function(){
-			return parseInt((Date.now()+'').substr(-8)+(_id_index++)+Math.round(Math.random()*100))+'';
-		};
-		global.isArray = Array.isArray;
-		global.isJson = function(obj){
-			return obj.constructor.prototype.hasOwnProperty("isPrototypeOf");
-		};
-		global.isAlpha = function(c){
-			var code = c.length == 1 ? c.charCodeAt(0) : -1;
-			return code == 95 || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
-		};
-		global.isDigit = function(c){
-			var code = c.length == 1 ? c.charCodeAt(0) : -1;
-			return code >= 48 && code < 57;
-		};
-		global.isAlpNum = function(c){
-			return isDigit(c) || isAlpha(c);
-		};
-		global.isIdentifier = function(text){
-			return /^[\$a-zA-Z\_][\w\$]*$/.test(text);
-		};
-		global.isNumber = function(text){
-			return typeof text == 'number' ? true : text && !isNaN(Number(text.replace(/^\s*-\s*/, '-')));
-		};
-		global.isBlank = function(text){
-			return /^[\t \r]+$/.test(text);
-		};
-		global.isValue = function(){
-			for (var i=0, arg; i < arguments.length; i++){
-				arg = arguments[i];
-				if (arg != null){
-					return arg;
-				}
-			}
-			return arguments[arguments.length-1];
-		};
-		global.isClass = function(obj, class_name){
-			if (obj && obj.constructor){
-				if (class_name && typeof class_name != 'string'){
-					return obj.constructor == class_name;
-				}
-				if (obj.constructor.toString){
-					var m = obj.constructor.toString().match(/function\s*(\w+)/);
-					if (m){
-						return class_name ? class_name == m[1] : m[1];
-					}
-				}
-			}
-			return undefined;
-		};
-		global.isHas = function(obj, target){
-			switch (isClass(obj)){
-				case 'Array':case 'String':
-					return obj.indexOf(target) != -1;
-				case 'Object':
-					if (obj.length){
-						return Array.prototype.indexOf.call(obj, target) != -1;
-					}else {
-						return obj.hasOwnProperty(target);
-					}
-					break;
-			}
-		};
-		global.checkGlobalScope = function(){
-			var def = 'global process GLOBAL root console Path'.split(' ');
-			for (var name in global){
-				if (!global.hasOwnProperty(name)) continue;
-				if (def.indexOf(name) >= 0){
-					continue;
-				}
-				if (typeof global[name] == 'function'){
-					continue;
-				}
-				console.log('!![global space]', name);
-			}
-		};
-		global.Hash = function(arr, separator){
-			var h = {}, keys, extend;
-			if (isArray(separator)){
-				keys = separator, separator = ',';
-			}else if (typeof separator == 'object'){
-				extend = Hash.slice(arguments, 1), separator = ',';
-			}
-			if (typeof arr == 'string'){
-				arr = arr.split(separator || ' ');
-			}
-			var name, val;
-			for (var i in arr){
-				if (!arr.hasOwnProperty(i)) continue;
-				var v = arr[i];
-				if (typeof v == 'string'){
-					v = v.split(':');
-					if (v.length > 1){
-						name = v[0].trim(), val = v.slice(1).join(':').trim();
-					}else {
-						name = keys ? keys[i] || i : v[0], val = v[0].trim();
-					}
-					h[name] = /\d+|false|true/.test(val) ? eval(val) : (val || false);
-				}else if (typeof v == 'number'){
-					h[v] = v;
+var Module = (function(){_cache = {};_main  = new Module();function Module(filename, dirname){this.id = filename;this.filename = filename;this.dirname = dirname;this.exports = {};this.loaded = false;this.children = [];this.parent = null;};Module.prototype.require = function(file){var id = resolve(this.dirname, file);var mod = _cache[id];if (!mod && !/.js/.test(id)){if(mod = _cache[id+'.js'])id = id+'.js';}if (!mod){if(mod = _cache[id+'/index.js'])id = id+'/index.js';}if (mod){this.children.push(id);return mod.loaded ? mod.exports : mod.load(this);}this.children.push(file);return module.require(file);};Module.prototype.load = function(parent){this.loaded = true;if(parent) this.parent = parent;this.creater();module.constructor._cache[this.id] = this;return this.exports;};Module.prototype.register = function(creater){var id = this.id;if (!_cache[id]){_cache[id] = this;this.creater = creater;}};Module.makeRequire = function(module){function require(path){return module.require(path);};require.main = _main;require.resolve = function(path){return resolve(module.dirname, path)};require.extensions = null;require.cache = null;return require;};Module.main = function(filename, dirname){_main.id = '.';_main.filename = filename;_main.dirname = dirname;_main.parent  = module.parent;return _main;};function resolve(from, to){if(/^(\~|\/)/.test(to)) return to;if (from && from != '.') to = from + '/' + to;var m = null;while( m = to.match(/\/[^\/]+?\/\.\.\/|\/\.\//) ){to = to.substr(0, m.index) + to.substr(m.index+m[0].length-1);}return to;};return Module;})();
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		require("../utils")
+		var Tea = (function(){
+			var Helper, Token, Source, SourceMap, Syntax, Scope, Card, Grammar, Standard, Preprocess;
+			Helper = require("./helper");
+			Token = require("./core/token.js");
+			Source = require("./core/source.js");
+			SourceMap = require("./core/sourcemap.js");
+			Syntax = require("./core/syntax.js");
+			Scope = require("./core/scope.js");
+			Card = require("./core/card.js");
+			Grammar = require("./core/grammar");
+			Standard = require("./core/standard");
+			Preprocess = require("./preprocess");
+			require("./settings");
+			function Tea(file, text, prepor, std, outfile, map){
+				this.fileName = file;
+				this.dirName = Fp.dirName(this.fileName);
+				this.std = std || Argv['--std'] || 'es5';
+				this.outfile = outfile;
+				this.outmap = map;
+				if (text && text.isSource){
+					this._source = text;
 				}else {
-					h[i] = Hash.clone(v);
-				}
-			}
-			if (extend){
-				extend.unshift(h);
-				h = Hash.extend.apply(Hash, extend);
-			}
-			return h;
-		};
-		Hash.sha1 = function(text){
-			var sha1 = Crypto.createHash('sha1');
-			sha1.update(text);
-			return sha1.digest('hex');
-		};
-		Hash.extend = function(obj){
-			arguments[0] = obj && Hash.clone(obj) || {};
-			return Hash.concat.apply(Hash, arguments);
-		};
-		Hash.clone = function(obj, deep){
-			var tar;
-			if (typeof obj == 'object'){
-				if (isArray(obj)){
-					tar = [];
-				}else {
-					tar = {};
-					if (tar.prototype != obj.prototype){
-						tar.prototype = obj.prototype;
-						tar.constructor = obj.constructor;
-					}
-				}
-				for (var k in obj){
-					if (!obj.hasOwnProperty(k)) continue;
-					tar[k] = deep ? Hash.clone(obj[k], (deep || 1)-1) : obj[k];
-				}
-				return tar;
-			}else {
-				return obj;
-			}
-		};
-		Hash.concat = function(obj){
-			for (var i=1, arg; i < arguments.length; i++){
-				arg = arguments[i];
-				for (var k in arg){
-					if (!arg.hasOwnProperty(k)) continue;
-					obj[k] = arg[k];
-				}
-			}
-			return obj;
-		};
-		Hash.slice = function(obj, start, end){
-			return Array.prototype.slice.call(obj, start, end);
-		};
-		global.Text = function(something, qq){
-			if (typeof something == 'object'){
-				var cache = [],
-					text = JSON.stringify(something, function(key, value){
-						if (typeof value === 'object' && value !== null){
-							if (cache.indexOf(value) !== -1){
-								return '[circular]';
-							}
-							cache.push(value);
-						}
-						return value;
-					});
-				cache = null;
-			}else {
-				var text = Util.format([something]).replace(/^\s*\[\s*(\"|\')?|(\"|\')?\s*\]\s*$/g, '');
-			}
-			return qq == '"' ? text.replace(/"/g, '\\"').replace(/([^\\])\\'/g, '$1\'') : text;
-		};
-		Text.isESC = function(text, pos){
-			if (pos <= 0) return false;
-			var t = 0;
-			while (pos > 0 && text[pos-1] == '\\'){
-				t += 1, pos -= 1;
-			}
-			return (t%2 != 0);
-		};
-		Text.readFile = function(file, encoding){
-			if (Path.isFile(file)){
-				return Fs.readFileSync(file, encoding || 'utf-8');
-			}
-		};
-		Text.writeFile = function(text, file, encoding){
-			var dir = Path.dirname(file);
-			if (!Path.isDir(dir)){
-				Path.mkdirp(dir);
-			}
-			return Fs.writeFileSync(file, text, encoding || 'utf8');
-		};
-		Text.split = function(text, separator, trim, del_esc){
-			separator = new RegExp('(\\\\*)'+(separator.replace(/([^\\]?)(\W)/g, '$1\\$2') || ' '));
-			var tmp = [], a = 0, b = -1, m, p;
-			while (text){
-				if (m = text.substr(a).match(separator)){
-					if (!m[1] || m[1].length%2 == 0){
-						b = a+m.index+m[1].length;
-					}else {
-						a += m.index+m[0].length;
-						continue;
-					}
-					_pair_re.lastIndex = a;
-					if (m = _pair_re.exec(text)){
-						if ((p = this.indexPair(text, m.index, m[0], _pair_token[m[0]], true)) && b > p[0]){
-							a = p[1]+1;
-							continue;
-						}
-					}
-					a = b;
-					tmp.push(text.slice(0, a));
-					text = text.slice(a+1), a = 0;
-				}else {
-					tmp.push(text);
-					break;
-				}
-			}
-			var ret = [];
-			for (var i=0, v; i < tmp.length; i++){
-				v = tmp[i];
-				if (trim){
-					v = v.trim();
-				}
-				if (del_esc && v){
-					v = v.replace(/\\(.)/g, '$1');
-				}
-				v && ret.push(v);
-			}
-			return ret;
-		};
-		Text.indexPair = function(text, pos, s1, s2, check_ESC){
-			if (typeof s2 == 'number'){
-				check_ESC = pos, pos = s2, s2 = s1;
-			}
-			pos = pos || 0;
-			s2 = s2 || s1;
-			check_ESC = check_ESC || (s1 == "'" || s1 == '"');
-			var a = text.indexOf(s1, pos);
-			while (a >= 0 && check_ESC && Text.isESC(text, a)){
-				if ((a = text.indexOf(s1, a+1)) == -1) return null;
-			}
-			if (a == -1) return;
-			var b = text.indexOf(s2, a+1);
-			while (b > 0 && check_ESC && Text.isESC(text, b)){
-				b = text.indexOf(s2, b+1);
-			}
-			if (b == -1) return null;
-			if (s1 == s2) return [a, b];
-			var a_b = a;
-			while (a_b >= 0 && b > a_b){
-				a_b = text.indexOf(s1, a_b+1);
-				while (a_b > 0 && check_ESC && Text.isESC(text, a_b)){
-					a_b = text.indexOf(s1, a_b+1);
-				}
-				if (a_b > a && a_b < b){
-					b = text.indexOf(s2, b+1);
-					while (b > 0 && check_ESC && Text.isESC(text, b)){
-						b = text.indexOf(s2, b+1);
-					}
-				}
-			}
-			return a >= 0 && a < b ? [a, b] : null;
-		};
-		Text.indexLine = function(text, pos){
-			var lines = text.split('\n'), shift = -1, num = 0, last = lines.length-1;
-			for (var i=0, line; i < lines.length; i++){
-				line = lines[i];
-				if (i < last){
-					line += '\n';
-				}
-				num += 1;
-				shift += line.length;
-				if (pos <= shift) break;
-			}
-			return [line, num, line.length-1-(shift-pos)];
-		};
-		Text.indexBreak = function(text, pos){
-			var br_re, ig_re;
-			br_re = /[\;\n\)\]\}]/g;
-			ig_re = /[^\;\)\]\}\$\w\s\#\"\'\`]\s*$|^\s*[^\;\)\]\}\w\s\"\'\`\$\#]/;
-			return this.indexOfReg(text, pos || 0, br_re, ig_re);
-		};
-		Text.indexOfReg = function(text, pos, re, ig_reg){
-			var m, pm, ab, igm;
-			if (typeof re == 'string') re = new RegExp(re, 'g');
-			if (!re) return -1;
-			var b = pos-1, len = text.length;
-			while (++b < len){
-				re.lastIndex = b;
-				if (m = re.exec(text)){
-					_pair_re.lastIndex = b;
-					if ((pm = _pair_re.exec(text)) && pm.index < m.index){
-						if (ab = this.indexPair(text, pm.index, pm[0], _pair_token[pm[0]])){
-							if (pm[0] != '/' || (!/\n/.test(text.slice(ab[0], ab[1]+1)) && !/(\w|\+\+|--|\$|\@)[\t\ \r]*$/g.test(text.substr(0, pm.index)))){
-								b = ab[1];
-								continue;
-							}
-						}
-					}
-					if (ig_reg){
-						if ((igm = text.substr(0, m.index+1).match(ig_reg)) && igm.index+igm[0].length-1 == m.index){
-							b += 1;
-							continue;
-						}
-						if ((igm = text.substr(m.index).match(ig_reg)) && igm.index === 0){
-							b += 1;
-							continue;
-						}
-					}
-					b = m.index-1;
-					break;
-				}else {
-					b = text.length-1;
-					break;
-				}
-			}
-			return b;
-		};
-		Text.width = function(text, tab){
-			var tmp = text.replace(/\t/g, tab || '    ').split('\n'), w = 0, len;
-			for (var i=0; i < tmp.length; i++){
-				if ((len = tmp[i].length) > w) w = len;
-			}
-			return w;
-		};
-		Text.count = function(text, str){
-			var n = 0, i = -1;
-			while ((i = text.indexOf(str, i+1)) != -1){
-				n += 1;
-			}
-			return n;
-		};
-		Text.toUnicode = function(text){
-			var u, str = [];
-			for (var i=0; i < text.length; i++){
-				u = text.charCodeAt(i);
-				str.push(u <= 0 ? text[i] : "\\u"+('0000'+u.toString(16)).slice(-4));
-			}
-			return str.join('');
-		};
-		Text.trimPP = function(text){
-			return text.replace(/^`+|^'+|^"+|"+$|'+$|`+$/g, '');
-		};
-		Text.trimIndent = function(text, tab){
-			var indent,
-				text = text.replace(/^(?:\s*?\n)+|\s*$/g, '').replace(/\t/g, tab || tab_size),
-				ls = text.split('\n'),
-				min = -1;
-			for (var i=0; i < ls.length; i++){
-				indent = ls[i].match(/^\s*/)[0].length || 0;
-				if (min == -1 || indent < min) min = indent;
-			}
-			if (min > 0){
-				text = text.replace((new RegExp('^\ {'+min+'}', 'mg')), '');
-			}
-			return text;
-		};
-		Text.print = function(data, circular){
-			if (typeof data == 'string'){
-				return '"'+data+'"';
-			}
-			if (typeof data == 'number' || typeof data == 'boolean' || data == null){
-				return data;
-			}
-			if (typeof data == 'function'){
-				return data.toString();
-			}
-			var class_name = isClass(data);
-			if (class_name == 'RegExp'){
-				return data+'';
-			}
-			if (!circular) circular = [];
-			if (circular.indexOf(data) !== -1){
-				return '[circular]';
-			}
-			circular.push(data);
-			var list = [], str = '', array_mode = data.hasOwnProperty('length');
-			for (var k in data){
-				if (!data.hasOwnProperty(k)) continue;
-				if (array_mode && /\d+/.test(k)){
-					list.push(Text.print(data[k], circular));
-				}else {
-					list.push(k+' : '+Text.print(data[k], circular));
-				}
-			}
-			if (list.length){
-				str = '\n'+list.join(',\n').replace(/^/mg, '\t')+'\n';
-			}
-			if (/Array|Object/.test(class_name)){
-				class_name = '';
-			}else {
-				class_name = ' *'+class_name+'*';
-			}
-			if (array_mode || isArray(data)){
-				str = '['+class_name+str+']';
-			}else {
-				str = '{'+class_name+str+'}';
-			}
-			return str;
-		};
-		Text.getName = function(text){
-			if (text){
-				text = text.replace(/^['"]+|['"]+$|\.[^\.]*$|/g, '');
-				var name = Path.basename(text);
-				if (name == 'index'){
-					name = Path.basename(Path.dirname(text));
-				}
-				return name.replace(/(?:^|[^a-zA-Z0-9\$]+)(\w)/g, function($0, $1){return $1.toUpperCase()});
-			}
-		};
-		global.Path = Path;
-		Path.isPathText = function(text){
-			return /^([^\*\s]|\\[ \t])*(\/([^\*\s]|\\[ \t])+)+$/.test(text);
-		};
-		Path.isFile = function(path){
-			return Fs.existsSync(path) && Fs.statSync(path).isFile();
-		};
-		Path.isDir = function(path){
-			return Fs.existsSync(path) && Fs.statSync(path).isDirectory();
-		};
-		Path.scanAllPath = function(path, filter, level, out){
-			if (typeof filter == 'number'){
-				out = level, level = filter, filter = null;
-			}
-			var ret = {"files": [], "dirs": {}, "allfiles": []};
-			if (this.isFile(path)){
-				ret.files.push(path);
-				return ret;
-			}else if (!this.isDir(path)){
-				return ret;
-			}
-			if (typeof filter == 'string'){
-				filter = this.parseRegExp(filter, 1);
-			}
-			var dirList = Fs.readdirSync(path), len = dirList.length;
-			for (var i_ref = Fs.readdirSync(path), i=0, tmp; i < i_ref.length; i++){
-				tmp = i_ref[i];
-				tmp = this.join(path, tmp);
-				if (Fs.statSync(tmp).isDirectory()){
-					if (level){
-						ret.dirs[tmp] = this.scanAllPath(tmp, filter, level-1, out);
-						if (ret.dirs[tmp].allfiles.length){
-							ret.allfiles.push.apply(ret.allfiles, ret.dirs[tmp].allfiles);
-						}
-					}else {
-						ret.dirs[tmp] = 0;
-					}
-				}else {
-					if (filter && (out ? filter.test(tmp) : !filter.test(tmp))){
-						continue;
-					}
-					ret.files.push(tmp);
-				}
-			}
-			if (ret.files.length){
-				ret.allfiles = ret.allfiles.concat(ret.files);
-			}
-			return ret;
-		};
-		Path.scanDir = function(path, filter, out){
-			var ret = this.scanAllPath(path, filter, 0, out);
-			ret.dirs = Object.keys(ret.dirs);
-			return ret;
-		};
-		Path.scanFile = function(path, filter, out){
-			var ret = this.scanAllPath(path, filter, 0, out);
-			return ret && ret.files;
-		};
-		Path.mkdirp = function(path, mode){
-			if (!Fs.existsSync(path)){
-				var base_dir = this.dirname(path);
-				if (!Fs.existsSync(base_dir)){
-					this.mkdirp(base_dir, mode);
-				}
-				Fs.mkdirSync(path, mode || 0755);
-			}
-		};
-		Path.parseRegExp = function(str, force){
-			if (force || /([^\\]|^)[\*\?]/.test(str)){
-				str = str.replace(/\./g, '\\.');
-				str = str.replace(/([^\\]|^)\?/g, '$1.');
-				str = str.replace(/([^\\]|^)\*/g, '$1.*?');
-				try {
-					return new RegExp('^'+str+'$');
-				} catch (_e){}
-			}
-		};
-		Path.parseDir = function(text, path){
-			if ((/\"|\'/).test(text[0])) text = text.slice(1, -1);
-			if (!(/\~|\/|\.]/).test(text[0])) text = './'+text;
-			text = path ? this.resolve(path, text) : this.resolve(text);
-			var dirs = [], re, tmp, names = text.split('/');
-			if (this.isDir(text)){
-				return [text];
-			}
-			for (var i=0, name; i < names.length; i++){
-				name = names[i];
-				if (re = this.parseRegExp(name)){
-					if (dirs.length){
-						tmp = [];
-						for (var d=0; d < dirs.length; d++){
-							tmp.push.apply(tmp, Path.scanDir(dirs[d], re).dirs);
-						}
-						dirs = tmp;
-					}else {
-						dirs = Path.scanDir('./', re).dirs;
-					}
-				}else {
-					if (dirs.length){
-						tmp = [];
-						for (var d=0; d < dirs.length; d++){
-							if (this.isDir(dirs[d]+name+'/')){
-								tmp.push(dirs[d]+name+'/');
-							}
-						}
-						dirs = tmp;
-					}else {
-						if (this.isDir(name+'/')){
-							dirs.push(name+'/');
-						}
-					}
-				}
-				if (!dirs.length){
-					dirs.error = 'The dir not exist! '+names.slice(0, i+1).join('/');
-					break;
-				}
-			}
-			return dirs;
-		};
-		Path.testFile = function(path, exts, name){
-			if (name){
-				path = this.join(path, name);
-			}
-			if (exts && exts.length){
-				for (var _i=0, ext; _i < exts.length; _i++){
-					ext = exts[_i];
-					if (this.isFile(path+ext)){
-						return path+ext;
-					}
-				}
-			}else if (this.isFile(path)){
-				return path;
-			}
-		};
-		Path.parseFile = function(text, path, exts){
-			var file;
-			text = Text.trimPP(text);
-			if (!(/\~|\/|\.]/).test(text[0])) text = './'+text;
-			text = path ? this.resolve(path, text) : this.resolve(text);
-			var files = [], error = [];
-			if (this.isDir(text)){
-				if (file = this.testFile(text, exts || ['.js'], 'index')){
-					files.push(file);
-					return files;
-				}
-			}
-			var data = this.parse(text);
-			if (!exts){
-				if (data.ext) exts = [data.ext];
-			}else {
-				exts.hasOwnProperty(data.ext) || exts.push(data.ext);
-			}
-			if (file = this.testFile(data.dir, exts, data.name)){
-				files.push(file);
-				return files;
-			}
-			var dirs = this.parseDir(data.dir);
-			if (dirs.error){
-				error.push(dirs.error);
-			}else {
-				var base_re = this.parseRegExp(data.base, 1), tmp;
-				for (var d=0; d < dirs.length; d++){
-					if (file = this.testFile(dirs[d], exts, data.name)){
-						files.push(file);
-					}else if (base_re){
-						files.push.apply(files, this.scanFile(dirs[d], base_re));
-					}else {
-						error.push('File not exist '+dirs[d]+data.base);
-					}
-				}
-			}
-			if (files.length == 0 && error.length == 0){
-				error.push('File not exist '+text);
-			}
-			files.error = error.length != 0 ? error : null;
-			return files;
-		};
-		Path.countPath = function(file, path, out){
-			var data = {"file": '', "dir": '', "path": '', "out": '', "outdir": ''};
-			if (path){
-				data.path = Path.resolve(path);
-				if (file && file.indexOf(data.path) != -1){
-					file = Path.relative(data.path, file);
-				}
-				data.file = Path.resolve(data.path, file || '');
-			}else {
-				data.file = Path.resolve(file || '');
-			}
-			if (!data.file){
-				if (data.path){
-					data.dir = data.path;
-				}
-			}else if (Path.isDir(data.file)){
-				if (!path){
-					data.path = data.file;
-				}
-				data.dir = data.file;
-				data.file = '';
-			}else if (!Path.isFile(data.file)){
-				data.file = '';
-				data.error = 'can not find file: '+file;
-				return data;
-			}else {
-				data.dir = Path.dirname(data.file);
-			}
-			if (out){
-				data.out = Path.resolve(out);
-				if (!Path.extname(data.out)){
-					data.outdir = data.out;
-					if (data.file){
-						if (data.path){
-							data.out = Path.resolve(data.outdir, Path.relative(data.path, data.file));
-						}else {
-							data.out = Path.join(data.outdir, Path.basename(data.file));
-						}
-					}
-				}else {
-					data.outdir = Path.dirname(data.out);
-				}
-			}else if (Path.extname(data.file) == 'tea'){
-				data.out = data.file;
-				data.outdir = Path.dirname(data.out);
-			}
-			if (data.out){
-				data.out = data.out.replace(/\.tea\b/, '.js');
-			}
-			return data;
-		};
-	});Module.register('/Users/wl/Sites/TeaJS/src/argv.tea', '../src/argv.tea', function(exports, require, module, __filename, __dirname){
-		var Argv = (function(){
-			function Argv(argv, opt, desc_text){
-				this.___desc = {};
-				this.pathdata = {};
-				this.length = 0;
-				if (arguments.length){
-					this.parse(argv, opt, desc_text);
-				}
-			}
-			Argv.prototype.parse = function (argv, opt, desc_text){
-				var value;
-				if (desc_text){
-					var re = /^[\ \t]*(\-(?:\-[\w\-]+)?\w)\,?\ *(\-\-[\w\-]+)?\ *(\<[^\>]+\>)?\s*(.*)$/mg,
-						m,
-						_opt = [];
-					while (m = re.exec(desc_text)){
-						_opt.push([m[1], m[2], m[3], m[4]]);
-					}
-					if (_opt.length){
-						opt = opt ? opt.concat(_opt) : _opt;
-					}
-					this.___desc._help_ = desc_text;
-				}
-				if (opt && opt.length){
-					for (var i=0, o; i < opt.length; i++){
-						o = opt[i];
-						if (o.length > 2 && o[0] && o[1] && o[0][0] == '-' && o[1][0] == '-'){
-							this.add(o[0], o[1], o[3] || o[2] || '');
-						}
-					}
-				}
-				if (argv){
-					var i = /node$/.test(argv[0]) ? 2 : 1;
-					for (var name; i < argv.length; i++){
-						name = argv[i];
-						if (name[0] == '-'){
-							value = argv[i+1];
-							if (!value || value[0] == '-'){
-								value = true;
-							}else {
-								i += 1;
-							}
-							this[name] = value;
-						}else if (!this['--file']){
-							this['--file'] = name;
-						}else {
-							this[this.length++] = name;
-						}
-					}
-					return this.check();
-				}
-			}
-			Argv.prototype.check = function (){
-				this.pathdata = Path.countPath(this['--file'], this['--path'], this['--out']);
-				if (this.pathdata.error){
-					throw tea.error(new Error(), this.pathdata.error);
-				}
-				return this;
-			}
-			Argv.prototype.__defineGetter__("file", function(){
-				return this.pathdata.file;
-			});
-			Argv.prototype.__defineGetter__("dir", function(){
-				return this.pathdata.dir;
-			});
-			Argv.prototype.__defineGetter__("path", function(){
-				return this.pathdata.path;
-			});
-			Argv.prototype.__defineGetter__("outdir", function(){
-				return this.pathdata.outdir;
-			});
-			Argv.prototype.__defineGetter__("out", function(){
-				if (this.pathdata.out){
-					return this.pathdata.out;
-				}
-				if (/\.tea$/.test(this.pathdata.file)){
-					return this.pathdata.file.replace(/\.tea$/, '.js');
-				}
-			});
-			Argv.prototype.__defineSetter__("file", function(file){
-				this.pathdata = Path.countPath(file, this.pathdata.path, this.pathdata.outdir);
-				if (this.pathdata.error){
-					throw tea.error(new Error(), this.pathdata.error);
-				}
-				return this.pathdata.file;
-			});
-			Argv.prototype.__defineSetter__("out", function(out){
-				this.pathdata = Path.countPath(this.pathdata.file, this.pathdata.path, out);
-				if (this.pathdata.error){
-					throw tea.error(new Error(), this.pathdata.error);
-				}
-				return this.pathdata.out;
-			});
-			Argv.prototype.add = function (short, long, desc, fn){
-				if (short.substr(0, 2) == '--'){
-					desc = long, long = short, short = null;
-				}
-				var name = long.replace(/^-+/, '');
-				if (desc){
-					this.___desc[short] = desc;
-					this.___desc[long] = desc;
-				}
-				if (short && long && short != long){
-					var self = this;
-					this.__defineGetter__(short, function(){
-						return self[long];
-					});
-					this.__defineSetter__(short, function(v){
-						return self[long] = v;
-					});
-				}
-			}
-			Argv.prototype.showDesc = function (com){
-				return this.___desc[com];
-			}
-			Argv.prototype.showHelp = function (){
-				print(this.___desc._help_);
-			}
-			Argv.prototype.copy = function (extend){
-				var argv = new Argv();
-				for (var i in this){
-					if (!this.hasOwnProperty(i)) continue;
-					if (this[i] == null || i[0] == '_' && i[1] == '_'){
-						continue;
-					}
-					argv[i] = this[i];
-				}
-				if (extend){
-					for (var i in extend){
-						if (!extend.hasOwnProperty(i)) continue;
-						argv[i] = extend[i];
-					}
-				}
-				argv.parent = argv.parent || argv;
-				return argv;
-			}
-			return Argv;
-		})();
-		module.exports = new Argv(null, null, "r{** g{Tea} 0.1.20 w{script help} *************************************************************}\n\
-  # parameter:\n\
-    -f,--file  <file>                  输入文件\n\
-    -p,--path  <project dir>           项目目录\n\
-    -o,--out   <output>                输出文件 或 目标目录\n\
-    -e,--eval  <tea script snippet>    编译一段 tea script 文本\n\
-    -j,--join                          合并 require 文件\n\
-    -m,--map                           生成 source map 文件\n\
-    -h,--help                          显示帮助\n\
-    -v,--verbose                       显示编译信息\n\
-    -r,--run                           执行输入件\n\
-    -d,--define                        宏定义文件\n\
-    -s,--safe                          只编译，不会对变量自动声名等\n\
-    --clear                            清理注释\n\
-    --tab <number>                     设置 tab size\n\
-    --token                            输出编译的 token 解析\n\
-    --ast                              输出 ast 结构\n\
-    --nopp                             不进行预编译\n\
-    --debug                            显示调试信息 [log prep syntax write all]");
-	});Module.register('/Users/wl/Sites/TeaJS/src/tools/helper.tea', '../src/tools/helper.tea', function(exports, require, module, __filename, __dirname){
-		require("../src/tools/debug.tea");
-		var Helpter = module.exports;
-		Helpter.getLocation = function(something){
-			switch (isClass(something)){
-				case 'Ast':
-					return this.getLocation(something.tokens(0));
-				case 'Node':
-					return this.getLocation(something.tokens(0));
-				case 'Source':
-					return this.getLocation(something.current);
-				case 'Token':
-					return this.getLocation(something.location);
-				case 'Location':
-					return something;
-			}
-		};
-		Helpter.errorPot = function(something){
-			switch (isClass(something)){
-				case 'Ast':case 'Node':case 'Source':case 'Token':
-					if (!(something = this.getLocation(something))){
-						break;
-					}
-				case 'Location':
-					var text = something.source,
-						pos = something.start,
-						code = text.slice(something.start, something.end+1),
-						file = something.fileName;
-					return this.errorPotByText(text, pos, code, file);
-				case 'Array':
-					return this.errorPotByText.apply(this, something);
-				case 'String':
-					if (arguments.length > 1){
-						return this.errorPotByText.apply(this, arguments);
-					}
-					return something;
-			}
-		};
-		Helpter.errorPotByText = function(text, pos, code, file){
-			if (pos == -1 && code){
-				pos = text.indexOf(code);
-			}
-			var line = Text.indexLine(text, pos),
-				line_text = line[0],
-				num = line[1],
-				col = line[2];
-			if (code){
-				code = code.replace(/\n/, '\\n');
-			}
-			var pot_num = num+' | ',
-				pot_shift = (pot_num+line_text.substr(0, col)).replace(/[^\s]/g, ' ')+code.replace(/./g, '^'),
-				pot_line = (line_text.substr(0, col)+print.color('#r{'+code+'}')+line_text.substr(col+code.length)).replace(/\n/, '\\n'),
-				qq_mark = (/(?:[^\\]|^)"/).test(line_text) ? "'" : '"',
-				pot_echo = qq_mark+pot_num+pot_line+'\n'+qq_mark+pot_shift;
-			if (file){
-				pot_echo = (Path.isPathText(file) ? 'At ' : 'From ')+file+':'+num+':'+col+'\n'+pot_echo.replace(/^(\'|\")/mg, '$1\t');
-			}
-			return pot_echo;
-		};
-		Helpter.atFile = function(something){
-			var location;
-			if (location = Helpter.getLocation(something)){
-				return 'at '+location.fileName+':'+location.lineNumber+':'+location.columnNumber;
-			}
-			return '';
-		};
-		Helpter.atFileByText = function(file, text, pos){
-			var line = Text.indexLine(text, pos), num = line[1], col = line[2];
-			return (Path.isPathText(file) ? 'At ' : 'From ')+file+':'+num+':'+col;
-		};
-		debug.addEvent('log', function(){
-			debug.echo(print.toString(arguments));
-		});
-		debug.addEvent('prep', function(msg, token){
-			if (token && token.istoken){
-				token = ' <--> '+Helpter.atFile(token);
-			}
-			debug.echo(print.toString(arguments).replace(/^(\s+)/mg, ' ·$1'));
-		});
-		debug.addEvent('syntax', function(){
-			debug.echo(print.toString(arguments));
-		});
-		debug.addEvent('write', function(){
-			debug.echo(print.toString(arguments));
-		});
-		debug.addEvent('token', function(){
-			debug.echo(print.toString(arguments));
-		});
-		function tokenPrinter(token, show_token){
-			if (show_token || show_token == null){
-				var type = token.types.join(',');
-				if (show_token == 'shot'){
-					type = type.replace(/[a-z]+/g, '');
-				}
-				return '['+(token.indent >= 0 ? '*' : '')+'('+(type)+') g{\''+Text(token.text)+'\'}]';
-			}
-			return '[(TOKEN) '+token.text+']';
-		}
-		function sourcePrinter(src){
-			var texts = [];
-			for (var i=0, t; i < src.length; i++){
-				t = src[i];
-				if (!t){
-					continue;
-				}
-				if (t.istoken){
-					texts.push((i && t.is('LineHead') ? '\n' : '')+tokenPrinter(t, 'shot'));
-				}else {
-					texts.push(lexemePrinter(src[i], 'shot')+(src[i].isToken('LF') ? '\n' : ''));
-				}
-			}
-			return texts.join(', ');
-		}
-		function nodePrinter(node, text, _level, _indent){
-			if (!_level) _level = 0;
-			if (!_indent) _indent = 0;
-			var O = _level%2 ? 'r{[}' : '[',
-				C = _level%2 ? 'r{]}' : ']',
-				isBlock = /BLOCK/.test(node.type) && node.length,
-				isNode = /node|block/i.test(node.type);
-			if (!text) text = '';
-			text += O+'(g{'+node.type+'}) ';
-			if (isBlock){
-				text += '\n'+print.strc('\t', _indent+1);
-			}
-			for (var i=0; i < node.length; i++){
-				if (!node[i]) continue;
-				if (i != 0){
-					text += ', ';
-				}
-				if (isNode){
-					text += '\n'+print.strc('\t', _indent+1);
-				}
-				if (node[i].length >= 0){
-					text = nodePrinter(node[i], text, (_level || 0)+1, isBlock || isNode ? _indent+1 : _indent);
-				}else if (node[i].text){
-					text += "'"+Text(node[i].text)+"'";
-				}
-			}
-			text += (isBlock || isNode ? '\n'+print.strc('\t', _indent)+C : C);
-			if (_level == 0){
-				text = text.replace(/^(\s+)((?:\*\*\*\ \]\ \*\*\*|\])+\,)\s*/mg, '$1$2\n$1');
-			}
-			return text;
-		}
-		function macroPrinter(macro){
-			var text;
-			text = '[(Macro - '+macro.type+') '+macro.name+(macro.params ? '('+macro.params.join(',')+')' : '')+' "'+Text(macro.body.length > 30 ? macro.body.substr(0, 30)+'...' : macro.body)+'"'+']';
-			return text;
-		}
-		function scopePrinter(scope){
-			var temp, texts = [];
-			for (var key in scope){
-				if (!scope.hasOwnProperty(key)) continue;
-				var item = scope[key];
-				if (key == 'node' || key == 'top' || key == '_top_' || item == null){
-					continue;
-				}
-				if (key == 'variables'){
-					var v_types = {};
-					for (var name in item){
-						if (!item.hasOwnProperty(name)) continue;
-						var type = item[name];
-						if (!v_types[type]) v_types[type] = [];
-						v_types[type].push(name);
-					}
-					var v_text = [];
-					for (var type in v_types){
-						if (!v_types.hasOwnProperty(type)) continue;
-						var varbs = v_types[type];
-						v_text.push(type+' : ["'+varbs.join('", "')+'"]');
-					}
-					if (v_text.length){
-						texts.push(key+' :\n'+v_text.join(',\n').replace(/^/mg, '\t'));
-					}
-					continue;
-				}
-				if (key == 'argumentsDefine'){
-					var sub_text = [];
-					for (var j=0; j < item.length; j++){
-						sub_text.push(print.toText(item[j]).replace(/^/mg, '\t'));
-					}
-					if (sub_text.length){
-						texts.push(key+' : [\n'+sub_text.join(',\n')+']');
-					}
-					continue;
-				}
-				if (key == 'sub' || key == 'letScope'){
-					var sub_text = [];
-					for (var k in item){
-						if (!item.hasOwnProperty(k)) continue;
-						sub_text.push(k+' : '+scopePrinter(item[k]));
-					}
-					if (sub_text.length){
-						texts.push(key+' : [\n'+sub_text.join(',\n').replace(/^/mg, '\t')+']');
-					}
-					continue;
-				}
-				if (temp = print.toString([item])){
-					if (temp.length > 2){
-						texts.push(key+' : '+temp);
-					}
-				}
-			}
-			return '[\n'+texts.join('\n').replace(/^/mg, '\t')+']';
-		}
-		function writerPrinter(data, level, _circular_cache){
-			if (!_circular_cache){
-				_circular_cache = [];
-			}
-			_circular_cache.push(data);
-			var texts = [];
-			for (var i=0, item; i < data.length; i++){
-				item = data[i];
-				if (item.istoken){
-					texts.push("'"+Text(item.text)+"'");
-				}else if (typeof item == 'string'){
-					texts.push("'"+Text(item)+"'");
-				}else {
-					if (_circular_cache.indexOf(item) != -1){
-						return '[Circular]';
-					}
-					texts.push(writerPrinter(item, (level || 0)+1, _circular_cache));
-				}
-			}
-			var text = '[('+data.type+') '+texts.join('·')+']';
-			return text;
-		}
-		function SyntaxPrinter(sre, __level){
-			var text = [];
-			for (var i=0, r; i < sre.length; i++){
-				r = sre[i];
-				if (r.type == 'Or'){
-					if (text.length){
-						text.push('|');
-					}
-					text.push((__level%2 ? 'd{' : 'w{')+SyntaxPrinter(r, (__level || 0))+'}');
-				}else if (r.type == 'Sub'){
-					text.push("("+(r.assertion)+SyntaxPrinter(r.key, (__level || 0)+1)+')');
-				}else {
-					text.push("[("+(r.type)+")"+(r.key)+r.quantifier+"]");
-				}
-			}
-			return text.join(' ');
-		}
-		print.register('Token', tokenPrinter);
-		print.register('Source', sourcePrinter);
-		print.register('Node', nodePrinter);
-		print.register('Ast', nodePrinter);
-		print.register('Macro', macroPrinter);
-		print.register('Scope', scopePrinter);
-		print.register('Writer', writerPrinter);
-		print.register('SyntaxReg', SyntaxPrinter);
-	});Module.register('/Users/wl/Sites/TeaJS/src/tools/debug.tea', '../src/tools/debug.tea', function(exports, require, module, __filename, __dirname){
-		require("../src/tools/printer.tea");
-		var debug_lv = 0, debug_event_listener = [];
-		global.debug = function(e){
-			var text;
-			if (arguments.length == 0 || e instanceof Error){
-				text = debug.stacksToText(e);
-			}else {
-				text = print.toString(arguments, '~ ');
-			}
-			debug.echo(text, new Error(), true);
-		};
-		debug.echo = function(text, error, show_line_info){
-			if (show_line_info || (debug_lv&64) == 64){
-				var at_line = debug.line(error || new Error(), true);
-				text = text.replace(/(\n|$)/, '<-->'+at_line+'$1');
-			}
-			print(text);
-		};
-		debug.line = function(err, ret_str){
-			var stacks = debug.stacks(err || (new Error)), stack = stacks[0];
-			if (ret_str){
-				return stacks[0].filetext;
-			}
-			if (debug.log){
-				debug.log(stacks[0].filetext);
-			}
-		};
-		debug.eventMap = {"all" : 0};
-		debug.addEvent = function(name, shot_name, func){
-			if (typeof shot_name == 'function'){
-				func = shot_name, shot_name = null;
-			}
-			var num = this.eventMap.all+1;
-			this.eventMap.all += num;
-			this.eventMap[name] = num;
-			if (shot_name){
-				this.eventMap[shot_name] = num;
-			}
-			this['__'+name] = func;
-		};
-		debug.onEvent = function(part, fn){
-			if (fn){
-				var lv = parseDebugConf(part);
-				if ((debug_lv&lv) == lv){
-					fn(debug_lv);
-				}else {
-					debug_event_listener.push([lv, fn]);
-				}
-			}else {
-				var lv = typeof part == 'number' ? part : this.eventMap[part];
-				return (debug_lv&(lv || 0)) == lv;
-			}
-		};
-		debug.disable = function(part){
-			debug_lv = parseDebugConf(part);
-			for (var name in this.eventMap){
-				if (!this.eventMap.hasOwnProperty(name)) continue;
-				if (debug[name] && (debug_lv&this.eventMap[name]) != this.eventMap[name]){
-					debug[name] = null;
-				}
-			}
-		};
-		debug.enable = function(part){
-			debug_lv = parseDebugConf(part);
-			var open_list = [];
-			for (var name in this.eventMap){
-				if (!this.eventMap.hasOwnProperty(name)) continue;
-				if (debug['__'+name]){
-					if ((debug_lv&this.eventMap[name]) == this.eventMap[name]){
-						debug[name] = debug['__'+name];
-						open_list.push(name);
-					}else {
-						debug[name] = null;
-					}
-				}
-			}
-			if (open_list.length){
-				print('* Debug enable: "'+open_list.join('", "')+'"');
-			}
-			for (var i=debug_event_listener.length-1, item; i >= 0; i--){
-				item = debug_event_listener[i];
-				if ((debug_lv&item[0]) == item[0]){
-					item[1](argvj_debug_level);
-				}
-			}
-		};
-		debug.stacks = function(err, shift){
-			var stacks;
-			if (isArray(err)) return err;
-			if (typeof err == 'number'){
-				shift = err, err = null;
-			}
-			if (typeof err == 'string'){
-				stacks = err.split('\n');
-			}else {
-				err = err || new Error();
-				stacks = err.stack.split('\n');
-			}
-			var i = 1, ret = [], m, tmp;
-			if (err && err.name == 'Error'){
-				while (i < stacks.length && /at (.*Function.debug|.*Function.print|.*?TeaError|.*?tea\.throw)/i.test(stacks[i])){
-					i++;
-				}
-			}
-			for (; i < stacks.length; i++){
-				if (stacks[i].indexOf('anonymous') != -1){
-					continue;
-				}
-				if (m = stacks[i].match(/at (.*?) \((.*?)\)$/)){
-					tmp = m[2].split(':');
-					ret.push({"fileName": tmp[0],
-						"lineNumber": tmp[1],
-						"columnNumber": tmp[2],
-						"code": m[1],
-						"source": stacks[i],
-						"filetext": m[2]});
-				}
-			}
-			if (shift){
-				ret = ret.slice(shift);
-			}
-			ret.message = stacks[0];
-			return ret;
-		};
-		debug.stacksToText = function(stacks, msg, name){
-			stacks = debug.stacks(stacks || new Error);
-			var text = msg === false ? [] : ['['+(name || 'Tea error stack')+']'+(msg && '\n'+msg || '')];
-			for (var i=0, stack; i < stacks.length; i++){
-				stack = stacks[i];
-				if (typeof stacks[i] == 'string'){
-					text.push(stacks[i]);
-				}else {
-					text.push(" · "+(stack.code)+" <-> File \""+(stack.fileName)+"\", <->line "+(stack.lineNumber));
-				}
-			}
-			text = text.join('\n');
-			return print.toText(text);
-		};
-		debug.__defineGetter__('level', function(){return debug_lv});
-		function parseDebugConf(part){
-			var e = debug_lv;
-			if (typeof part == 'number'){
-				e = part;
-			}else if (part){
-				for (var i_ref = part.replace(/\W+/g, ' ').trim().split(' '), i=0, name; i < i_ref.length; i++){
-					name = i_ref[i];
-					if (debug.eventMap[name]){
-						e += debug.eventMap[name];
-					}
-				}
-			}
-			return e;
-		}
-	});Module.register('/Users/wl/Sites/TeaJS/src/tools/printer.tea', '../src/tools/printer.tea', function(exports, require, module, __filename, __dirname){
-		require("../src/tools/utils.tea");
-		var std_width = process.stdout.columns,
-			is_terminal = !!std_width,
-			max_print_width = 0,
-			register_printer = {};
-		global.print = function(){
-			if (!print.stdout.apply(print, arguments)){
-				process.stdout.write("\n");
-			}
-		};
-		print.stdout = function(){
-			process.stdout.write(this.toText.apply(this, arguments));
-		};
-		print.toText = function(){
-			var text;
-			text = this.toString(Array.prototype.slice.call(arguments));
-			text = text.replace(/(.|\n)\u0008/g, '');
-			text = this.color(text);
-			text = this.flex(text);
-			text = text.replace(/\((.*) x(\d+)\)/g, function($0, $1, $2){return print.strc($1, parseInt($2))});
-			text = text.replace(/\[border\:(.*?)(\:end\]|$)/g, function($0, $1){return print.border($1)});
-			max_print_width = Math.max(max_print_width, Text.width(text) || 4);
-			text = this.line(text);
-			return text;
-		};
-		print.toString = function(args, prefix, postfix){
-			var text = classToString(Hash.slice(args));
-			if (prefix) text = text.replace(/^/mg, prefix);
-			if (postfix) text = text.replace(/$/mg, postfix);
-			return text;
-		};
-		print.line = function(text){
-			if (/^([\W\ x]){4}$/mg.test(text)){
-				var the_width = std_width || max_print_width;
-				text = text.replace(/^([\W\ x])\1{3}$/mg, function($0, $1){return print.strc($1, the_width)});
-			}
-			return text;
-		};
-		print.flex = function(text, min_width){
-			var col_width, mark;
-			while (/^(.*?)(?:<-{1,2}>)(.*)$/mg.test(text)){
-				col_width = min_width || 80, mark = false;
-				text = text.replace(/^(.*?)(<-{1,2}>|$)/mg, function($0, $1, $2){
-					mark = mark || $2 && $2.length == 4;
-					if (col_width < $1.length && ($2 || mark)){
-						col_width = $1.length;
-					}
-					return $0;
-				});
-				text = text.replace(/^(.*?)(?:<-{1,2}>)(.*)$/mg, function($0, $1, $2){return $1+print.strc(' ', col_width-$1.length)+$2});
-			}
-			return text;
-		};
-		print.border = function(){
-			var text = print.toText.apply(this, arguments).replace(/\t/g, '    '),
-				text_width = Text.width(text),
-				lines = text.split('\n'),
-				c = is_terminal ? '\033[96m' : '',
-				e = is_terminal ? '\033[0m' : '';
-			for (var i=0; i < lines.length; i++){
-				lines[i] = c+'|  '+e+lines[i]+print.strc(' ', text_width-lines[i].length)+c+'  |'+e;
-			}
-			lines.unshift(c+print.strc('-', text_width+6)+e);
-			lines.push(c+print.strc('-', text_width+6)+e);
-			return lines.join('\n');
-		};
-		print.cellText = function(text1, text2, separator, ret_str){
-			var texts1 = text1.replace(/\t/g, tab_size).split('\n'),
-				text1_w = Text.width(text1),
-				texts2 = text2.replace(/\t/g, tab_size).split('\n'),
-				len = Math.max(texts1.length, texts2.length),
-				echos = [];
-			separator = separator || '    ';
-			for (var i = 0; i < len; i++){
-				var t1 = texts1[i] || '', t2 = texts2[i] || '';
-				echos.push((t1+print.strc(' ', text1_w-t1.length))+separator+t2);
-			}
-			if (ret_str){
-				return echos.join('\n');
-			}
-			console.log(echos.join('\n'));
-		};
-		print.strc = function(str, num){
-			var tmp = [];
-			num = Math.max(num || 0, 0);
-			while (num--){
-				tmp.push(str);
-			}
-			return tmp.join('');
-		};
-		print.color = function(text){
-			if (!/\b[rbgcwd]\{/.test(text)){
-				return text;
-			}
-			var m,
-				tmp = [],
-				cc,
-				cc_order = [],
-				cc_table = {"r": '\033[91m',
-					"b": '\033[96m',
-					"g": '\033[92m',
-					"c": '\033[36m',
-					"d": '\033[90m',
-					"w": '\033[37m'};
-			while (m = text.match(/(?:\b|\#)([rbgcwd])\{|([^\\])\}/)){
-				tmp.push(text.substr(0, m.index+(m[2] ? 1 : 0)));
-				if (is_terminal){
-					if (m[2]){
-						if (cc_order.length){
-							tmp.push('\033[0m');
-							cc_order.pop();
-							if (cc_order.length){
-								tmp.push(cc_order[cc_order.length-1]);
-							}
-						}
-					}else {
-						cc = cc_table[m[1]] || '';
-						tmp.push(cc);
-						cc_order.push(cc);
-					}
-				}
-				text = text.substr(m.index+m[0].length);
-			}
-			if (text){
-				tmp.push(text);
-			}
-			if (cc_order.length){
-				tmp.push('\033[0m');
-			}
-			return tmp.join('');
-		};
-		print.register = function(name, printer){
-			if (printer){
-				register_printer[name] = printer;
-			}
-		};
-		function classToString(obj, igArray){
-			var type;
-			switch (type = isClass(obj)){
-				case 'String':case 'Number':case 'Boolean':case 'Undefined':
-					return obj;
-				case 'Array':
-					if (!igArray){
-						var text = [];
-						for (var i=0; i < obj.length; i++){
-							text.push(classToString(obj[i], true));
-						}
-						return text.join(' ');
-					}
-					break;
-				case 'Object':case 'Function':
-					if (!obj) return 'null';
-					break;
-				default:
-					if (register_printer.hasOwnProperty(type)){
-						return register_printer[type](obj);
-					}
-					break;
-			}
-			return Text(obj);
-		}
-	});Module.register('/Users/wl/Sites/TeaJS/src/error.tea', '../src/error.tea', function(exports, require, module, __filename, __dirname){
-		var helper = require("../src/tools/helper.tea");
-		var TeaError = (function(){
-			var err_code = {101 : 'Array expression miss right "]" token!',
-					102 : 'Json expression miss right "}" token!',
-					103 : 'Compel expression miss right ")" token!',
-					104 : 'member expression miss right "]" token',
-					105 : 'params expression miss right ")" token',
-					106 : 'switch expression miss right "}" token',
-					107 : 'for expression miss right "}" token',
-					108 : 'for expression miss right expression',
-					109 : 'export expression right expression syntax error',
-					110 : 'block statement miss right "}" token',
-					201 : 'unexpected dot expression',
-					202 : 'unexpected params expression',
-					203 : 'unexpected json expression assign',
-					204 : 'unexpected assignment declaration expression',
-					208 : 'unexpected assignment expression',
-					205 : 'unexpected comma expression',
-					206 : 'unexpected selete right pattern expression',
-					207 : 'unexpected selete left pattern expression',
-					208 : 'unexpected control Clauses',
-					209 : 'unexpected token ILLEGAL',
-					210 : 'unexpected break expression',
-					211 : 'unexpected continue expression',
-					212 : 'unexpected token ILLEGAL',
-					213 : 'unexpected for condition expression left token',
-					214 : 'unexpected compel expression',
-					215 : 'unexpected expression',
-					301 : 'getter or setter statement syntax error',
-					302 : 'method statement syntax error',
-					303 : 'if statement syntax error',
-					304 : 'while statement syntax error',
-					305 : 'with statement syntax error',
-					306 : 'do while statement syntax error',
-					307 : 'try while statement syntax error',
-					308 : 'switch while statement syntax error',
-					309 : 'for statement syntax error',
-					311 : 'condition statement syntax error',
-					312 : 'switch case or default statement syntax error',
-					313 : 'case or default expression syntax error',
-					314 : 'extends expression syntax error',
-					315 : 'array pattern assignment declaration syntax error',
-					316 : 'var declaration statement syntax error',
-					317 : 'let declaration statement syntax error',
-					318 : 'const declaration statement syntax error',
-					319 : 'arguments statement syntax error',
-					320 : 'indent illegal',
-					321 : 'class declaration statement syntax error! miss name',
-					322 : 'get declaration statement illegal',
-					323 : 'set declaration statement illegal',
-					324 : 'static declaration statement illegal',
-					325 : '*proto declaration statement illegal',
-					326 : '*init declaration statement illegal',
-					402 : 'block statement illegal',
-					401 : 'const declaration not supported',
-					403 : 'yield declaration not supported',
-					501 : 'define token statement illegal'};
-			function TeaError(err, msg, target, name, err_shift){
-				var sub, stacks;
-				if (msg instanceof Error){
-					err = msg, msg = target, target = name, name = err_shift, err_shift = arguments[5];
-				}
-				if (!(err instanceof Error)){
-					name = target, target = msg, msg = err, err = new Error(), err_shift = 2;
-				}
-				if (err.type == 'TeaError'){
-					sub = err, err = new Error(), err_shift = 2;
-				}
-				if (typeof msg == 'object'){
-					err_shift = name, name = target, target = msg, msg = '';
-				}
-				stacks = debug.stacks(err, err_shift);
-				name = '['+(name && name[0].toUpperCase()+name.substr(1) || 'Tea error')+']';
-				if (typeof msg == 'number') msg = err_code[msg];
-				msg = msg ? msg[0].toUpperCase()+msg.substr(1) : stacks.message;
-				var error = new Error(msg);
-				error.type = 'TeaError';
-				error.name = print.toText(name);
-				error.target = target;
-				error.stacks = stacks;
-				error.__defineGetter__('text', toString);
-				error.__defineGetter__('stack', printError);
-				if (sub){
-					sub.top = error;
-					return sub;
-				}
-				return error;
-			}
-			TeaError.code = err_code;
-			function toString(){
-				var texts = [], stacks = [];
-				texts.push(this.name);
-				stacks.push(debug.stacksToText(this.stacks));
-				if (this.target){
-					var bug_pot = helper.errorPot(this.target);
-					texts.push(('\n'+bug_pot+'\n->  '+this.message+'\n').replace(/^/mg, '\t'));
-				}else {
-					texts.push(this.message);
-				}
-				var top = this.top, top_texts = [];
-				while (top){
-					top_texts.push('   '+top.name);
-					if (top.target){
-						var bug_pot = helper.errorPot(top.target);
-						top_texts.push((bug_pot+'\n->  '+top.message).replace(/^/mg, '\t'));
-					}else {
-						top_texts.push(top.message);
-					}
-					texts.push(top_texts.join('\n'));
-					stacks.push(debug.stacksToText(top.stacks, false));
-					top = top.top;
-				}
-				texts.push('----', stacks.join('\n'));
-				return texts.join('\n');
-			}
-			function printError(){
-				print(this.text);
-				process.exit(1);
-			}
-			return TeaError;
-		})();
-		module.exports = TeaError;
-	});Module.register('/Users/wl/Sites/TeaJS/src/preprocess/index.tea', '../src/preprocess/index.tea', function(exports, require, module, __filename, __dirname){
-		var Context = require("../src/preprocess/context.tea");
-		function context(argv, extend){
-			return new Context(argv, extend);
-		};
-		function setDefault(){
-			Context.defaultProcessor.apply(Context, arguments);
-		};
-		module.exports.context = context;
-		module.exports.setDefault = setDefault;
-	});Module.register('/Users/wl/Sites/TeaJS/src/preprocess/context.tea', '../src/preprocess/context.tea', function(exports, require, module, __filename, __dirname){
-		var Context = (function(){
-			var Processor = require("../src/preprocess/processor.tea");
-			var Macro = require("../src/preprocess/macro.tea");
-			var Sugar = require("../src/preprocess/sugar.tea");
-			var DefPor, Syntax, Require, ReWriter;
-			function Context(argv, extend){
-				if (!Syntax) Syntax = require("../src/syntax/index.tea");
-				if (!Require) Require = require("../src/preprocess/require.tea");
-				if (!ReWriter) ReWriter = require("../src/rewriter/index.tea");
-				this.macro = {"map": []};
-				this.macrofun = {"map": []};
-				this.statement = {"map": []};
-				this.expression = {"map": []};
-				this.argv = argv || {};
-				this.processor = new Processor(this);
-				if (DefPor){
-					this.extends(DefPor);
-				}
-				if (extend){
-					this.extends(extend);
-				}
-			}
-			Context.prototype.__defineGetter__("length", function(){
-				return this.macro.map.length+this.macrofun.map.length+this.statement.map.length+this.expression.map.length;
-			});
-			Context.prototype.__defineGetter__("source", function(){
+					this.sourcetext = text || SText.readFile(file);
+				}
+				this.prepor = Preprocess.create(prepor);
+			};
+			Tea.prototype.__defineGetter__("source", function(){
 				if (!this._source){
-					if (this.argv.source){
-						this._source = this.argv.source;
-					}else if (this.argv.text || this.argv.file){
-						this._source = this.parse(this.argv.text, this.argv.file);
-					}
+					this._source = Tea.source(this.sourcetext, this.fileName, this.prepor);
 				}
 				return this._source;
 			});
-			Context.prototype.__defineGetter__("fileName", function(){
-				return this.source.fileName;
-			});
-			Context.prototype.__defineGetter__("sourceText", function(){
-				return this.source.source;
-			});
-			Context.prototype.__defineGetter__("ast", function(){
+			Tea.prototype.__defineGetter__("AST", function(){
 				if (!this._ast){
-					this._ast = Syntax.parse(this.source, this);
+					this._ast = Tea.AST(this.source, this.prepor);
 				}
 				return this._ast;
 			});
-			Context.prototype.__defineGetter__("scope", function(){
-				return this.ast.scope;
-			});
-			Context.prototype.__defineGetter__("rewriter", function(){
-				if (!this._rewriter){
-					this._rewriter = ReWriter.read(this.ast, this);
+			Tea.prototype.__defineGetter__("CAST", function(){
+				var std, dirname, main, list, requires;
+				if (!this._cast){
+					std = this.std;
+					dirname = this.dirName;
+					main = Tea.CAST(this.AST, std, this.prepor);
+					this._cast = main;
+					if (Argv['--concat'] && (list = main.scope.cache.require) && list.length){
+						requires = {};
+						for (var file, i = 0; i < list.length; i++){
+							file = list[i];
+							if (!requires[file]){
+								Tea.log('* <r:Concat require:> : <d:'+file+':>');
+								if (!/\.tea/.test(file)){
+									requires[file] = {"fileName": file, "CAST": concatFromJs(list, file, std)};
+								}else {
+									requires[file] = {"fileName": file, "CAST": concatFromTea(list, file, std)};
+								}
+							}
+						}
+						this._cast = Preprocess.concatModule(this, Jsop.toArray(requires));
+					}
 				}
-				return this._rewriter;
+				return this._cast;
 			});
-			Context.prototype.__defineGetter__("text", function(){
-				return this.rewriter.text;
+			Tea.prototype.__defineGetter__("scope", function(){
+				if (!this.AST.scope){
+					return Tea.scope(this.AST);
+				}
+				return this.AST.scope;
 			});
-			Context.prototype.__defineGetter__("sourcemap", function(){
+			Tea.prototype.sourcemap = function (file){
 				var map;
-				map = ReWriter.sourceMap();
-				map.file = this.argv.out || '';
+				map = new SourceMap();
 				map.sourceRoot = this.fileName;
-				map.parse(this.rewriter, this.source);
+				map.parse(this.CAST);
+				if (file){
+					map.file = file;
+					SText.writeFile(map.text, Fp.resolve(this.dirName, file), 'UTF-8');
+				}
 				return map;
-			});
-			Context.prototype.__defineGetter__("requires", function(){
-				if (!this._rewriter){
-					this._rewriter = ReWriter.read(this.ast, this);
+			};
+			Tea.prototype.output = function (file, map){
+				var script;
+				script = this.CAST.toScript();
+				!file && (file = this.outfile);
+				!map && (map = this.outmap);
+				if (file){
+					file = Fp.resolve(this.dirName, file);
 				}
-				return this.scope.requires;
-			});
-			Context.prototype.parse = function (text, file){
-				return Syntax.source(text, file, this);
-			}
-			Context.prototype.clone = function (argv, extend){
+				if (map){
+					map = Fp.resolve(Fp.dirName(file), typeof map == 'string' ? map : file+'.map');
+					script += '\n\n//# sourceMappingURL='+(file ? Fp.relative(Fp.dirName(file), map) : map);
+					this.sourcemap(map);
+					this.outmap = map;
+				}
+				if (file){
+					SText.writeFile(script, file, 'UTF-8');
+					this.outfile = file;
+				}
+				return script;
+			};
+			// static
+			Tea.argv = Argv;
+			Tea.filename = __filename;
+			Tea.dirname = __dirname;
+			Tea.prep = Preprocess;
+			Tea.version = "0.2.0";
+			Tea.context = function(file, text, prepor, stdv){
+				return new Tea(file, text, prepor, stdv);
+			};
+			Tea.compile = function(text, prepor, from, stdv){
 				var ctx;
-				ctx = new Context(argv, extend);
-				ctx.extend(this);
-				return ctx;
-			}
-			Context.prototype.undef = function (name){
-				var i;
-				for (var _i_ref = ['macrofun', 'macro', 'statement', 'expression'], _i=0, type; _i < _i_ref.length; _i++){
-					type = _i_ref[_i];
-					if ((i = this[type].map.indexOf(name)) >= 0){
-						this[type].map.splice(i, 1);
-						delete this[type][name];
-					}
+				ctx = new Tea(from, text, prepor, stdv);
+				return ctx.output();
+			};
+			// core method
+			Tea.source = function(text, file, prepor){
+				var src;
+				src = new Source(text, file);
+				if (prepor !== false){
+					src.prepor = Preprocess.gather(src, prepor);
 				}
-			}
-			Context.prototype.add = function (something){
-				if (typeof something == 'string'){
-					if (something == 'expression' || something == 'statement'){
-						something = new Sugar(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], this);
-					}else {
-						something = new Macro(arguments[0], arguments[1], arguments[2], this);
-					}
+				return src;
+			};
+			Tea.scope = function(ast, check_define){
+				return Scope.init(ast, check_define);
+			};
+			Tea.grammar = function(type, src, prepor){
+				var grammar, syntax;
+				!prepor && (prepor = src.prepor);
+				grammar = Grammar.create(prepor);
+				syntax = grammar.parser(type, src);
+				syntax.source = src;
+				return syntax;
+			};
+			Tea.standard = function(version, syntax, prepor){
+				var scope, std, card;
+				if (version == null) version = 'es5';
+				!prepor && (prepor = syntax.source && syntax.source.prepor);
+				scope = Tea.scope(syntax);
+				std = Standard.create(version, prepor);
+				card = std.read(syntax);
+				card.scope = scope;
+				return card;
+			};
+			Tea.card = function(){
+				return Jsop.newClass(Card, arguments);
+			};
+			Tea.AST = function(src, prepor){
+				return Tea.grammar('Root', src.refresh(0), prepor);
+			};
+			Tea.CAST = function(ast, version, prepor){
+				return Tea.standard(version, ast, prepor);
+			};
+			// tools
+			Tea.tabsize = function(num){
+				SText.tabsize = SText.cope(' ', num);
+			};
+			Tea.exit = function(state){
+				if (state == null) state = 0;
+				print('* <r:TeaJS:> exit - Used time <b:'+Tea.uptime('ms')+':>');
+				process.exit(state);
+			};
+			Tea.uptime = function(unit){
+				var t;
+				t = process.uptime();
+				switch (unit){
+					case 's':
+						return t+'s';
+					case 'ms':
+						return t*1000+'ms';
 				}
-				var key = something.name, type = something.type;
-				this[type][key] = something;
-				if (this[type].map.indexOf(key) == -1){
-					this[type].map.push(key);
+				return t*1000;
+			};
+			Tea.memory = function(unit){
+				var data, rss;
+				data = process.memoryUsage();
+				rss = data.rss;
+				switch (unit){
+					case 'kb':
+						return Math.floor(data.rss*100/1024)/100+' KB';
+					case 'mb':
+						return Math.floor(data.rss*100/1024/1024)/100+' MB';
 				}
-				return something;
-			}
-			Context.prototype.get = function (key){
-				if (!(this.length)) return;
-				var limits = arguments.length > 1 ? Hash.slice(arguments, 1) : ['macrofun', 'macro', 'statement', 'expression'];
-				for (var _i=0, type; _i < limits.length; _i++){
-					type = limits[_i];
-					if (this[type].map.indexOf(key) != -1){
-						return this[type][key];
-					}
-				}
-			}
-			Context.prototype.extends = function (extend){
-				for (var _i_ref = ['macrofun', 'macro', 'statement', 'expression'], _i=0, type; _i < _i_ref.length; _i++){
-					type = _i_ref[_i];
-					for (var _j=0, key; _j < extend[type].map.length; _j++){
-						key = extend[type].map[_j];
-						this.add(extend[type][key]);
-					}
-				}
-			}
-			Context.prototype.reinit = function (){
-				this._source = null;
-				this._ast = null;
-				this._rewriter = null;
-			}
-			Context.prototype.echo = function (output, outmap){
-				var requires, text, sourcemap;
-				if (!output) output = this.argv && this.argv.out;
-				if (this.requires.length){
-					requires = Require.load(this.requires);
-					Require.join(requires, this.rewriter);
-				}
-				text = this.rewriter.text;
-				if (output){
-					if (outmap){
-						sourcemap = this.sourcemap;
-						if (!(typeof outmap == 'string')){
-							outmap = output.replace(/\.\w+$/, '.map');
-						}
-						Text.writeFile(sourcemap.text, outmap);
-						text += '\n//# sourceMappingURL='+Path.relative(Path.dirname(output), outmap);
-					}
-					Text.writeFile(text, output);
-				}
-				return text;
-			}
-			Context.defaultProcessor = function(){
-				if (!DefPor) DefPor = new Context();
-				for (var i=0, item; i < arguments.length; i++){
-					item = arguments[i];
-					if (item){
-						DefPor.extends(typeof item == 'string' ? Context.parseByFile(item) : item);
-					}
+				return rss;
+			};
+			Tea.log = function(){
+				if (Tea.argv['--verbose']){
+					Tea.log = Helper.log;
+					Tea.log.apply(null, arguments);
 				}
 			};
-			Context.parseByFile = function(file, ctx){
-				if (ctx == null) ctx = new Context();
-				ctx.parse(file);
-				return ctx;
-			};
-			function loadRequiresList(list, cache){
-				for (var file in list){
-					if (!list.hasOwnProperty(file)) continue;
-					var key = list[file];
-					if (file == 'length' || cache.hasOwnProperty(file)){
-						continue;
-					}
-					if (debug.log){
-						debug.log('** require file: '+file);
-					}
-					var ctx = new Context({"file": file});
-					cache[file] = [key, ctx, ctx.rewriter];
-					if (ctx.requires.length){
-						loadRequiresList(ctx.requires, cache);
-					}
-				}
-				return cache;
-			}
-			return Context;
-		})();
-		module.exports = Context;
-	});Module.register('/Users/wl/Sites/TeaJS/src/preprocess/processor.tea', '../src/preprocess/processor.tea', function(exports, require, module, __filename, __dirname){
-		var Processor = (function(){
-			var include_cache = {}, Template = require("../src/preprocess/template.tea");
-			function Processor(ctx){
-				this.context = ctx;
-			}
-			Processor.prototype.string = function (src, text, i, token){
-				return Processor.string(this.context, src, text, i, token);
-			}
-			Processor.prototype.comm = function (src, text, i, token){
-				return Processor.comm(this.context, src, text, i, token);
-			}
-			Processor.prototype.regexp = function (src, text, i, token){
-				return Processor.regexp(this.context, src, text, i, token);
-			}
-			Processor.prototype.pound = function (src, text, i, token, control_cache){
-				return Processor.pound(this.context, src, text, i, token, control_cache);
-			}
-			Processor.prototype.macro = function (src, text, i, token){
-				return Processor.macro(this.context, src, text, i, token);
-			}
-			Processor.prototype.matchNode = function (type, src, opt){
-				var exp;
-				if (!(this.context[type])) return;
-				var map = this.context[type].map, _index = src.index;
-				for (var i=0, name; i < map.length; i++){
-					name = map[i];
-					src.index = _index;
-					if (exp = this.context[type][name].parse(src, opt)){
-						if (debug.prep){
-							debug.prep('[Prep '+type+': '+name+' matched]', src[_index]);
-						}
-						return exp;
-					}
-				}
-			}
-			Processor.string = function(ctx, src, text, i, token){
-				var b, str, re, m, val;
-				if ((b = indexRight(text, i, token.text)) === false){
-					throw tea.error(new Error(), 'tokenize string pattern error! miss right token', token);
-				}
-				str = text.slice(i, b+1);
-				re = /([^\\]|^)(\#\{((\w+)(.*?))\})/g;
-				while (m = re.exec(str)){
-					val = parseMacro(ctx, null, m[3], 0, null, m[4]);
-					str = str.slice(0, m.index+1)+(val || '')+str.substr(m.index+m[0].length);
-					re.lastIndex = m.index+1;
-				}
-				str = Template.string(str);
-				token.text = str;
-				token.types = ['StringTokn', 'ConstTokn'];
-				token.location.end = b;
-				return token;
-			};
-			Processor.regexp = function(ctx, src, text, i, token){
-				var b, match;
-				if (!testValue(src, src.prevIndex(src.length, true))){
-					if ((b = indexRight(text, i, '/', '/')) === false){
-						throw tea.error(new Error(), 'tokenize regexp pattern error! miss right token', token);
-					}
-					if (match = text.substr(b+1).match(/^[gimy]+/)){
-						b = b+match[0].length;
-					}
-					token.text = Template.regexp(text.slice(i, b+1));
-					token.types = ['RegExpDecl', 'ConstTokn'];
-					token.location.end = b;
-				}
-				return token;
-			};
-			Processor.comm = function(ctx, src, text, i, token){
-				var b;
-				switch (token.text){
-					case '/*':
-						if ((b = indexRight(text, i, '/*', '*/')) === false){
-							throw tea.error(new Error(), 'tokenize comment pattern error! miss right token', token);
-						}
-						token.types = ['CommDecl', 'MultiLineComm'];
-						break;
-					case '//':
-						token.types = ['CommDecl', 'LineComm'];
-						break;
-					case '#!':
-						token.types = ['CommDecl', 'ShellComm'];
-						break;
-				}
-				if (!b){
-					if ((b = text.indexOf('\n', i)) == -1){
-						b = text.length;
-					}
-					b -= 1;
-				}
-				token.text = text.slice(i, b+1);
-				token.location.end = b;
-				return token;
-			};
-			Processor.pound = function(ctx, src, text, i, token, cache){
-				var match, type;
-				if (match = text.substr(i+1).match(/^([\$A-Za-z_][\w\$]*)(\:?)/)){
-					type = match[1];
-					if (Processor.hasOwnProperty(type)){
-						token = Processor[type](ctx, src, text, i, token);
-					}else if (/^(elifdef|elif|ifdef|else|endif|if)$/.test(type)){
-						token = Processor.control(ctx, src, text, i, token, type, cache);
-					}else if (type == 'end'){
-						token = text.indexOf('\n', i);
-					}else {
-						token.text = '#'+match[0];
-						token.types = ['InstructionExpr', 'ConstTokn'];
-						token.location.end = i+match[0].length;
-						token = parseMacro(ctx, src, text, i, token, match[0], token.location.end);
-					}
-				}
-				return token;
-			};
-			Processor.token = function(ctx, src, text, i, token){
-				var m;
-				if (m = text.substr(i).match(/^#token (\w+(?:\s*,\s*\w+)*) (.*)$/m)){
-					var types = Text.split(m[1], ',', true), symbols = Text.split(m[2], ',', true);
-					tea.defineToken(types, symbols);
-					if (debug.prep){
-						debug.prep('[Prep define token: g{"'+symbols.join('","')+'"}]', token);
-					}
-					return i+m[0].length;
-				}else {
-					throw tea.error(new Error(), 'define token syntax error!', token);
-				}
-			};
-			Processor.line = function(ctx, src, text, i, token){
-				token.text = token.location.lineNumber+'';
-				token.types = ['NumTokn', 'ConstTokn'];
-				if (token.indent >= 0){
-					token.types.push('LineHead');
-				}
-				token.location.end = i+4;
-				return token;
-			};
-			Processor.argv = function(ctx, src, text, i, token){
-				var m, arg;
-				if (!(m = text.substr(i).match(/^#argv (.*$)/m))){
-					throw tea.error(new Error(), 'define argv syntax error!', token);
-				}
-				var args = Text.split(m[1], ' ', true);
-				for (var _i=0, item; _i < args.length; _i++){
-					item = args[_i];
-					if (!item){
-						continue;
-					}
-					if (arg = item.match(/\s*((-{0,2})[\w\-]+)(?:\s*=\s*(.*))?/)){
-						tea.argv[arg[1]] = evalValue(arg[3]);
-						if (debug.prep){
-							debug.prep('[Prep set argv: g{'+arg[1]+' == '+tea.argv[arg[1]]+'}]', token);
-						}
-					}
-				}
-				return i+m[0].length;
-			};
-			Processor.run = function(ctx, src, text, i, token){
-				var abcd, b, res;
-				if (!(abcd = indexInstruction(text, i))){
-					throw tea.error(new Error(), 'define run script syntax error', token);
-				}
-				b = abcd[3];
-				try {
-					if (res = Template.run(text.slice(i+4, b-3), ['source', 'index', 'argv'], [src, i, tea.argv], ctx)){
-						src.parse(res, null, ctx);
-						if (debug.prep){
-							debug.prep('[Prep run instruction]', token);
-						}
-					}
-				}catch (e) {
-					var err_pot = tea.helper.errorPot(token);
-					err_pot = err_pot.replace(/[^\n]*$/g, '')+text.slice(i+4, b-3).replace(/^/mg, err_pot.match(/"(\s*\d+\s*\|)/)[1]+'\t')+'\n"';
-					throw tea.error(new Error(), e, 'Prep run eval error: '+e.message, err_pot);
-				}
-				return b+1;
-			};
-			Processor.define = function(ctx, src, text, i, token){
-				var m, name, params, body;
-				if (!(m = text.substr(i).match(/^#define +(\w+)(\(.*?\))? *(\s*""""[\w\W]*?""""|(?:.*\\\n)*.*)/))){
-					throw tea.error(new Error(), 'define macro syntax error!', token);
-				}
-				name = m[1], params = m[2] && (m[2].slice(1, -1).trim() || []), body = m[3] && Text.trimIndent(m[3].replace(/\\\n/g, '\n').replace(/^\s*""""|""""\s*$/g, ''));
-				if (body && /#(?:if|argv)/.test(body)){
-					body = ctx.parse(body).join();
-				}
-				var macro = ctx.add(name, params, body);
-				if (macro.error){
-					throw tea.error(new Error(), macro.error, token);
-				}
-				if (debug.prep){
-					debug.prep('[Prep define: g{'+name+(m[2] || '')+'}]', token);
-				}
-				return i+m[0].length;
-			};
-			Processor.undef = function(ctx, src, text, i, token){
-				var m;
-				if (!(m = text.substr(i).match(/^#undef (.+)$/m))){
-					throw tea.error(new Error(), 'undefine syntax error!', token);
-				}
-				var names = m[1].trim().replace(/\s+/g, ' ').split(' ');
-				for (var _i=0, name; _i < names.length; _i++){
-					name = names[_i];
-					ctx.undef(name);
-				}
-				if (debug.prep){
-					debug.prep('[Prep undef: g{'+names.join(', ')+'}]', token);
-				}
-				return i+m[0].length;
-			};
-			Processor.include = function(ctx, src, text, i, token){
-				var m, file_list, file_dir, files, temp;
-				if (!(m = text.substr(i).match(/^#include +((?:[^\,\;\s\\]+(?:\\\ )*)+(?:\s*,\s*(?:[^\,\;\s\\]+(?:\\\ )*)+)*)\;*/))){
-					throw tea.error(new Error(), 'include syntax error!', token);
-				}
-				file_list = m[1].replace(/\s*,\s*/g, ',').replace(/\s*;+/g, '').trim().split(','), file_dir = Path.dirname(token.fileName || src.fileName);
-				files = [];
-				for (var f=0; f < file_list.length; f++){
-					temp = Path.parseFile(file_list[f], file_dir);
-					if (temp.error){
-						throw tea.error(new Error(), 'Can not find file: '+file_list[f]+' in "'+file_dir+'" dir', token);
-					}
-					for (var _i=0, file; _i < temp.length; _i++){
-						file = temp[_i];
-						if (!include_cache[file]){
-							include_cache[file] = ctx.parse(null, file);
-							include_cache[file].trimIndent();
-						}
-						if (include_cache[file].length){
-							src.insert(token.clone('/* Include file "'+file+'" */\n', ['CommDecl']));
-							src.insert(include_cache[file].clone());
-							if (debug.prep){
-								debug.prep('[Prep include: file at g{"'+file+'"}]', token);
-							}
-						}
-					}
-				}
-				return i+m[0].length;
-			};
-			Processor.test = function(ctx, src, text, i, token){
-				var b, m;
-				if (!(b = indexRight(text, i, '#test', '#end'))){
-					b = text.length;
-				}
-				text = text.slice(i, b-3);
-				if (!(m = text.match(/#test(.*)\n/))){
-					throw tea.error(new Error(), 'define test block syntax error', token);
-				}
-				text = text.substr(m[0].length);
-				if (m[1] && m[1].trim() == 'run'){
-					tea.argv['--test'] = true;
-				}
-				token.text = '/* Test: */\n'+tea.compile(text, ctx)+'\n/* Test end */';
-				token.types = ['TestPatt', 'CommDecl'];
-				src.add(token);
-				return b+1;
-			};
-			Processor.expr = function(ctx, src, text, i, token){
-				var m, type, name, pattern, writer;
-				if (!(m = text.substr(i).match(/#(expr|stat) +([A-Z][\w]+(?:Tokn|Patt|Decl|Expr|Stam)) +[\/\`]((?:[^\/\`]|\\\/|\\\`)+)[\/\`] *(\s*""""[\w\W]*?""""|(?:.*\\\n)*.+)/))){
-					throw tea.error(new Error(), 'define syntactic sugar syntax error', token);
-				}
-				type = m[1] == 'expr' ? 'expression' : 'statement';
-				name = m[2];
-				pattern = m[3];
-				writer = Text.trimIndent(m[4].replace(/\\\n/g, '\n').replace(/^\s*""""|""""\s*$/g, ''));
-				var ss = ctx.add(type, name, pattern, writer);
-				if (ss.error){
-					throw tea.error(new Error(), ss.error, token);
-				}
-				if (debug.prep){
-					debug.prep('[Prep register '+type+': '+name+' -> /'+pattern+'/]', token);
-				}
-				return i+m[0].length;
-			};
-			Processor.control = function(ctx, src, text, i, token, type, cache){
-				var blocks, status, data;
-				if (type == 'if' || type == 'ifdef'){
-					if (!(blocks = indexControl(text, i))){
-						throw tea.error(new Error(), 'define control preprocess syntax error', token);
-					}
-					status = false;
-					for (var _i=0, item; _i < blocks.length; _i++){
-						item = blocks[_i];
-						if (status){
-							item[1] = false;
-						}else {
-							item[1] = status = evalCondition(ctx, item[0], item[1], src, token);
-						}
-						cache[item[2]] = item;
-					}
-				}
-				if (!(data = cache[i])){
-					throw tea.error(new Error(), 'unexpected #'+type+' ctx instruction', token);
-				}
-				if (data[1]){
-					return data[4]+1;
-				}else {
-					return data[5]+1;
-				}
-			};
-			Processor.macro = function(ctx, src, text, i, token){
-				if (testIdExpr(src, src.length)){
-					return parseMacro(ctx, src, text, i, token, token.text);
-				}
-				return token;
-			};
-			Processor.stam = Processor.expr;
-			function parseMacro(ctx, src, text, i, token, name, b){
-				if (b == null) b = i+name.length-1;
-				var macro, params, ab, val_src;
-				if (macro = ctx.get(name, 'macrofun')){
-					params = text.substr(b+1);
-					if (/^\s*\(/g.test(params) && (ab = Text.indexPair(params, 0, '(', ')'))){
-						b += ab[1]+1;
-						params = params.slice(ab[0]+1, ab[1]);
-					}else if (/^\ +[^\n\;\}\]\)\,]/.test(params)){
-						ab = Text.indexBreak(params, 0);
-						b += ab+1;
-						params = params.slice(0, ab+1);
-					}else {
-						params = '';
-					}
-				}
-				if (!macro || !params){
-					macro = ctx.get(name, 'macro');
-				}
-				if (macro){
-					val_src = macro.getValue(params, true);
-					if (src){
-						src.insert(val_src);
-						if (debug.prep){
-							debug.prep('[Prep macro matched: '+name+']', token);
-						}
-					}else {
-						return val_src.join();
-					}
-					return b+1;
-				}
-				return token;
-			}
-			function indexInstruction(text, i){
-				var m, a, a_, b, type, label, b_, abcd;
-				if (m = text.substr(i).match(/^#(\w+)(\:?)/)){
-					a = i, a_ = i+m[0].length-1;
-					b = i+m[0].length-1;
-					type = m[1];
-					label = !!m[2];
-					var t = 10;
-					while (t--){
-						if (!(m = text.substr(b+1).match(/#(\w+)(\:?)/))){
-							b = text.length, b_ = b;
-							break;
-						}else {
-							if (m[1] == 'end' || m[1] == 'end'+type || m[1] == 'endif' && /^(ifdef|if|elifdef|elif|else)$/.test(type)){
-								b = b+1+m.index, b_ = b+m[0].length-1;
-								break;
-							}else if (label && m[2] || /^(elifdef|elif|else)$/.test(m[1])){
-								b_ = b = b+m.index;
-								break;
-							}
-							b = b+m.index;
-							if (/^(ifdef|if)$/.test(m[1])){
-								if (!(b = indexControl(text, b+1, 'end'))){
-									return;
-								}
-							}else if (/^(run|test)$/.test(m[1]) || m[2] == ':'){
-								if (!(abcd = indexInstruction(text, b+1))){
-									return;
-								}
-								b = abcd[3];
-							}
-						}
-					}
-					return [a, b, a_, b_];
-				}else {
-					throw tea.error(new Error(), 'not find instruction');
-				}
-			}
-			function indexControl(text, i, only_index){
-				var re, cache, abcd, a, b, _a, _b, m;
-				re = /^#(ifdef|if)\b/;
-				cache = [];
-				while (re.test(text.substr(i))){
-					if (!(abcd = indexInstruction(text, i))){
-						return;
-					}
-					a = abcd[0], b = abcd[1], _a = abcd[2], _b = abcd[3];
-					if (only_index){
-						cache.push([a, b, _a, _b]);
-					}else {
-						m = text.substr(_a+1).match(/.*$/m);
-						cache.push([text.slice(a+1, _a+1), m[0], a, b, _a+m[0].length, _b]);
-					}
-					re = /^#(elifdef|elif|else)\b/;
-					i = _b+1;
-				}
-				if (!only_index){
-					var last = cache[cache.length-1];
-					if (m = text.substr(last[3]).match(/^#(endif|end).*$/m)){
-						cache.push(['endif', '', last[3], last[3], last[5], last[3]+m[0].length-1]);
-					}
-				}
-				if (only_index == 'end'){
-					return cache[cache.length-1][3];
-				}
-				return cache;
-			}
-			function indexRight(text, index, s1, s2){
-				if (s2 == null) s2 = s1;
-				var a_b = Text.indexPair(text, index, s1, s2, true);
-				return !a_b || a_b[0] !== index ? false : a_b[1]+s2.length-1;
-			}
-			function testValue(src, index){
-				var token;
-				if (token = src[index]){
-					if (token.is('ConstTokn', 'Close', 'Postfix')){
-						return true;
-					}
-					if (token.is('IdentifierTokn')){
-						if (!token.is('Binary', 'Unary')){
-							return true;
-						}
-					}else if (token.is('Keyword')){
-						if (token.is('Restricted')){
-							return false;
-						}
-					}else {
-						return false;
-					}
-					token = src[src.prevIndex(index, true)];
-					if (token && token.is('Member')){
-						return true;
-					}
-				}
-				return false;
-			}
-			function testIdExpr(src, index){
-				var last;
-				last = src[src.prevIndex(index, true)];
-				if (last && last.eq('.', '::', '..', 'function', 'set', 'get', 'static')){
-					return false;
-				}
-				return true;
-			}
-			function evalValue(val){
-				if (val == 'false' || val == 'null'){
-					return false;
-				}else if (val){
-					try {
-						return eval(val);
-					}catch (e) {
-						return '"'+val+'"';
-					}
-				}
-				return true;
-			}
-			function evalCondition(ctx, type, condition, src, token){
-				var isdef, root_file, the_file, exp;
-				isdef = type.indexOf('def') != -1, root_file = tea.argv.file, the_file = token.fileName || src.fileName, exp = condition.trim().replace(/\:$/, '').replace(/((-{0,2})([\$a-zA-Z_][\w]*)\b)/g, function($0, $1, $2, $3){
-					var res;
-					if ($2){
-						if ($3 == 'main'){
-							return root_file == the_file;
-						}
-						if ($3 == 'root'){
-							return '"'+root_file+'"';
-						}
-						if ($3 == 'file'){
-							return '"'+the_file+'"';
-						}
-						res = tea.argv[$1];
-					}else if (isdef){
-						return !!ctx.get($1)+'';
-					}else {
-						if (global.hasOwnProperty($1)){
-							res = global[$1];
-						}else if (tea.argv.hasOwnProperty($1)){
-							res = tea.argv[$1];
-						}else {
-							return $1;
-						}
-					}
-					return typeof res == 'string' ? '"'+res.replace(/\"/g, '\"')+'"' : res;
-				});
-				try {
-					return exp && eval('!!('+exp+')') || type == 'else';
-				}catch (e) {
-					throw tea.error(new Error(), e, '[ProProcess condition '+type+' "'+condition+'" -> "'+exp+'" error', token, 'ProProcess condition error!');
-				}
-			}
-			module.exports = Processor;
-			return Processor;
-		})();
-	});Module.register('/Users/wl/Sites/TeaJS/src/preprocess/template.tea', '../src/preprocess/template.tea', function(exports, require, module, __filename, __dirname){
-		function regexp(str){
-			str = str.replace(/([^\\]|^)\\i/g, '$1(?:[\\$_a-zA-Z]\\w+)');
-			str = str.replace(/(\\?[\(\"\'\{\[])\.{3}(\\?[\)\"\'\}\]])/g, '(?:$1(?:\\\\\\\\|\\\\$1|\\\\$2|$1(?:\\\\\\\\|\\\\$1|\\\\$2|[^$2]+)*$2|[^$2]+)*$2)');
-			str = str.replace(/\s*\n\s*/g, '');
-			return str;
-		};
-		function slices(str){
-			var m, ab, str_slices = [], tmp_re = /([^\\]|^)(\{\{|\$[a-zA-Z]+)/;
-			while (m = str.match(tmp_re)){
-				str_slices.push(str.slice(0, m.index+m[1].length));
-				if (m[2] == '{{'){
-					if (!(ab = Text.indexPair(str, m.index, '{{', '}}', true))){
-						break;
-					}
-					str_slices.push(str.slice(ab[0]+2, ab[1]));
-					str = str.substr(ab[1]+2);
-				}else {
-					str_slices.push(m[2]);
-					str = str.substr(m.index+m[0].length);
-				}
-			}
-			if (str){
-				str_slices.push(str);
-			}
-			return str_slices;
-		};
-		function string(str){
-			var symbol = str.match(/^('+|"+|`+)/)[1],
-				qq = symbol[0] == '`' ? "'" : symbol[0];
-			str = str.slice(symbol.length, -symbol.length);
-			if (!str){
-				return qq+str+qq;
-			}
-			if (/\n/.test(str)){
-				str = Text.trimIndent(str);
-			}
-			if (qq == '"'){
-				var str_slices = [];
-				for (var i_ref = slices(str), i=0, item; i < i_ref.length; i++){
-					item = i_ref[i];
-					if (!item){
-						continue;
-					}
-					if (i%2){
-						if (/[^\w\s\$\_]/.test(item)){
-							str_slices.push('('+item+')');
-						}else {
-							str_slices.push(item);
-						}
-					}else {
-						str_slices.push('"'+escapeString(symbol, item)+'"');
-					}
-				}
-				str = str_slices.join('+').replace(/^\"\"\+|\+\"\"$/g, '');
-			}else {
-				str = qq+escapeString(symbol, str)+qq;
-			}
-			return str;
-		};
-		function run(text, args, param, prep){
-			if (param){
-				return func(text, args, true, prep).apply(this, param);
-			}else {
-				return func(text, args, null, prep);
-			}
-		};
-		function func(text, args, create, prep){
-			var script;
-			args = args ? args.join(',') : '';
-			script = compile(text, prep);
-			script = "function("+args+"){\nvar __write  = '';\nfunction write(){for(var i=0; i<arguments.length; i++) __write += arguments[i]};\n"+script+";\nreturn __write;\n}";
-			if (create){
-				eval('create = '+script);
-				return create;
-			}
-			return script;
-		};
-		function compile(text, prep){
-			var snippets, script;
-			if (!test(text)){
-				return tea.compile(text, prep);
-			}
-			snippets = [];
-			for (var i_ref = slices(text), i=0, item; i < i_ref.length; i++){
-				item = i_ref[i];
-				if (!item){
-					continue;
-				}
-				snippets.push(i%2 ? item : "write '"+item+"';");
-			}
-			script = tea.compile(snippets.join('\n'), prep);
-			return script;
-		};
-		function test(text){
-			return /([^\\]|^)\{\{/.test(text);
-		};
-		function escapeString(symbol, str){
-			switch (symbol){
-				case '""""':case '`':case "''''":
-					str = Text(str, symbol[0]).replace(/([^\\]|^)(\\{2,4,6,8})?\\n/g, '$1$2\\n\\\n');
-					break;
-				case '"""':case "'''":
-					str = str.replace(/([^\\]|^)\n/g, '$1\\n').replace(/^\n/mg, '\\n\\\n');
-					break;
-				case '"':case "'":default:
-					str = str.replace(/([^\\]|^)\n|^\n/g, '$1\\n');
-					break;
-			}
-			if (symbol[0] == '"'){
-				if (symbol.length > 1){
-					str = str.replace(/([^\\])"/g, '$1\"');
-				}
-				str = str.replace(/\\'/g, "'");
-			}else {
-				if (symbol.length > 1){
-					str = str.replace(/([^\\])'/g, "$1\'");
-				}
-				str = str.replace(/\\"/g, '"');
-			}
-			return str;
-		}
-		module.exports.regexp = regexp;
-		module.exports.slices = slices;
-		module.exports.string = string;
-		module.exports.run = run;
-		module.exports.func = func;
-		module.exports.compile = compile;
-		module.exports.test = test;
-	});Module.register('/Users/wl/Sites/TeaJS/src/preprocess/macro.tea', '../src/preprocess/macro.tea', function(exports, require, module, __filename, __dirname){
-		var Macro = (function(){
-			var Template = require("../src/preprocess/template.tea");
-			function Macro(name, params, body, parent){
-				this.name = name;
-				this.type = params ? 'macrofun' : 'macro';
-				if (params){
-					if (typeof params == 'string'){
-						this.params = Text.split(params, ',', true);
-					}else {
-						this.params = params;
-					}
-				}else {
-					this.params = [];
-				}
-				this.body = body;
-				this.parent = parent;
-				if (Template.test(body)){
-					try {
-						this.script = Template.func(body, params, true);
-					}catch (e) {
-						this.error = e;
-					}
-				}
-			}
-			Macro.prototype.getValue = function (params, ret_src){
-				var value, val_src;
-				if (typeof params == 'string'){
-					params = Text.split(params.replace(/^\((.*)\)$/g, '$1'), ',', 'trim');
-				}
-				if (this.script){
-					value = this.script.apply(this.parent, params || []);
-				}else {
-					value = this.body;
-				}
-				value = replaceParam(value, this.params, params || []);
-				value = Text.trimIndent(value);
-				val_src = this.parent.parse(value);
-				if (ret_src){
-					return val_src;
-				}
-				return val_src.join();
-			}
-			function replaceParam(value, keys, params){
-				var keys_join = keys.join('|'),
-					re = new RegExp('(#*?)('+(keys_join ? '\\b(?:'+keys_join+')\\b|' : '')+'#(\\d+)|\\bARGR\\.\\.\\.)(##)?', 'g'),
-					m,
-					hash,
-					unhash,
-					key,
-					num,
-					arg,
-					val,
-					insert = [],
-					id;
-				while (m = re.exec(value)){
-					hash = m[1], key = m[2], num = m[3], unhash = m[4];
-					num = num || keys.indexOf(key);
-					if (key == 'ARGR...'){
-						val = params.slice(keys.length).join(', ');
-					}else if (params[num]){
-						val = params[num];
-					}
-					id = '$$$'+ID()+'$$$';
-					insert.push([id, (val ? hash%2 ? '"'+val+'"' : val : '')]);
-					value = value.slice(0, m.index)+id+value.substr(re.lastIndex);
-					re.lastIndex = m.index+id.length;
-				}
-				for (var i=0; i < insert.length; i++){
-					value = value.replace(insert[i][0], insert[i][1]);
-				}
-				return value;
-			}
-			module.exports = Macro;
-			return Macro;
-		})();
-	});Module.register('/Users/wl/Sites/TeaJS/src/preprocess/sugar.tea', '../src/preprocess/sugar.tea', function(exports, require, module, __filename, __dirname){
-		var Sugar = (function(){
-			var Syntax = require("../src/syntax/index.tea");
-			function Sugar(type, name, pattern, writer, parser){
-				this.type = type;
-				this.name = name;
-				this.stxre = Syntax.regexp(pattern);
-				this.parser = parser;
-				this.writer = writer;
-			}
-			Sugar.prototype.parse = function (src, opt){
-				var node = Syntax.matchNode(this.name, this.stxre, src, 'ret node');
-				if (node && this.parser){
-					return this.parser.call(this, node, src, opt);
-				}
-				return node;
-			}
-			Sugar.prototype.read = function (reader, node){
-				var write = reader.new(this.name);
-				if (typeof this.writer == 'string'){
-					write.read(this.writer, node);
-				}else {
-					write = this.writer(node, write) || write;
-				}
-				return write;
-			}
-			module.exports = Sugar;
-			return Sugar;
-		})();
-	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/index.tea', '../src/syntax/index.tea', function(exports, require, module, __filename, __dirname){
-		var token,
-			location,
-			source,
-			regexp,
-			match,
-			matchNode,
-			Node = require("../src/syntax/node.tea"),
-			Scope = require("../src/syntax/scope.tea"),
-			Parser = require("../src/syntax/parser.tea"),
-			SyntaxReg = require("../src/syntax/regexp.tea");
-		token = require("../src/syntax/token.tea");
-		location = require("../src/syntax/location.tea");
-		source = require("../src/syntax/source.tea");
-		function parse(src, ctx){
-			var ast = new Node('Root');
-			ast.context = null;
-			ast.source = src;
-			ast.fileName = src.fileName;
-			ast.filePath = Path.dirname(ast.fileName);
-			src.index = 0;
-			src.refresh();
-			var old_por = src.context;
-			if (ctx){
-				src.context = ctx;
-			}
-			ast.add(Parser.Node(src));
-			Scope.parse(ast);
-			ast.context = src.context;
-			src.context = old_por;
-			return ast;
-		};
-		regexp = SyntaxReg.compile;
-		match = function(stx_re, src, opt){
-			if (typeof stx_re == 'string'){
-				if (Parser.hasOwnProperty(stx_re)){
-					return Parser[stx_re](src, opt);
-				}
-				stx_re = Syntax.regexp(stx_re);
-			}
-			return SyntaxReg.match(stx_re, src);
-		};
-		matchNode = SyntaxReg.matchNode;
-		module.exports.token = token;
-		module.exports.location = location;
-		module.exports.source = source;
-		module.exports.parse = parse;
-		module.exports.regexp = regexp;
-		module.exports.match = match;
-		module.exports.matchNode = matchNode;
-	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/node.tea', '../src/syntax/node.tea', function(exports, require, module, __filename, __dirname){
-		var NodeBase = require("../src/syntax/base.tea");
-		var Node = (function(){
-			function Node(type){
-				this.type = type;
-				this.length = 0;
-				this.isnode = true;
-				this._scope = null;
-				if (arguments.length > 1){
-					this.add.apply(this, Array.prototype.slice.call(arguments, 1));
-				}
-			}
-			Node.prototype = new NodeBase();
-			Node.prototype.constructor = Node;
-			Node.prototype.__super__ = NodeBase.prototype;
-			Node.prototype.__defineGetter__("text", function(){
-				var tokens, texts;
-				tokens = this.tokens;
-				texts = [];
-				for (var _i=0, tk; _i < tokens.length; _i++){
-					tk = tokens[_i];
-					texts.push(tk.text);
-				}
-				return texts.join('');
-			});
-			Node.prototype.add = function (){
-				for (var i=0, node; i < arguments.length; i++){
-					node = arguments[i];
-					if (!node){
-						continue;
-					}
-					if (node.isnode || node.istoken){
-						node.parent = this;
-						this[this.length++] = node;
-					}else if (isArray(node)){
-						this.add.apply(this, node);
-					}else {
-						throw tea.error(new Error(), 'Node can only add object of "Node" or "Code" and "NaN" types ! >> '+node);
-					}
-				}
-				return this;
-			}
-			Node.prototype.tokens = function (index){
-				var tokens = [];
-				for (var i=0; i < this.length; i++){
-					if (this[i].istoken){
-						tokens.push(this[i]);
-					}else {
-						tokens.push.apply(tokens, this[i].tokens());
-					}
-					if (index === 0){
-						return tokens[0];
-					}
-				}
-				if (typeof index == 'number'){
-					return tokens[index < 0 ? tokens.length+index : index];
-				}
-				return tokens;
-			}
-			Node.prototype.clone = function (){
-				var node = new Node(this.type);
-				for (var i=0; i < this.length; i++){
-					node[node.length++] = this[i];
-				}
-				node.parent = this.parent;
-				return node;
-			}
-			return Node;
-		})();
-		module.exports = Node;
-	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/base.tea', '../src/syntax/base.tea', function(exports, require, module, __filename, __dirname){
-		var Scope = require("../src/syntax/scope.tea");
-		var NodeBase = (function(){
-			var nodemap = require("../src/syntax/map.tea").node;
-			function NodeBase(){}
-			NodeBase.prototype.__defineGetter__("root", function(){
-				var root = this;
-				while (root.parent){
-					root = root.parent;
-				}
-				return root;
-			});
-			NodeBase.prototype.__defineGetter__("offsetParent", function(){
-				var parent = this.parent;
-				while (parent && (['ArgumentsDecl', 'NodeStam', 'CommaExpr'].indexOf(parent.type) != -1)){
-					parent = parent.parent;
-				}
-				return parent;
-			});
-			NodeBase.prototype.__defineGetter__("scopeParent", function(){
-				if (this.type == 'Root'){
-					return this;
-				}
-				var parent = this.parent;
-				while (parent && !parent.is('ScopeNode')){
-					parent = parent.parent;
-				}
-				return parent;
-			});
-			NodeBase.prototype.__defineGetter__("parent", function(){
-				return this._parent;
-			});
-			NodeBase.prototype.__defineSetter__("parent", function(parent){
-				this._scope = null;
-				return this._parent = parent;
-			});
-			NodeBase.prototype.__defineGetter__("nextSibling", function(){
-				var index = this.index;
-				if (index >= 0){
-					return this.parent[index+1];
-				}
-			});
-			NodeBase.prototype.__defineGetter__("prevSibling", function(){
-				var index = this.index;
-				if (index-1 >= 0){
-					return this.parent[index-1];
-				}
-			});
-			NodeBase.prototype.__defineGetter__("index", function(){
-				return !this.parent ? -1 : Array.prototype.indexOf.call(this.parent, this);
-			});
-			NodeBase.prototype.__defineGetter__("scope", function(){
-				if (!this._scope){
-					if (this.parent){
-						this._scope = this.parent.scope;
-					}else {
-						this._scope = new Scope(this);
-					}
-				}
-				return this._scope;
-			});
-			NodeBase.prototype.__defineSetter__("scope", function(scope){
-				return this._scope = scope;
-			});
-			NodeBase.prototype.__defineGetter__("offsetScope", function(){
-				var scope = this.scope;
-				if (scope.isLetScope){
-					return scope.parent;
-				}
-				return scope;
-			});
-			NodeBase.prototype.queryParent = function (type){
-				var p = this.parent;
-				while (p && p.type != type){
-					p = p.parent;
-				}
-				return p;
-			}
-			NodeBase.prototype.is = function (){
-				var list, types;
-				list = arguments.length > 1 ? arguments : arguments[0].split(' '), types = this.types || [this.type];
-				for (var i=0; i < list.length; i++){
-					if (types.indexOf(list[i]) != -1){
-						return list[i];
-					}else if (nodemap.test(types[0], list[i])){
-						return list[i];
-					}
-				}
-				return false;
-			}
-			NodeBase.prototype.eq = function (){
-				var text, list;
-				if (this.isnode){
-					if (this.length == 1 && this[0].istoken){
-						text = this[0].text;
-					}else {
-						return false;
-					}
-				}else {
-					text = this.text;
-				}
-				list = arguments.length > 1 ? arguments : arguments[0].split(' ');
-				for (var i=0; i < list.length; i++){
-					if (list[i] == text){
-						return text;
-					}
-				}
-				return false;
-			}
-			return NodeBase;
-		})();
-		module.exports = NodeBase;
-	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/scope.tea', '../src/syntax/scope.tea', function(exports, require, module, __filename, __dirname){
-		var Scope = (function(){
-			var global_scope = new Scope();
-			global_scope.type = 'Global';
-			global_scope.top = null;
-			function Scope(node){
-				this.name = null;
-				if (node && (node.isnode || node.istoken)){
-					this.node = node;
-					this.type = node.type;
-					this.node.scope = this;
-				}else {
-					this.type = node || '?';
-				}
-				this.variables = {};
-				this.lets = {};
-				this.consts = [];
-				this.exports = [];
-				this.argumentsDefine = [];
-				this.sub = [];
-				switch (this.type){
-					case 'ClassExpr':
-						this.construct = null;
-						this.inits = [];
-						this.protos = [];
-						this.statics = [];
-						break;
-					case 'Root':
-						this.requires = {"length": 0};
-						break;
-				}
-			}
-			Scope.prototype.__defineGetter__("top", function(){
-				if (!this._top_){
-					var scopeParent = this.node && this.node.scopeParent;
-					this._top_ = scopeParent && scopeParent.scope || global_scope;
-				}
-				return this._top_;
-			});
-			Scope.prototype.__defineSetter__("top", function(scope){
-				scope.addSub(this);
-				return this._top_ = scope;
-			});
-			Scope.prototype.__defineGetter__("parent", function(){
-				var top = this.top;
-				while (top.isLetScope){
-					top = top.top;
-				}
-				return top;
-			});
-			Scope.prototype.__defineGetter__("root", function(){
-				var rot = this;
-				while (rot && rot.type != 'Root'){
-					rot = rot.top;
-				}
-				return rot || global_scope;
-			});
-			Scope.prototype.queryParent = function (type){
-				var p = this;
-				while (p && p.type != type){
-					if (p.type == 'Root' || p.type == 'Global'){
-						return;
-					}
-					p = p.top;
-				}
-				return p;
-			}
-			Scope.prototype.addSub = function (scope){
-				if (this.sub.indexOf(scope) == -1){
-					this.sub.push(scope);
-				}
-				return this;
-			}
-			Scope.prototype.set = function (type, name, force){
-				var names = typeof name == 'string' ? [name] : name;
-				for (var i=0, name; i < names.length; i++){
-					name = names[i];
-					if (this.hasOwnProperty(type) && isArray(this[type])){
-						if (this[type].indexOf(name) == -1){
-							this[type].push(name);
-						}
-						return this;
-					}
-					var variables = this.variables;
-					if (force || !(variables.hasOwnProperty(name))){
-						variables[name] = type;
-					}
-				}
-				return this;
-			}
-			Scope.prototype.get = function (type){
-				var variables = this.variables, list = [];
-				for (var name in variables){
-					if (!variables.hasOwnProperty(name)) continue;
-					if (variables[name] == type){
-						list.push(name);
-					}
-				}
-				return list;
-			}
-			Scope.prototype.setLet = function (name, rename){
-				this.set('let', name);
-				if (rename){
-					this.lets[name] = rename;
-				}
-			}
-			Scope.prototype.getLet = function (name){
-				var scope = this.isDefined(name, 'let', 100, true);
-				if (scope){
-					return scope.lets[name] || name;
-				}
-			}
-			Scope.prototype.isDefined = function (name, type, level, ret_scope){
-				var variables, scope = this, _scope;
-				if (!level) level = 100;
-				while (scope && scope != _scope && level--){
-					_scope = scope;
-					variables = scope.variables;
-					if (variables.hasOwnProperty(name)){
-						type = type ? variables[name] == type : variables[name];
-						if (ret_scope && type){
-							return scope;
-						}
-						return type;
-					}
-					if (type == 'let' && !scope.isLetScope){
-						break;
-					}
-					scope = scope.top;
-				}
-				return false;
-			}
-			Scope.prototype.create = function (node, let_type){
-				var scope = new Scope(node);
-				scope.top = this;
-				if (let_type){
-					scope.isLetScope = true;
-				}
-				return scope;
-			}
-			Scope.prototype.addRequire = function (file){
-				if (!Path.isFile(file)){
-					throw tea.error(new Error(), 'join the "'+file+'" file not exist');
-				}
-				if (this.requires.hasOwnProperty(file)){
-					return this.requires[file];
-				}
-				var key = Path.join('./', Path.relative(tea.argv.outdir || '', file));
-				this.requires[file] = key;
-				this.requires.length++;
-				return key;
-			}
-			Scope.parse = function(node, __scope, __let_scope){
-				if (!__scope) __scope = node.scope || global_scope;
-				switch (node.is('ScopeNode', 'ControlStam')){
-					case 'ScopeNode':
-						__scope = __scope.create(node);
-						__let_scope = null;
-						break;
-					case 'ControlStam':
-						__let_scope = (__let_scope || __scope).create(node, 'let');
-						break;
-					default:
-						node.scope = __let_scope || __scope;
-						break;
-				}
-				for (var i=0, item; i < node.length; i++){
-					item = node[i];
-					item.scope = __let_scope || __scope;
-					if (item.type == 'IdentifierTokn'){
-						checkIdentifier(node, item, __scope, __let_scope);
-					}
-					if (item.isnode){
-						Scope.parse(item, __scope, __let_scope);
-					}
-				}
-				return __scope;
-			};
-			function createScope(node, parent_scope){
-				var scope = new Scope(node);
-				scope.top = parent_scope;
-				return scope;
-			}
-			function checkIdentifier(parent, id, scope, let_scope){
-				var idexpr, ass_expr, argu_expr, arr_patt, expr, p = parent;
-				do {
-					if (p.type == 'IdentifierExpr'){
-						idexpr = p;
-						continue;
-					}
-					if (p.type == 'ArrayPatt'){
-						arr_patt = p;
-						continue;
-					}
-					if (p.type == 'AssignmentDecl' || p.type == 'AssignmentExpr'){
-						ass_expr = p;
-						continue;
-					}
-					if (p.type == 'ArgumentsDecl' || p.type == 'ArgumentsExpr'){
-						argu_expr = p;
-						continue;
-					}
-					if (p.type == 'CommaExpr' || p.type == 'CommaStam' || p.type == 'NodeStam'){
-						continue;
-					}
-					expr = p;
-					break;
-				} while (p = p.parent);
-				if (!idexpr){
-					if (argu_expr){
-						if (let_scope && let_scope.type == 'ForStam' && expr.type == 'VarDecl' && /ForPConditionPatt|ForInConditionPatt/.test(expr.parent.type)){
-							checkArguments('LetDecl', ass_expr, id, scope, let_scope);
-						}else {
-							checkArguments(expr.type, ass_expr, id, scope, let_scope);
-						}
-					}else if (expr.is('FunctionDecl', 'GetterDecl', 'SetterDecl', 'MethodDecl', 'ClassExpr', 'ClassExpr')){
-						checkFunctionName(parent, id, scope);
-					}else if (ass_expr && arr_patt){
-						checkIdentifierExpr(expr, ass_expr, arr_patt, id, scope, let_scope);
-					}else if (/AtExpr/.test(parent.parent.type) && parent.index == 1){
-						checkAt(parent.parent, id);
-					}
-				}else {
-					checkIdentifierExpr(expr, ass_expr, idexpr, id, scope, let_scope);
-				}
-				return;
-			}
-			function checkAt(parent, id){
-				var scope, top_scope;
-				if (parent.length == 2 && parent.parent.type == 'AssignmentExpr'){
-					scope = parent.offsetScope;
-					if (scope.type == 'ClassExpr'){
-						scope.set('statics', id.text);
-						scope.set('static', id.text);
-						return;
-					}
-					top_scope = scope.parent;
-					if (top_scope.type == 'ClassExpr'){
-						if (top_scope.protos.indexOf(scope.name) != -1){
-							top_scope.set('protos', id.text);
-							top_scope.set('proto', id.text, true);
-						}else if (top_scope.statics.indexOf(scope.name) != -1){
-							top_scope.set('statics', id.text);
-							top_scope.set('static', id.text);
-						}
-					}
-				}
-			}
-			function checkArguments(expr_type, ass_expr, id, scope, let_scope){
-				var root;
-				switch (expr_type){
-					case 'LetDecl':
-						if (let_scope){
-							let_scope.set('let', id.text);
-						}else {
-							scope.set('let', id.text);
-						}
-						break;
-					case 'ConstDecl':
-						if (root = scope.root){
-							root.set('undefined', id.text);
-							root.set('consts', id.text);
-						}
-						scope.set('const', id.text);
-						break;
-					case 'VarDecl':
-						scope.set('defined', id.text);
-						break;
-					case 'ExportDecl':
-						if (!scope.isDefined(id.text)){
-							scope.set('undefined', id.text);
-						}
-						scope.set('exports', id.text);
-						break;
-					case 'ProtoDecl':case 'InitDecl':
-						scope.set('protos', id.text);
-						scope.set('proto', id.text, true);
-						break;
-					case 'StaticDecl':
-						scope.set('statics', id.text);
-						scope.set('static', id.text);
-						break;
-					case 'FunctionExpr':case 'FunctionDecl':case 'GetterDecl':case 'SetterDecl':case 'MethodDecl':case 'LambdaExpr':
-						scope.set('argument', id.text);
-						if (ass_expr){
-							scope.argumentsDefine.push(ass_expr.clone());
-						}
-						break;
-				}
-			}
-			function checkFunctionName(parent, id, scope){
-				var expr_type = parent.parent.type;
-				if (expr_type == 'JsonExpr'){
-					return;
-				}
-				var top_scope = scope.parent;
-				if (expr_type == 'ExportDecl'){
-					top_scope.set('exports', id.text);
-				}
-				switch (parent.type){
-					case 'GetterDecl':
-						top_scope.set('getter', id.text);
-						break;
-					case 'SetterDecl':
-						top_scope.set('setter', id.text);
-						break;
-					case 'ClassExpr':
-						top_scope.set('class', id.text);
-						break;
-					case 'FunctionDecl':
-						top_scope.set('function', id.text);
-						break;
-					case 'MethodDecl':
-						switch (expr_type){
-							case 'StaticDecl':
-								top_scope.set('statics', id.text);
-								top_scope.set('static', id.text);
-								break;
-							case 'ProtoDecl':case 'ClassExpr':case 'InitDecl':
-								top_scope.set('protos', id.text);
-								top_scope.set('proto', id.text);
-								break;
-							default:
-								if (top_scope.type == 'ClassExpr'){
-									top_scope.set('protos', id.text);
-									top_scope.set('proto', id.text);
-								}else {
-									top_scope.set('function', id.text);
-								}
-								break;
-						}
-						break;
-					default:
-						return;
-				}
-				scope.name = id.text;
-			}
-			function checkIdentifierExpr(expr, ass, idexpr, id, scope, let_scope){
-				if (let_scope && let_scope.isDefined(id.text, 'let')){
-					return;
-				}
-				var forstam = let_scope && let_scope.type == 'ForStam' && /ForPConditionPatt|ForInConditionPatt/.test(expr.type);
-				if (ass && idexpr.index == 0){
-					if (forstam && ass.parent.index == 0){
-						let_scope.set('let', id.text);
-					}else {
-						if (scope.isDefined(id.text, null, 1) == 'unknow'){
-							scope.set('modfiy', id.text, true);
-						}else if (!/defined/.test(scope.isDefined(id.text))){
-							scope.set('undefined', id.text);
-						}
-					}
-				}else if (!scope.isDefined(id.text, null, 1)){
-					if (forstam && idexpr.parent.index == 0){
-						let_scope.set('let', id.text);
-					}else {
-						scope.set('unknow', id.text);
-					}
-				}
-			}
-			return Scope;
-		})();
-		module.exports = Scope;
-	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/map.tea', '../src/syntax/map.tea', function(exports, require, module, __filename, __dirname){
-		var token,
-			node,
-			token_map = {'LF' : '\n',
-				'BlankTokn' : '\r  \t  \f  \ ',
-				'CommDecl' : '//  /*  */  #!',
-				'SymbolTokn Instruction' : '#',
-				'ConstTokn Boolean' : 'true  false',
-				'ConstTokn Null' : 'null  undefined  Infinity',
-				'Keyword' : 'this  instanceof  in  extends  null  undefined  Infinity  true  false  '+'if  while  with  catch  for  switch  case  default  else  try  do  finally  '+'new  typeof  delete  void  return  break  continue  throw  var  function  '+'let  enum  const  import  export  debugger  super  yield  class',
-				'IdentifierTokn' : 'eval  arguments  extends  import  export  get  set  static  as  of  and  or  not  is  require  let  enum  const  debugger  super  yield  class',
-				'Restricted' : 'instanceof  in  Infinity  '+'if  while  with  catch  for  switch  case  default  else  try  do  finally  '+'new  typeof  delete  void  return  break  continue  throw',
-				'SymbolTokn' : ';  ,  .  :  ?  \\  [  ]  {  }  (  )  //  /*  */  #!  '+'=  +=  -=  *=  /=  %=  &=  >>=  <<=  >>>=  '+'>  <  >=  <=  !=  !==  ==  ===  ++  --  '+'!  ~  +  -  *  /  %  &  |  ^  >>  <<  >>>  &&  ||  '+'**  ::  |=  ?=  @  ->  <-  >>  <<  >>>  <<<  =>  <=  ..  ...',
-				'SymbolTokn Quote' : '\'  "  """  \'\'\'  """"  \'\'\'\'  `',
-				'Controler' : 'if  while  with  catch  for  switch  case  default  else  try  do  finally',
-				'Declaration' : 'function  require  class  package  static  get  set  import  export',
-				'Clauses' : 'let  enum  const  var  return  break  continue  throw  debugger',
-				'Expression IdentifierTokn' : 'super  this  @',
-				'ClassRestricted' : 'static  get  set  extends',
-				'Unary' : 'new  typeof  yield  delete  void  not  !  ~  -  +  ++  --',
-				'Prefix Postfix' : '++  --',
-				'Binary Compute' : '+  -  *  /  %  &  |  ^  >>  <<  >>>  **  \\',
-				'Binary Compare' : 'instanceof  in  of  as  extends  is  not is  >  <  >=  <=  !=  !==  ==  ===',
-				'Binary Logic' : 'and  or  &&  ||',
-				'Binary Assign' : '=  +=  -=  *=  /=  %=  &=  |=  >>=  <<=  >>>=  ?=  |=',
-				'Ternary' : '?',
-				'Member' : '.  ::  ..  [',
-				'Comma' : ',',
-				'Open' : '{  (  [',
-				'Close' : '}  ]  )',
-				'BlockBreakTokn BlockBreak' : ';  \n',
-				'BlockStart' : ':  {',
-				'Contextual' : 'Binary  Member  Comma  in  as  of  ->  <-  =>  <=  ...',
-				'EndTokn' : 'BlockBreakTokn  Close  /*  //',
-				'IGLF' : 'Unary  Binary  Ternary  Member  Assign  Comma  Open  Contextual'},
-			node_map = {'Token' : 'ConstTokn IdentifierTokn NumTokn StringTokn RegexpTokn SymbolTokn TmlTokn BlockBreakTokn',
-				'DataPatt' : 'Token ArrayExpr JsonExpr UnaryExpr IdentifierExpr PrefixExpr PostfixExpr NotExpr',
-				'AccessorExpr' : 'DataPatt CompelExpr',
-				'ValueExpr' : 'AccessorExpr CallExpr',
-				'LogicExpr' : 'CompareExpr ComputeExpr ValueExpr',
-				'BinaryExpr' : 'LogicExpr',
-				'FunctionExpr' : 'FunctionDecl ClassExpr GetterDecl SetterDecl MethodDecl PackageExpr LambdaExpr',
-				'ExprStam' : 'SuperExpr ThisExpr AtExpr TernaryExpr Ternary2.5Expr BinaryExpr FunctionExpr RequireStam CommDecl ImportExpr ExtendsExpr',
-				'ClausesStam' : 'LetDecl ConstDecl VarDecl ReturnStam BreakStam ContinueStam ThrowStam DebuggerStam ExportDecl',
-				'ControlStam' : 'IfPatt ElseIfPatt ElsePatt WhileStam DoWhileStam WithStam ForStam SwitchStam CaseStam DefaultStam TryPatt CatchPatt FinallyPatt',
-				'ConditionPatt' : 'ForPConditionPatt ForPConditionPatt ForPConditionPatt',
-				'BlockStam' : 'LineBlockStam IndentBlockStam StamBlockStam',
-				'StatementStam' : 'ControlStam ClausesStam AssignmentExpr CommaExpr SeleteStam BlockStam ExprStam',
-				'NodeStam' : 'BlockStam',
-				'ScopeNode' : 'Root FunctionExpr',
-				'IgSemicolon' : 'LabelStam IfStam ElseIfStam ElseStam WhileStam WithStam ForStam WitchStam TryStam CatchStam FinallyStam FunctionExpr GetterDecl SetterDecl ClassExpr MethodDecl ExportDecl StaticDecl PackageExpr CommDecl BlockBreakTokn'};
-		token = {"types": {},
-			"literals": {},
-			"complexs": [],
-			"complexre": null,
-			"define": function(types, literals){
-				var literal_re, tmp;
-				if (arguments.length == 1){
-					if (isJson(types)){
-						for (var i in types){
-							if (!types.hasOwnProperty(i)) continue;
-							this.define(i, types[i]);
-						}
-					}
-					return;
-				}
-				types = isArray(types) ? types : types.split(' ');
-				literals = isArray(literals) ? literals : literals.split('  ');
-				for (var _i=0, literal; _i < literals.length; _i++){
-					literal = literals[_i];
-					if (this.types.hasOwnProperty(literal) && /^[A-Z]\w+$/.test(literal)){
-						this.define(types, this.types[literal]);
-						continue;
-					}
-					if (/\w\W|\W\w/.test(literal)){
-						literal_re = literal.replace(/(\W)/g, '\\$1');
-						if (this.complexs.indexOf(literal_re) == -1){
-							this.complexs.push(literal_re);
-						}
-					}
-					for (var _j=0, type; _j < types.length; _j++){
-						type = types[_j];
-						if (!this.types[type]) this.types[type] = [];
-						if (this.types[type].indexOf(literal) == -1){
-							this.types[type].push(literal);
-						}
-					}
-					if (tmp = this.literals[literal]){
-						for (var _j=0, type; _j < types.length; _j++){
-							type = types[_j];
-							if (tmp.indexOf(type) == -1){
-								tmp.push(type);
-							}
-						}
-					}else {
-						this.literals[literal] = types.slice();
-					}
-				}
-				if (this.complexs.length){
-					this.complexs.sort(function(a, b){return b.length-a.length});
-					this.complexre = new RegExp('^(?:'+this.complexs.join('|')+')(?!\\w)', 'g');
-				}
-			}};
-		node = {"map": {},
-			"all": [],
-			"test": function(name, type){
-				if (!type){
-					if (this.map['Expr'].indexOf(name) != -1){
-						return 'Expr';
-					}
-					if (this.map['Decl'].indexOf(name) != -1){
-						return 'Decl';
-					}
-					if (this.map['Stam'].indexOf(name) != -1){
-						return 'Stam';
-					}
-					return false;
-				}
-				return name == type || this.map[type] && this.map[type].indexOf(name) != -1;
-			},
-			"define": function(types, names){
-				if (arguments.length == 1){
-					if (isJson(types)){
-						for (var i in types){
-							if (!types.hasOwnProperty(i)) continue;
-							this.define(i, types[i]);
-						}
-					}
-					return;
-				}
-				types = isArray(types) ? types : types.split(' ');
-				names = isArray(names) ? names : names.split(' ');
-				for (var _i=0, name; _i < names.length; _i++){
-					name = names[_i];
-					if (this.map.hasOwnProperty(name)){
-						this.define(types, this.map[name]);
-					}
-					for (var _j=0, type; _j < types.length; _j++){
-						type = types[_j];
-						if (!this.map[type]) this.map[type] = [];
-						if (this.map[type].indexOf(name) == -1) this.map[type].push(name);
-						if (this.all.indexOf(name) == -1) this.all.push(name);
-					}
-				}
-			}};
-		token.define(token_map);
-		node.define(node_map);
-		module.exports.token = token;
-		module.exports.node = node;
-	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/parser.tea', '../src/syntax/parser.tea', function(exports, require, module, __filename, __dirname){
-		var Parser = module.exports,
-			Node = require("../src/syntax/node.tea"),
-			SyntaxReg = require("../src/syntax/regexp.tea");
-		Parser.define = function(name, pattern, callback){
-			var m;
-			if (typeof pattern == 'string'){
-				var stx_re = SyntaxReg.compile(pattern), rule = null;
-				if (m = name.match(/(\w+):([\-\w]+)/)){
-					name = m[1];
-					switch (m[2]){
-						case '1':
-							rule = 'ret node';
-							break;
-						case '2':
-							rule = 'check empty';
-							break;
-						case '3':
-							rule = 'ret list';
-							break;
-						case '4':
-							rule = 'not check';
-							break;
-						default:
-							rule = m[2];
-							break;
-					}
-				}
-				Parser[name] = function(src, param){
-					var res = SyntaxReg.matchNode(name, stx_re, src, rule);
-					if (res && callback){
-						return callback(res, src, param);
-					}
-					return res;
-				};
-			}else {
-				Parser[name] = function(src, param){
-					var res = pattern(rc);
-					if (res && callback){
-						return callback(res, src, param);
-					}
-					return res;
-				};
-			}
-		};
-		Parser.define('NameExpr', 'is(IdentifierTokn Restricted)');
-		Parser.define('ConstPatt', '(:UnaryExpr [+|-] NumTokn) | ConstTokn');
-		Parser.define('UnaryExpr', '(:NotExpr not ExprStam) | (:PrefixExpr is(Prefix) ValuePatt) | (:UnaryExpr is(Unary) ValuePatt)');
-		Parser.define('JsonPatt\:4', 'eq?(get set) +1is?(IdentifierTokn Restricted) (eq?(set) SetterDecl | GetterDecl){err:301} | '+'is?(IdentifierTokn Restricted) +1eq(\\\() MethodDecl{err:302} | '+'(:AssignmentExpr is(IdentifierTokn NumTokn StringTokn) : ExprStam{err:203})');
-		Parser.define('JsonExpr\:1', '(?\{) ((?\}) | JsonPatt ((?\,)? JsonPatt)* (?\,)* (?\}{err:102}))');
-		Parser.define('ArrayExpr\:1', '(?\[) ((?\]) | ExprStam ((?\,)? ExprStam)* (?\,)* (?\]{err:101}))');
-		Parser.define('CompelExpr\:1', '(?\\\() CommaExpr{err:214} (?\\\))');
-		Parser.define('IdentifierExpr\:1', 'IdentifierTokn');
-		Parser.define('SlicePatt\:2', '(?\[) ( (?\]) | (ComputeExpr? : ComputeExpr? | (:MemberExpr CommaPatt) )? (?\]{err:104}) )');
-		Parser.define('DotExpr\:1', '(?\.) (NameExpr | (:MemberExpr ConstPatt)){err:201}');
-		Parser.define('MemberExpr', 'DotExpr | SlicePatt | (:MemberPatt eq?(!.) is(Member) is(IdentifierTokn Restricted)?)');
-		Parser.define('AccessorExpr', '(Expression() | DataPatt) (is?(Member) MemberExpr)*');
-		Parser.define('SuperExpr\:1', '(:AccessorExpr super (is?(Member) MemberExpr)*) ParamsExpr?');
-		Parser.define('ThisExpr\:1', 'this (is?(Member) MemberExpr)*');
-		Parser.define('AtExpr\:1', '@ (:DotExpr NameExpr)? (is?(Member) MemberExpr)*');
-		Parser.define('ParamsPatt\:4', '(LambdaExpr | ExprStam) (, (?=\,|\\\)))*');
-		Parser.define('ParamsExpr\:1', '(?\\\() ((?\\\)) | ,* ParamsPatt ((?\,) ParamsPatt)* (?\\\)){err:105})');
-		Parser.define('ParamsStam', 'eq?(\\\() ParamsExpr | --1is(BlankTokn !LineHead) is?(!Close !Contextual !BlockBreak !Controler !Clauses) (:ParamsStam ParamsPatt ((?\,) ParamsPatt)*)');
-		Parser.define('ArgumentsPatt\:3', 'AssignmentDecl ((?\,) AssignmentDecl)*');
-		Parser.define('ArgumentsExpr\:1', '(?\\\() ArgumentsPatt? (?\\\))');
-		Parser.define('ArgumentsDecl\:1', 'ArgumentsPatt');
-		Parser.define('ValueExpr', 'is?(Unary Prefix) UnaryExpr | (::PostfixExpr ValuePatt is(Postfix)?)');
-		Parser.define('ComputeExpr', 'ValueExpr (is(Compute) ValueExpr)*');
-		Parser.define('CompareExpr', 'ComputeExpr (is(Compare) ComputeExpr)*');
-		Parser.define('LogicRightPatt\:4', 'CompareExpr (:::AssignmentExpr is(Assign) (eq?(\\\() LambdaExpr|ExprStam) )?');
-		Parser.define('LogicExpr', 'CompareExpr (is(Logic) LogicRightPatt)*');
-		Parser.define('ArrayPatt\:1', '(?\[) IdentifierTokn ((?,) IdentifierTokn)* (?\])');
-		Parser.define('AssignmentDecl', 'IdentifierTokn ( = (LambdaExpr|ExprStam){err:204})? | eq?(\[) ArrayPatt ={err:315} ExprStam{err:315}');
-		Parser.define('AssignmentExpr', '(eq?(\[) ArrayPatt | ValueExpr) is(Assign) (eq?(\\\() LambdaExpr|ExprStam){err:208}');
-		Parser.define('BinaryExpr', 'AssignmentExpr | LogicExpr');
-		Parser.define('TernaryExpr', 'LogicExpr ((:::Ternary2.5Expr ? (Clauses()|ExprStam)) (:::TernaryExpr : (Clauses()|ExprStam))?)?');
-		Parser.define('LambdaExpr', 'ArgumentsExpr (?->) (ReturnStam|ExprStam)');
-		Parser.define('CommaPatt\:4', 'ExprStam ((?\,) ExprStam{err:205})*');
-		Parser.define('CommaExpr\:1', 'CommaPatt');
-		Parser.define('CommaStam', 'ExprStam ((?\,) ExprStam{err:205})*');
-		Parser.define('ExprStam\:4', 'Declaration() | AssignmentExpr | TernaryExpr');
-		Parser.define('FunctionExpr', 'function (:::FunctionDecl IdentifierTokn)? ArgumentsExpr Block()');
-		Parser.define('FunctionDecl', 'function IdentifierTokn ArgumentsExpr Block()');
-		Parser.define('PackageExpr', 'package ArgumentsExpr? Block()');
-		Parser.define('ExtendsExpr\:2', 'extends ParamsStam{err:314}');
-		Parser.define('ClassExpr\:1', 'class IdentifierTokn? ExtendsExpr? Block(classStatement)');
-		Parser.define('GetterDecl', 'get NameExpr ArgumentsExpr? Block()');
-		Parser.define('SetterDecl', 'set NameExpr ArgumentsExpr Block()');
-		Parser.define('StaticDecl', 'static (MethodDecl | ArgumentsDecl)');
-		Parser.define('MethodDecl', 'NameExpr ArgumentsExpr eq?({ :) Block(){err:402}');
-		Parser.define('ProtoDecl', '(?\*) proto (MethodDecl | ArgumentsDecl)');
-		Parser.define('InitDecl', '(?\*) init (MethodDecl | ArgumentsDecl)');
-		Parser.define('VarDecl\:1', 'var ArgumentsDecl{err:306}');
-		Parser.define('LetDecl\:1', 'let ArgumentsDecl{err:307}');
-		Parser.define('ConstDecl\:1', 'const ArgumentsDecl{err:308}');
-		Parser.define('ReturnStam\:1', 'return{lf} CommaExpr?');
-		Parser.define('BreakStam\:1', 'break{lf} IdentifierTokn?');
-		Parser.define('ContinueStam\:1', 'continue{lf} IdentifierTokn?');
-		Parser.define('ThrowStam\:1', 'throw{lf} CommaExpr?');
-		Parser.define('DebuggerStam\:1', 'debugger');
-		Parser.define('ExportDecl\:1', 'export (eq?(class) ClassExpr | FunctionDecl | MethodDecl | ArgumentsDecl){err:109}');
-		Parser.define('RequireStam\:1', 'require ParamsStam');
-		Parser.define('CallExpr', 'AccessorExpr ParamsStam');
-		Parser.define('ConditionStam\:CompelExpr', 'CommaPatt{err:311}');
-		Parser.define('IfStam\:1', 'IfPatt ElseIfPatt*');
-		Parser.define('DoWhileStam\:1', 'do Block(controlStatement){err:306} (while ConditionStam)?');
-		Parser.define('TryStam\:1', 'TryPatt CatchPatt* FinallyPatt?');
-		Parser.define('IfPatt\:1', 'if ConditionStam Block(controlStatement){err:303}');
-		Parser.define('ElseIfPatt', 'else (?if) ConditionStam Block(controlStatement) | '+'(::ElsePatt else Block(controlStatement))', checkElseIfPatt);
-		Parser.define('WhileStam\:1', 'while ConditionStam Block(controlStatement){err:304}');
-		Parser.define('WithStam\:1', 'with ConditionStam Block(controlStatement){err:305}');
-		Parser.define('TryPatt', 'try Block(controlStatement){err:307}');
-		Parser.define('CatchPatt', 'catch ConditionStam Block(controlStatement)');
-		Parser.define('FinallyPatt', 'finally Block(controlStatement)');
-		Parser.define('SwitchStam\:1', 'switch ConditionStam ('+'(:IndentBlockStam (?\\\:) SwitchIndentBlockPatt* ) | '+'(:BlockStam (?\{) SwitchBlockPatt* (?\}){err:106})'+' ){err:308}');
-		Parser.define('SwitchIndentBlockPatt', '((:::CaseStam case CommaExpr) | (:::DefaultStam default)) :{err:313} IndentBlockStam(end:case,default)?');
-		Parser.define('SwitchBlockPatt', '((:::CaseStam case CommaExpr) | (:::DefaultStam default)) :{err:313} BlockStam(end:case,default)?');
-		Parser.define('ForStam\:1', 'for ForCondition() Block(controlStatement){err:402}');
-		Parser.define('LabelStam', 'IdentifierTokn : StatementStam');
-		Parser.define('SeleteLeftStam\:3', '(<-|--1is(BlankTokn !LineHead) if) CommaStam{err:207}');
-		Parser.define('SeleteRightStam\:3', '(&&|\\\|\\\||and|or|->) StatementStam{err:206}');
-		Parser.define('StatementStam', 'is?(Controler) ControlClauses() | '+'(eq?({) (JsonExpr|Block()) | Clauses() | Statement() | MethodDecl) (:::SeleteStam SeleteLeftStam)? | '+'CommaStam (:::CallExpr if(ValueExpr) ParamsStam)? (:::SeleteStam SeleteLeftStam|SeleteRightStam)?');
-		Parser.define('ClassStatStam', 'Declaration(classStatement) | StatementStam');
-		Parser.define('StatementPatt', '(is(CommDecl) | is?(IdentifierTokn) LabelStam | StatementStam){lf} is?(EndTokn){err:215}');
-		Parser.define('ClassStatementPatt', '(is(CommDecl) | is?(IdentifierTokn) LabelStam | Declaration(classStatement) | StatementStam){lf} is?(EndTokn){err:215}');
-		Parser.RegExpDecl = function(src, param){
-			var a, b, _ref;
-			_ref = src.indexPair('/', '/', src.index), a = _ref[0], b = _ref[1];
-			while (src[b+1] && /^[gimy]+/.test(src[b+1].text)){
-				b += 1;
-			}
-			src.current.text = src.join(a, b);
-			src.current.types = ['RegExpDecl', 'ConstTokn'];
-			src.delete(a+1, b);
-			return src.current;
-		};
-		Parser.DataPatt = function(src, param){
-			switch (src.text){
-				case '(':
-					return Parser.CompelExpr(src, param);
-				case '[':
-					return Parser.ArrayExpr(src, param);
-				case '{':
-					return Parser.JsonExpr(src, param);
-				case '/':
-					return Parser.RegExpDecl(src, param);
-			}
-			switch (src.current.is('Unary', 'IdentifierTokn', 'ConstTokn')){
-				case 'Unary':
-					return Parser.UnaryExpr(src, param);
-				case 'IdentifierTokn':
-					return new Node('IdentifierExpr', src.current);
-				case 'ConstTokn':
-					return src.current;
-			}
-		};
-		Parser.ValuePatt = function(src, opt){
-			var res, member, param;
-			if (res = Parser.AccessorExpr(src, opt)){
+			function concatFromJs(list, file, std){
+				var src, node;
+				src = Tea.source(null, file, false);
 				while (true){
-					var peek = src.peek, _index = src.index;
-					if (peek.is('Member')){
-						if (member = Parser.MemberExpr(src.next(1), opt)){
-							if (res.type == 'AccessorExpr'){
-								res.add(member);
-							}else {
-								res = new Node('AccessorExpr', res, member);
-							}
-							continue;
+					src.index = src.indexOf('require', ++src.index);
+					if (src.index >= 0){
+						if (node = Tea.grammar('RequireExpr', src)){
+							concatRequire(list, Tea.standard(std, node));
 						}
-					}else if (peek.text == '(' && (param = Parser.ParamsExpr(src.next(1), opt))){
-						res = new Node('CallExpr', res, param);
 						continue;
 					}
-					src.index = _index;
 					break;
 				}
-				return res;
-			}
-			return false;
-		};
-		Parser.ForCondition = function(src, opt){
-			var b, res, o_index = src.index;
-			if (src.text == '('){
-				b = src.nextIndex(src.indexPair('(', ')', src.index)[1], true);
-				if (!src[b].is('Contextual')){
-					if (res = Parser.ForCondition(src.next(1), opt)){
-						if (src.next(1).text == ')'){
-							return res;
-						}
-						throw tea.error(new Error(), 107, src.current);
-					}
-					throw tea.error(new Error(), 213, src[o_index]);
-				}
-			}
-			var exp1, exp2, exp3, isbreak = false;
-			switch (src.text){
-				case 'var':
-					exp1 = Parser.VarDecl(src, opt);
-					break;
-				case 'let':
-					exp1 = Parser.LetDecl(src, opt);
-					break;
-				case ';':
-					exp1 = new Node('Empty');
-					break;
-				default:
-					exp1 = Parser.CommaExpr(src, opt);
-					break;
-			}
-			if (src.peek.text == ';' || (exp1.type == 'Empty' && src.text == ';')){
-				o_index = src.index;
-				if (src.text == ';'){
-					src.next(1);
-				}else {
-					src.next(2);
-				}
-				if (src.text == ';'){
-					isbreak = true;
-					o_index = src.index;
-					if (!(exp3 = Parser.CommaExpr(src.next(1), opt))){
-						src.next = o_index;
-					}
-				}else if ((exp2 = Parser.CommaExpr(src, opt)) && src.next(1).text == ';'){
-					isbreak = true;
-					o_index = src.index;
-					if (!(exp3 = Parser.CommaExpr(src.next(1), opt))){
-						src.next = o_index;
-					}
-				}else {
-					isbreak = false;
-					src.next = o_index;
-				}
-				if (isbreak){
-					return new Node('ForBaseConditionPatt', exp1, exp2, exp3);
-				}
-			}
-			if (!exp1 || exp1.type == 'Empty'){
-				throw tea.error(new Error(), 309, src[o_index]);
-			}
-			if (src.peek.eq('in', 'of', '=>', '<=', '->', '<-')){
-				exp2 = src.next(1).current;
-				if (!(exp3 = Parser.CommaExpr(src.next(1), opt))){
-					throw tea.error(new Error(), 108, exp2);
-				}
-				return checkForStamType(exp1, exp2, exp3);
-			}else {
-				var last = exp1, last_index = exp1.length-1, last_len, last_tmp;
-				while ((last_tmp = last[last_index]) && (last_len = last_tmp.length)){
-					if (last_tmp.is('CompareExpr') && last_tmp[last_len-2].eq('<=', 'in', 'of', '->', '<-')){
-						exp2 = last_tmp[last_len-2];
-						exp3 = last_tmp[last_len-1];
-						if (last_len > 3){
-							last[last_index] = new Node('CompareExpr', Hash.slice(last_tmp, 0, last_len-2));
-						}else {
-							last[last_index] = last_tmp[0];
-							last_tmp[0].parent = last;
-						}
-						break;
-					}else {
-						last = last_tmp;
-						last_index = last_len-1;
-					}
-				}
-				if (exp2){
-					return checkForStamType(exp1, exp2, exp3);
-				}else {
-					return new Node('ForPConditionPatt', exp1);
-				}
-			}
-		};
-		Parser.Expression = function(src, opt){
-			var exp;
-			switch (src.text){
-				case 'require':
-					return Parser.RequireStam(src, opt);
-				case 'super':
-					return Parser.SuperExpr(src, opt);
-				case 'this':
-					return Parser.ThisExpr(src, opt);
-				case '@':
-					return Parser.AtExpr(src, opt);
-			}
-			if (src.context && (exp = src.context.processor.matchNode('expression', src, opt))){
-				return exp;
-			}
-			return false;
-		};
-		Parser.Declaration = function(src, opt){
-			var token = src.current, isClassBlock = opt && opt.classStatement;
-			switch (token.text){
-				case 'function':
-					return Parser.FunctionExpr(src, opt);
-				case 'package':
-					return Parser.PackageExpr(src, opt);
-				case 'class':
-					return Parser.ClassExpr(src, opt);
-				case 'get':
-					if (!isClassBlock){
-						throw tea.error(new Error(), 322, token);
-					}
-					if (src.peek.type == 'IdentifierTokn'){
-						return Parser.GetterDecl(src, opt);
-					}
-					break;
-				case 'set':
-					if (!isClassBlock){
-						throw tea.error(new Error(), 323, token);
-					}
-					if (src.peek.type == 'IdentifierTokn'){
-						return Parser.SetterDecl(src, opt);
-					}
-					break;
-				case 'static':
-					if (!isClassBlock){
-						throw tea.error(new Error(), 324, token);
-					}
-					if (src.peek.type == 'IdentifierTokn'){
-						return Parser.StaticDecl(src, opt);
-					}
-					break;
-				case '*':
-					switch (src[src.index+1].text){
-						case 'proto':
-							if (!isClassBlock){
-								throw tea.error(new Error(), 325, token);
-							}
-							return Parser.ProtoDecl(src, opt);
-						case 'init':
-							if (!isClassBlock){
-								throw tea.error(new Error(), 326, token);
-							}
-							return Parser.InitDecl(src, opt);
-					}
-					break;
-			}
-			return false;
-		};
-		Parser.Clauses = function(src, opt){
-			var token = src.current;
-			switch (token.text){
-				case 'var':
-					return Parser.VarDecl(src, opt);
-				case 'let':
-					return Parser.LetDecl(src, opt);
-				case 'const':
-					throw tea.error(new Error(), 401, token);
-					return Parser.ConstDecl(src, opt);
-				case 'yield':
-					throw tea.error(new Error(), 401, token);
-					return Parser.ConstDecl(src, opt);
-				case 'return':
-					return Parser.ReturnStam(src, opt);
-				case 'break':
-					return Parser.BreakStam(src, opt);
-				case 'continue':
-					return Parser.ContinueStam(src, opt);
-				case 'throw':
-					return Parser.ThrowStam(src, opt);
-				case 'debugger':
-					return Parser.DebuggerStam(src, opt);
-				case 'export':
-					return Parser.ExportDecl(src, opt);
-			}
-			return false;
-		};
-		Parser.ControlClauses = function(src, opt){
-			var token = src.current;
-			switch (token.text){
-				case 'if':
-					return Parser.IfStam(src, opt);
-				case 'while':
-					return Parser.WhileStam(src, opt);
-				case 'do':
-					return Parser.DoWhileStam(src, opt);
-				case 'with':
-					return Parser.WithStam(src, opt);
-				case 'try':
-					return Parser.TryStam(src, opt);
-				case 'switch':
-					return Parser.SwitchStam(src, opt);
-				case 'for':
-					return Parser.ForStam(src, opt);
-			}
-			throw tea.error(new Error(), 208, token);
-			return false;
-		};
-		Parser.Statement = function(src, opt){
-			var exp;
-			if (src.context && (exp = src.context.processor.matchNode('statement', src, opt))){
-				return exp;
-			}
-			return false;
-		};
-		Parser.LineBlockStam = function(src, opt){
-			var sta,
-				stamfn = src.isClassBlock || opt.classStatement ? 'ClassStatStam' : 'StatementStam',
-				node = new Node('LineBlockStam'),
-				o_index = src.index,
-				not_emtpy,
-				end = opt.end ? opt.end.split(',') : [];
-			end.push('\n', ';', '}', ']', ']', 'else', 'while', 'catch', 'finally', 'case', 'default');
-			while (src.index < src.length){
-				if (src.current.text == ';'){
-					not_emtpy = true;
-					o_index = src.index;
-					src.next();
-					if (src.current.text == ','){
-						break;
-					}
-				}
-				if (src.current.type == 'EOT'){
-					return node;
-				}
-				if (end.indexOf(src.current.text) != -1){
-					break;
-				}
-				if (sta = Parser[stamfn](src, opt)){
-					node.add(sta);
-					o_index = src.index;
-					src.next();
-					continue;
-				}
-				break;
-			}
-			src.index = o_index;
-			return node.length || not_emtpy ? node : false;
-		};
-		Parser.IndentBlockStam = function(src, opt){
-			var line_block,
-				sta,
-				stamfn = src.isClassBlock || opt.classStatement ? 'ClassStatStam' : 'StatementStam',
-				node = new Node('IndentBlockStam'),
-				o_index = src.index,
-				b_index = src.prevIndex(o_index, true),
-				the_indent = src.lineIndent(b_index),
-				line_indent,
-				a,
-				b,
-				c,
-				not_emtpy;
-			node.indent = the_indent;
-			if (src[b_index].text == ':'){
-				b_index = src.nextIndex(b_index);
-				if (src[b_index].type != 'LF'){
-					src.index = b_index;
-					if (line_block = Parser.LineBlockStam(src, opt)){
-						if (src[src.nextIndex(src.index)].type == 'LF'){
-							o_index = src.index;
-							src.next(1);
-							node = line_block;
-							node.type = 'IndentBlockStam';
-						}else {
-							return line_block;
-						}
-					}else {
-						src.index = o_index;
-						return false;
-					}
-				}
-			}
-			var end = opt.end ? opt.end.split(',') : [];
-			end.push('}', ')', ']');
-			if (o_index-b_index > 2){
-				if (c = collageComment(node, src, b_index+1, o_index)){
-					o_index = c;
-				}
-			}
-			while (src.index < src.length){
-				if (src.current.type == 'EOT'){
-					return node;
-				}
-				b_index = src.index;
-				if (end.indexOf(src.current.text) == -1){
-					if (line_indent == null){
-						line_indent = src.lineIndent(b);
-					}else if (src.current.indent >= 0){
-						line_indent = src.current.indent;
-					}else if (src[src.index-1].indent >= 0 && src[src.index-1].type == 'BlankTokn'){
-						line_indent = src[src.index-1].indent;
-					}
-					if (line_indent > the_indent){
-						if (src.current.is('BlockBreak')){
-							not_emtpy = true;
-							o_index = src.index;
-							src.next(1);
-							continue;
-						}
-						if (sta = Parser[stamfn](src, opt)){
-							collageComment(node, src, o_index+1, b_index);
-							node.add(sta);
-							o_index = src.index;
-							src.next(1);
-							continue;
-						}
-						if (!src.current.is('Close')){
-							throw tea.error(new Error(), 320, src.current);
-						}
-					}
-				}
-				if (o_index+1 < b_index){
-					if (c = collageComment(node, src, o_index+1, b_index, the_indent)){
-						o_index = c;
-					}
-				}
-				break;
-			}
-			src.index = o_index;
-			return node.length || not_emtpy ? node : false;
-		};
-		Parser.BlockStam = function(src, opt){
-			var sta,
-				stamfn = src.isClassBlock || opt.classStatement ? 'ClassStatStam' : 'StatementStam',
-				node = new Node('BlockStam'),
-				o_index = src.index,
-				b_index = src.prevIndex(src.index, true),
-				end = opt.end ? opt.end.split(',') : [];
-			end.push('}');
-			while (src.index < src.length){
-				while (src.current.is('BlockBreak')){
-					b_index = src.index;
-					src.next(1, true);
-				}
-				if (src.current.type == 'EOT'){
-					return node;
-				}
-				if (src.current.type == 'CommDecl'){
-					node.add(src.current);
-					b_index = src.index;
-					src.next(1, true);
-					continue;
-				}
-				if (end.indexOf(src.current.text) != -1){
-					src.index = b_index;
-					return node;
-				}
-				if (sta = Parser[stamfn](src, opt)){
-					node.add(sta);
-					b_index = src.index;
-					src.next(1, true);
-					continue;
-				}
-				break;
-			}
-			return false;
-		};
-		Parser.StamBlockStam = function(src, opt){
-			var sta,
-				stamfn = src.isClassBlock || opt.classStatement ? 'ClassStatStam' : 'StatementStam';
-			if (sta = Parser[stamfn](src, opt)){
-				if (src.peek.text == ';'){
-					src.next(1);
-				}
-				return new Node('StamBlockStam', sta);
-			}
-		};
-		Parser.Block = function(src, opt){
-			var o_index = src.index, _old_isClassBlock = src.isClassBlock, ref;
-			if (!opt.controlStatement){
-				src.isClassBlock = opt.classStatement;
-			}
-			switch (src.text){
-				case '{':
-					if (src.next(1).current.text == '}'){
-						return new Node('BlockStam');
-					}
-					if (ref = Parser.BlockStam(src, opt)){
-						if (src.next(1).text != '}'){
-							throw tea.error(new Error(), 110, src.current);
-						}
-					}
-					break;
-				case ':':
-					if (!(ref = Parser.IndentBlockStam(src.next(1), opt))){
-						src.index = o_index;
-						return new Node('IndentBlockStam');
-					}
-					break;
-				case ';':
-					ref = false;
-					break;
-				default:
-					if (opt.controlStatement){
-						ref = Parser.StamBlockStam(src, opt);
-					}else {
-						ref = false;
-					}
-					break;
-			}
-			src.isClassBlock = _old_isClassBlock;
-			if (ref){
-				return ref;
-			}
-			if (ref === false){
-				return false;
-			}
-			src.index = o_index;
-			return new Node('BlockStam');
-		};
-		Parser.Node = function(src, opt){
-			var res;
-			src.isClassBlock = false;
-			var i = src.index, node = new Node('NodeStam'), token;
-			while (i < src.length){
-				token = src.current;
-				if (token.is('BlockBreak', 'BlankTokn')){
-					i = src.next(1).index;
-					token = src.current;
-				}
-				if (token.type == 'EOT'){
-					break;
-				}
-				if (res = Parser.StatementPatt(src, opt)){
-					node.add(res);
-					i = src.next(1, true).index;
-				}else {
-					throw tea.error(new Error(), 209, src.current);
-				}
-			}
-			return node;
-		};
-		function collageComment(node, src, a, b, check){
-			var list = [], c;
-			for (var i = a; i < b; i++){
-				if (src[i].type == 'CommDecl'){
-					if (check != null){
-						if (src.lineIndent(i) > check){
-							c = i;
-							list.push(src[i]);
-						}else {
-							break;
-						}
-					}else {
-						c = i;
-						list.push(src[i]);
-					}
-				}else if (!src[i].is('BlankTokn', 'LF', 'EOT')){
-					return;
-				}
-			}
-			if (list.length){
-				node.add(list);
-			}
-			return c;
-		}
-		function checkForStamType(exp1, exp2, exp3){
-			if (exp2 && exp2.text == 'in' && exp1){
-				if (exp1.type == 'VarDecl' ? exp1[1].length == 1 : exp1.length == 1){
-					return new Node('ForInConditionPatt', exp1, exp2, exp3);
-				}
-			}
-			return new Node('ForPConditionPatt', exp1, exp2, exp3);
-		}
-		function checkElseIfPatt(node, src, param){
-			if (node.type == 'ElsePatt' && node[1].type == 'StamBlockStam'){
-				var peek = src.peek, block, o_index = src.index;
-				if (peek.text == ':' || peek.text == '{'){
-					if (block = Parser.Block(src.next(1), param)){
-						node[1].type = 'ConditionStam';
-						node.type = 'ElseIfPatt';
-						node.add(block);
-					}else {
-						src.index = o_index;
-					}
-				}
-			}
-			return node;
-		}
-	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/regexp.tea', '../src/syntax/regexp.tea', function(exports, require, module, __filename, __dirname){
-		var Token = require("../src/syntax/token.tea"),
-			Node = require("../src/syntax/node.tea"),
-			Parser = require("../src/syntax/parser.tea");
-		var SyntaxReg = (function(){
-			var stx_re_cache = {};
-			function SyntaxReg(){
-				this.length = 0;
-				this.quantifier = '';
-				this.minmatch = 0;
-			}
-			SyntaxReg.prototype.push = function (){
-				for (var i=0; i < arguments.length; i++){
-					if (arguments[i] instanceof SyntaxReg){
-						arguments[i].parent = this;
-					}
-				}
-				return Array.prototype.push.apply(this, arguments);
-			}
-			SyntaxReg.prototype.match = function (srcr){
-				return SyntaxReg.match(this, src);
-			}
-			SyntaxReg.compile = function(source){
-				if (stx_re_cache[source]){
-					return stx_re_cache[source];
-				}
-				var stx_re = compileSyReg(source);
-				stx_re.source = source;
-				return stx_re_cache[source] = stx_re;
+				return Tea.card('Source', Jsop.toArray(src));
 			};
-			SyntaxReg.match = function(stx_re, src){
-				var res, matchlist = [];
-				matchlist.index = src.index;
-				if (res = matchInit(stx_re, src, matchlist)){
-					matchlist.lastIndex = src.index;
-					matchlist.unshift(res);
-				}else {
-					matchlist.length = 0;
-				}
-				return matchlist;
+			function concatFromTea(list, file, std){
+				var prepor, src, node, card;
+				prepor = Tea.prep.create();
+				src = Tea.source(null, file, prepor);
+				node = Tea.AST(src, prepor);
+				card = Tea.CAST(node, std, prepor);
+				concatRequire(list, card);
+				return card;
 			};
-			SyntaxReg.matchNode = function(name, stx_re, src, rule){
-				var res = matchInit(stx_re, src);
-				if (res){
-					if (rule){
-						if (typeof rule == 'string' && res.type == rule){
-							res.type = name;
-						}else if (rule == 'check empty'){
-							if (res.length == 0){
-								res = new Node(name);
-							}else if (res.length == 1){
-								res = res[0];
-							}else {
-								res = new Node(name, res);
-							}
-						}else if (rule == 'ret list'){
-							if (res.isnode){
-								res = Hash.slice(res);
-							}
-						}else if (rule != 'not check'){
-							res = new Node(name, res === true ? null : res);
-						}
-					}else {
-						if (!res.istoken && !res.isnode && res !== true){
-							if (res.length == 1){
-								res = res[0];
-							}else if (res.length > 1){
-								res = new Node(name, res);
-							}
-						}
+			function concatRequire(list, card){
+				var scope;
+				if (scope = card.scope){
+					if (scope.cache.require && scope.cache.require.length){
+						list.push.apply(list, scope.cache.require);
 					}
-					return res;
 				}
 			};
-			function compileSyReg(source, __parent){
-				var chipp, chips = Text.split(source, ' ');
-				for (var i=chips.length-1, chip; i >= 0; i--){
-					chip = chips[i];
-					if (/[^\\]\|[^\|]/.test(chip)){
-						chipp = Text.split(chip, '|');
-						if (chipp.length){
-							for (var j = chipp.length-1; j > 0; j--){
-								chipp.splice(j, 0, '|');
-							}
-							chips.splice.apply(chips, [i, 1].concat(chipp));
-						}
-					}
-				}
-				var stx_re = new SyntaxReg(), or_list = [], ptn;
-				for (var i=0, chip; i < chips.length; i++){
-					chip = chips[i];
-					if (chip == '|'){
-						or_list.push(stx_re);
-						stx_re = new SyntaxReg();
-						continue;
-					}
-					ptn = compilePtn(chip);
-					ptn.parent = stx_re;
-					stx_re.push(ptn);
-					stx_re.minmatch += !ptn.quantifier || ptn.quantifier[0] == '+' ? 1 : 0;
-				}
-				if (or_list.length){
-					if (stx_re.length){
-						or_list.push(stx_re);
-					}
-					stx_re = new SyntaxReg();
-					for (var i=0; i < or_list.length; i++){
-						or_list[i].type = 'Or';
-						or_list[i].quantifier = '?';
-						or_list[i].parent = stx_re;
-						stx_re.push(or_list[i]);
-						stx_re.minmatch += or_list[i].minmatch;
-					}
-				}
-				stx_re.parent = __parent;
-				return stx_re;
-			}
-			function compilePtn(source){
-				var m,
-					ptn = {"type": '', "key": '', "quantifier": '', "param": {}, "text": source},
-					text = source;
-				if (m = text.match(/[^\\](\+\?|\*\?|\!|\?|\+|\*)$/)){
-					ptn.quantifier = m[1], text = text.slice(0, -1);
-				}
-				if (m = text.match(/(?:\{([^\}]*)\})$/)){
-					ptn.param = compileParam(m[1]);
-					text = text.slice(0, m.index);
-				}
-				if (text[0] == '(' && text[text.length-1] == ')'){
-					text = text.slice(1, -1);
-					if (m = text.match(/^(\?[\=\!\:]?)?(?:(\:{1,3})([A-Z][\w\.\-]+(?:Tokn|Patt|Expr|Stam|Decl)\b))?/)){
-						if (m[1] || m[2]){
-							ptn.assertion = (m[1] || '')+(m[2] || '');
-							if (m[3]){
-								ptn.name = m[3];
-							}
-							text = text.substr(m[0].length);
-						}
-					}
-					ptn.type = 'Sub';
-					ptn.key = compileSyReg(text, ptn);
-				}else if (text == '*'){
-					ptn.type = 'ALL';
-					ptn.key = text;
-				}else if (Token.types.hasOwnProperty(text)){
-					ptn.type = 'Tokn';
-					ptn.key = text;
-				}else if (m = text.match(/^[A-Z]\w+(?:Tokn|(Patt|Expr|Stam|Decl))$/)){
-					ptn.type = m[1] ? 'Node' : 'Tokn';
-					ptn.key = text;
-				}else if (m = text.match(/^(?:([\+\-]{1,2})(\d+))?(\w+)([\=\?]?)\((.*?)\)$/)){
-					return compileCall(ptn, m);
-				}else if (m = text.match(/^\/(.*?)\/([img]*)$|^\[(.*?)\]([img]*)$/)){
-					ptn.type = 'RegExp';
-					try {
-						if (text[0] == '['){
-							ptn.key = new RegExp('^('+compileVal(m[3]).replace(/([^\|\\\w])/g, '\\$1')+')$', m[4]);
-						}else {
-							ptn.key = new RegExp(compileVal(m[1]).replace(/\\{2}/g, '\\'), m[2]);
-						}
-					}catch (e) {
-						throw tea.error(new Error(), e.message, [source, source.indexOf(text), text], 'Syntax RegExp parse error');
-					}
-				}else {
-					text = compileVal(text);
-					var token_list = Token.tokenize(text, 0, 'code list');
-					if (token_list.length == 1){
-						ptn.type = 'Code';
-						ptn.key = text;
-					}else {
-						ptn.type = 'CodeList';
-						ptn.key = token_list;
-					}
-				}
-				return ptn;
-			}
-			function compileVal(text){
-				return text.replace(/\\(\W)/g, '$1');
-			}
-			function compileParam(source){
-				return source ? Hash(source) : {};
-			}
-			function compileCall(ptn, match){
-				ptn.type = 'Call';
-				ptn.key = match[3];
-				ptn.test = match[4] || match[1];
-				if (match[5]){
-					if (ptn.key == 'is' || ptn.key == 'eq' || ptn.key == 'if'){
-						ptn.param = Hash.concat(ptn.param, compileTokenCallParams(compileVal(match[5])));
-					}else {
-						ptn.param = Hash.concat(ptn.param, compileParam(compileVal(match[5])));
-					}
-				}
-				ptn.param.mark = match[1];
-				ptn.param.num = match[2] && parseInt(match[2]);
-				return ptn;
-			}
-			function compileTokenCallParams(param){
-				var param = param.split(' '), yes_param = [], not_param = [];
-				for (var i=0; i < param.length; i++){
-					if (param[i][0] == '!'){
-						not_param.push(param[i].substr(1));
-					}else {
-						yes_param.push(param[i]);
-					}
-				}
-				return {"yes": yes_param.length && yes_param, "no": not_param.length && not_param};
-			}
-			function matchInit(stx_re, src, __m){
-				var o_name = stx_re.tempName;
-				stx_re.tempName = null;
-				stx_re.checkIndent = false;
-				var res = matchSyReg.call(stx_re, stx_re, src, __m);
-				stx_re.tempName = o_name;
-				return res;
-			}
-			function matchSyReg(stx_re, src, __m, __r){
-				var res,
-					next_ptn,
-					o_index = src.index,
-					s_index = o_index,
-					p_index = o_index,
-					sub_index,
-					res_list = [];
-				res_list.matched = 0;
-				for (var i=0, ptn; i < stx_re.length; i++){
-					ptn = stx_re[i];
-					if (ptn.type == 'Or'){
-						src.index = o_index, res_list.length = 0, res_list.matched = 0, this.checkIndent = false;
-					}
-					sub_index = matchSubIndex.call(this, ptn, __m);
-					s_index = src.index;
-					res = matchPattern.call(this, ptn, src, __r || res_list, __m);
-					if (res){
-						res_list.matched++;
-						if (ptn.type == 'Or'){
-							return res;
-						}
-						if (ptn.assertion == '?!'){
-							return matchBad.call(this, ptn, src, o_index, __m);
-						}
-						if (ptn.assertion == '?='){
-							src.index = s_index = p_index;
-							continue;
-						}
-						if (ptn.quantifier[0] == '*' || ptn.quantifier[0] == '+'){
-							if (ptn.quantifier[1] == '?'){
-								next_ptn = stx_re[i+1];
-							}
-							res = matchPatternMore.call(this, res, ptn, next_ptn, src, __r || res_list, __m);
-						}
-						if (res === true){
-							p_index = src.index;
-							continue;
-						}
-						if (ptn.assertion != '?'){
-							res = matchResName.call(this, ptn, res);
-							matchSaveSubList.call(this, ptn, sub_index, res, __m);
-							if (res.istoken || res.isnode){
-								res_list.push(res);
-							}else if (res.length){
-								res_list.push.apply(res_list, res);
-							}
-						}
-						p_index = src.index;
-						src.next(!ptn.param.lf);
-					}else {
-						if (ptn.quantifier[0] == '?' || ptn.quantifier[0] == '*'){
-							src.index = s_index;
-							continue;
-						}
-						if (ptn.assertion == '?!' || ptn.type == 'Or'){
-							src.index = s_index;
-							continue;
-						}
-						if (ptn.type == 'Sub' && ptn.key.minmatch == 0){
-							src.index = s_index;
-							continue;
-						}
-						return matchBad.call(this, ptn, src, o_index, __m);
-					}
-				}
-				src.index = p_index;
-				if (res_list.matched){
-					if (res_list.length == 1 && stx_re.length == 1 && /^(Sub|Tokn|Node|Call)$/.test(stx_re[0].type)){
-						res_list = res_list[0];
-					}
-					return matchResName.call(this, stx_re, res_list);
-				}else {
-					src.index = o_index;
-				}
-			}
-			function matchPattern(ptn, src, __r, __m){
-				var res, o_index = src.index, token = src.current;
-				if (this.checkIndent || this.checkIndent === 0){
-					if (this.checkIndent > src.lineIndent(o_index)){
-						this.checkIndent = false;
-						return;
-					}
-					this.checkIndent = false;
-				}
-				switch (ptn.type){
-					case 'ALL':
-						return token;
-					case 'RegExp':
-						if (ptn.key.test(token.text)) return token;
-						break;
-					case 'Code':
-						if (ptn.key == token.text) return token;
-						break;
-					case 'Tokn':
-						if (token.is(ptn.key)) return token;
-						break;
-					case 'CodeList':
-						return matchTokenList.call(this, ptn, src);
-					case 'Patt':case 'Expr':case 'Stam':case 'Decl':case 'Node':case 'Call':
-						res = matchCallPattern.call(this, ptn, src, __r, __m);
-						break;
-					case 'Sub':
-						res = matchSyReg.call(this, ptn.key, src, __m, __r);
-						break;
-					case 'Or':
-						res = matchSyReg.call(this, ptn, src, __m, null);
-						break;
-				}
-				if (res){
-					if (res == true || res.isnode || res.istoken || res.length || res.matched){
-						return res;
-					}
-					return true;
-				}
-				src.index = o_index;
-				return res;
-			}
-			function matchPatternMore(res, ptn, next_ptn, src, __r, __m){
-				var _res_list = res.istoken || res.isnode ? [res] : res,
-					_res,
-					o_index = src.index;
-				while (_res = matchPatternNext.call(this, ptn, next_ptn, src, __r, __m)){
-					if (o_index == src.index){
-						return _res_list;
-					}
-					o_index = src.index;
-					if (_res_list === true){
-						continue;
-					}
-					if (_res.istoken || _res.isnode){
-						_res_list.push(_res);
-					}else if (_res.length){
-						_res_list.push.apply(_res_list, _res);
-					}
-				}
-				src.index = o_index;
-				return _res_list;
-			}
-			function matchPatternNext(ptn, next_ptn, src, __r, __m){
-				var res, o_index = src.index, next_res;
-				if (next_ptn){
-					this.try = true;
-					next_res = matchPattern.call(this, next_ptn, src.next(!ptn.param.lf), __r, __m);
-					this.try = false;
-				}
-				if (!next_res){
-					src.index = o_index;
-					if (res = matchPattern.call(this, ptn, src.next(!ptn.param.lf), __r, __m)){
-						return res;
-					}
-				}
-				src.index = o_index;
-			}
-			function matchCallPattern(ptn, src, __r, __m){
-				var res;
-				switch (ptn.key){
-					case 'is':case 'eq':
-						return matchToken.call(this, ptn, src);
-					case 'if':
-						var lase_res = __r[__r.length-1], yes = ptn.param.yes, no = ptn.param.no;
-						if (!lase_res || !lase_res.is){
-							return ptn.param.yes ? false : true;
-						}
-						if ((!yes || lase_res.is.apply(lase_res, yes)) && (!no || !lase_res.is.apply(lase_res, no))){
-							return true;
-						}
-						return false;
-					default:
-						var name = ptn.key;
-						if (Parser.hasOwnProperty(name)){
-							var o_index = src.index;
-							res = Parser[name](src, ptn.param, __m);
-							this.checkIndent = false;
-							if (res){
-								if (res.type == 'IndentBlockStam' || res.type == 'LineBlockStam'){
-									this.checkIndent = src.lineIndent(o_index);
-								}else {
-									var last = res[res.length-1];
-									if (last && (last.type == 'IndentBlockStam' || last.type == 'LineBlockStam')){
-										this.checkIndent = src.lineIndent(o_index);
-									}
-								}
-							}
-							return ptn.test ? !!res : res;
-						}else {
-							throw tea.error(new Error(), "unexpected syntax parser as \""+name+"\"");
-						}
-						break;
-				}
-				throw tea.error(new Error(), 'Syntax pattern unexpected call function', [this.source, -1, name]);
-			}
-			function matchToken(ptn, src){
-				var param = ptn.param, num = param.num, _index = src.index;
-				switch (param.mark){
-					case '+':
-						while (--num >= 0){
-							_index = src.nextIndex(_index, !param.lf);
-						}
-						break;
-					case '++':
-						while (--num >= 0){
-							_index++;
-						}
-						break;
-					case '-':
-						while (--num >= 0){
-							_index = src.prevIndex(_index, !param.lf);
-						}
-						break;
-					case '--':
-						while (--num >= 0){
-							_index--;
-						}
-						break;
-				}
-				var yes = param.yes, no = param.no, token = src[_index];
-				if (!token){
-					return !yes && no && ptn.test ? true : false;
-				}
-				if ((!yes || token[ptn.key].apply(token, yes)) && (!no || !token[ptn.key].apply(token, no))){
-					return !ptn.test ? token : true;
-				}
-				return false;
-			}
-			function matchTokenList(ptn, src){
-				var index = src.index-1, list = [], tokens = ptn.key;
-				for (var _i=0, key; _i < tokens.length; _i++){
-					key = tokens[_i];
-					index++;
-					if (/^\s+$/.test(tokens) && src[index].type == 'BlankTokn'){
-						continue;
-					}
-					if (key == src[index].text){
-						list.push(src[index]);
-						continue;
-					}
-					return;
-				}
-				if (list.length){
-					src.index = index;
-					return list;
-				}
-			}
-			function matchBad(ptn, src, o_index, __m){
-				var err_token = src.current;
-				src.index = o_index;
-				if (ptn.param.err && !ptn.param.try && !this.try){
-					throw tea.error(new Error(), ptn.param.err, err_token, 'Syntax parse error');
-				}
-				return false;
-			}
-			function matchResName(ptn, res){
-				if (ptn.type == 'Or'){
-					ptn = ptn.parent || ptn;
-				}
-				var name = ptn.tempName || ptn.name;
-				if (name){
-					if (!res || res === true){
-						return res;
-					}
-					if (ptn.assertion == '::'){
-						if (!res.isnode && res.length > 1){
-							res = new Node(name, res);
-						}
-					}else if (ptn.assertion == ':::'){
-						this.tempName = ptn.name;
-					}else {
-						res = new Node(name, res);
-					}
-				}
-				return res;
-			}
-			function matchSubIndex(ptn, __m){
-				if (__m && ptn.type == 'Sub' && (!ptn.assertion || ptn.assertion[0] != '?')){
-					__m.push(null);
-					return __m.length-1;
-				}
-			}
-			function matchSaveSubList(ptn, sub_index, res, __m){
-				if (__m){
-					if (sub_index != null){
-						__m.splice(sub_index, 1, res);
-					}
-					if (ptn.type == 'Node' || ptn.type == 'Tokn'){
-						if (!__m[ptn.key]){
-							__m[ptn.key] = [];
-						}
-						__m[ptn.key].push(res);
-					}
-					return true;
-				}
-			}
-			return SyntaxReg;
-		})();
-		module.exports = SyntaxReg;
-	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/token.tea', '../src/syntax/token.tea', function(exports, require, module, __filename, __dirname){
-		var NodeBase = require("../src/syntax/base.tea");
+			return Tea;
+		})()
+		module.exports = global.Tea = Tea;
+	});
+	return module.exports;
+})('./tea.js', '.', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var id_index;
+		if (typeof global == 'undefined'){
+		    if (typeof window == 'undefined'){
+		        throw 'Tea script run environment error!';
+		    }
+		    window.global = window;
+		}
+		id_index = 0;
+		global.SText = require("./stext");
+		global.Jsop = require("./jsop");
+		global.print = require("./print");
+		global.Fp = require("./fp");
+		global.Argv = require("./argv").create();
+		global.isArray = Array.isArray;
+		global.isJson = Jsop.isJson;
+		global.isClass = Jsop.isClass;
+		global.ID = function(){
+		    return parseInt((Date.now()+'').substr(-8)+(id_index++)+Math.round(Math.random()*100))+'';
+		};
+		global.checkGlobal = function(){
+		    var def = 'global process GLOBAL root console Path Tea Fp'.split(' ');
+		    for (var name in global){
+		        if (!global.hasOwnProperty(name)) continue;
+		        if (def.indexOf(name) >= 0){
+		            continue;
+		        }
+		        if (typeof global[name] == 'function'){
+		            continue;
+		        }
+		        print('[r<Global scope pollution>]', name, global[name]);
+		    }
+		};;
+	});
+	return module.exports;
+})('../utils/index.js', '../utils', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		require("./printer.js")
+		require("./error.js")
+		exports.log = require("./log.js");
+	});
+	return module.exports;
+})('./helper/index.js', './helper', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Node
+		Node = require("./node.js")
 		var Token = (function(){
-			var tokenmap, token_literals, token_symbol, token_complex_re;
-			tokenmap = require("../src/syntax/map.tea").token;
-			token_literals = tokenmap.literals;
-			token_symbol = tokenmap.types.SymbolTokn;
-			token_complex_re = tokenmap.complexre;
-			function Token(text, types, indent, location){
-				if (this.constructor != Token){
-					if (arguments.length == 1 || typeof types == 'number'){
-						return Token.parse(text, types);
-					}
-					return new Token(text, types, indent, location);
-				}
-				if (!types){
-					if (text == '\4'){
-						types = ['EOT', 'BlockBreakTokn', 'BlockBreak', 'EndTokn'];
-					}else if (token_literals.hasOwnProperty(text)){
-						types = token_literals[text];
-					}else if (text){
-						types = ['Character'];
-					}else {
-						types = ['EMPTY'];
+			function Token(text, types, location){
+				var instance;
+				if (!types || typeof types == 'number'){
+					instance = Token.create(text, types, location);
+					text = instance.text;
+					types = instance.types;
+					location = instance.location;
+					if (instance.error){
+						this.error = instance.error;
 					}
 				}
 				this.text = text;
-				this.types = Hash.slice(types);
-				if (indent != null) this.indent = indent;
+				this.types = types;
+				this.indent = -1;
 				this.location = location || null;
-				this.istoken = true;
-			}
-			Token.prototype = new NodeBase();
+			};
+			Token.prototype = Object.create(Node.prototype);
+			Token.prototype.__super__ = Node.prototype;
 			Token.prototype.constructor = Token;
-			Token.prototype.__super__ = NodeBase.prototype;
+			Token.map = {"types": {}, "literals": {}, "complexs": [], "complexre": null};
 			Token.prototype.__defineGetter__("types", function(){
 				return this._types;
 			});
 			Token.prototype.__defineSetter__("types", function(types){
-				this.type = types[0];
-				this._types = types;
-				return this._types;
-			});
-			Token.prototype.__defineSetter__("indent", function(num){
-				this._indent = (num != null ? num : -1);
-				var i = this.types.indexOf('LineHead');
-				if (this._indent >= 0){
-					if (i == -1) this.types.push('LineHead');
-				}else if (i >= 0){
-					this.types.splice(i, 1);
+				if (types){
+					this._types = Jsop.toArray(types);
+					this.type = this._types[0];
 				}
-			});
-			Token.prototype.__defineGetter__("indent", function(){
-				return this._indent;
+				return this._types;
 			});
 			Token.prototype.__defineGetter__("fileName", function(){
 				return this.location && this.location.fileName;
@@ -4520,239 +317,169 @@
 			Token.prototype.__defineGetter__("end", function(){
 				return this.location && this.location.end;
 			});
+			// rewrite
+			Token.prototype.isToken = true;
 			Token.prototype.clone = function (text, types){
-				var token = new Token(text || this.text, types || this.types, this.indent, this.location);
+				var token = new Token(text || this.text, types || this.types, this.location);
 				token.parent = this.parent;
+				token.indent = this.indent;
+				token.scope = this.scope;
 				return token;
-			}
-			Token.types = tokenmap.types;
-			Token.define = function(types, literals){
-				return tokenmap.define(types, literals);
 			};
-			Token.parse = function(text, index){
+			Token.define = function(types, literals){
+				var map, literal_re, tmp;
+				map = Token.map;
+				if (!literals || !literals.length){
+					for (var type, i = 0; i < types.length; i++){
+						type = types[i];
+						!map.types[type] && (map.types[type] = []);
+					}
+				}
+				for (var literal, i = 0; i < literals.length; i++){
+					literal = literals[i];
+					if (map.types.hasOwnProperty(literal) && /^[A-Z]\w+$/.test(literal)){
+						Token.define(types, map.types[literal]);
+						continue;
+					}
+					if (/\w\W|\W\w/.test(literal)){
+						literal_re = literal.replace(/(\W)/g, '\\$1');
+						if (map.complexs.indexOf(literal_re) == -1){
+							map.complexs.push(literal_re);
+						}
+					}
+					for (var type, j = 0; j < types.length; j++){
+						type = types[j];
+						!map.types[type] && (map.types[type] = []);
+						if (map.types[type].indexOf(literal) == -1){
+							map.types[type].push(literal);
+						}
+					}
+					if (tmp = map.literals[literal]){
+						for (var type, j = 0; j < types.length; j++){
+							type = types[j];
+							if (tmp.indexOf(type) == -1){
+								tmp.push(type);
+							}
+						}
+					}else {
+						map.literals[literal] = types.slice();
+					}
+				}
+				if (map.complexs.length){
+					map.complexs.sort(function(a, b){return b.length-a.length});
+					map.complexre = new RegExp('^(?:'+map.complexs.join('|')+')(?!\\w)', 'g');
+				}
+			};
+			Token.create = function(text, index, location){
+				var token_literals, code, token_complex_re, match, types;
 				if (index == null) index = 0;
-				var match, code;
 				if (!(text = text.substr(index))){
-					return;
+					throw Error.create('create token object of param is empty!', new Error());
 				}
-				if (token_complex_re && (match = text.match(token_complex_re))){
-					if (token_literals.hasOwnProperty(match[0])){
-						return new Token(match[0], token_literals[match[0]]);
+				token_literals = Token.map.literals;
+				do {
+					if (token_literals.hasOwnProperty(text)){
+						code = text;
+						break;
 					}
-				}
-				if (match = text.match(/^\n/)){
-					return new Token(match[0], token_literals[match[0]]);
-				}
-				if (match = text.match(/^[\r\t\f\ ]+/)){
-					return new Token(match[0], ['BlankTokn']);
-				}
-				if (match = text.match(/^(0[xX][0-9a-fA-F]+|(?:\.\d+|\d+(?:\.\d+)?)(?:e\-?\d+)?)/)){
-					return new Token(match[0], ['NumTokn', 'ConstTokn']);
-				}
-				if (match = text.match(/^([\$a-zA-Z_][\w\$]*)/)){
-					if (token_literals.hasOwnProperty(match[0])){
-						return new Token(match[0], token_literals[match[0]]);
+					token_complex_re = Token.map.complexre;
+					if (token_complex_re && (match = text.match(token_complex_re))){
+						if (token_literals.hasOwnProperty(match[0])){
+							code = match[0];
+							break;
+						}
 					}
-					return new Token(match[0], ['IdentifierTokn']);
+					if (match = text.match(/^\n/)){
+						code = match[0];
+						break;
+					}
+					if (match = text.match(/^[\r\t\f\ ]+/)){
+						code = match[0], types = ['BLANK'];
+						break;
+					}
+					if (match = text.match(/^\#+\w+/)){
+						code = match[0], types = ['TAG'];
+						break;
+					}
+					if (match = text.match(/^(0[xX][0-9a-fA-F]+|(?:\.\d+|\d+(?:\.\d+)?)(?:e\-?\d+)?)/)){
+						code = match[0], types = ['NUMBER', 'CONST'];
+						break;
+					}
+					if (match = text.match(/^([\$a-zA-Z_][\w\$]*)/)){
+						code = match[0];
+						if (!(token_literals.hasOwnProperty(match[0]))){
+							types = ['IDENTIFIER'];
+						}
+						break;
+					}
+					if (!(match = text.match(/^[^\w\_\s]+/))){
+						return {
+							"error": 'tokenize parse error! unexpected token like as "'+text.slice(0, 5)+'"'};
+					}
+					code = match[0];
+					while (code){
+						if (token_literals.hasOwnProperty(code)){
+							break;
+						}
+						code = code.slice(0, -1);
+					}
+					if (!code){
+						code = match[0][0], types = ['CHARACTER'];
+					}
+					if (code == '\\'){
+						code = text.substr(0, 2);
+						types = ['SYMBOL'];
+					}
+					break;
+					break;
+				} while(true)
+				!types && (types = token_literals[code]);
+				if (!types){
+					return {"error": 'tokenize parse error! unexpected token like as "'+code+'"'};
 				}
-				if (!(match = text.match(/^[^\w\_\s]+/))){
-					return {"error": 'tokenize parse error! unexpected token like as "'+text.slice(0, 5)+'"'};
-				}
-				code = match[0];
-				while (code && token_symbol.indexOf(code) == -1){
-					code = code.slice(0, -1);
-				}
-				if (!code){
-					return new Token(match[0]);
-				}
-				if (token_literals.hasOwnProperty(code)){
-					return new Token(code, token_literals[code]);
-				}
-				return {"error": 'tokenize parse error! undefined token "'+code+'"'};
+				return new Token(code, types || token_literals[code], location && location.fission(code, index));
 			};
 			Token.tokenize = function(text, index, opt){
+				var list, len, tokn;
 				if (index == null) index = 0;
-				var list, tk;
-				list = [];
-				while (tk = Token.parse(text, index)){
-					list.push(opt == 'code list' ? tk.text : tk);
-					index += tk.text.length;
+				list = [], len = text.length;
+				while (index < len){
+					if (tokn = Token.create(text, index)){
+						if (tokn.error){
+							throw Error.create(tokn.error, [text, index, text[index]], new Error());
+						}
+						list.push(opt == 'code list' ? tokn.text : tokn);
+						index += tokn.text.length;
+					}else {
+						break;
+					}
 				}
 				return list;
 			};
 			return Token;
-		})();
+		})()
 		module.exports = Token;
-	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/location.tea', '../src/syntax/location.tea', function(exports, require, module, __filename, __dirname){
-		var Location = (function(){
-			var file_cache = [], source_cache = [];
-			function Location(file, source, code, start, end, line, column){
-				if (!source && file){
-					source = Text.readFile(file);
-				}
-				this.__file_id = CacheFile(file);
-				this.__source_id = CacheSource(source);
-				this.code = code || '';
-				this.lineNumber = (line != null ? line : null);
-				this.columnNumber = (column != null ? column : null);
-				this.start = (start != null ? start : 0);
-				this.end = end || start+this.code.length-1;
-				if (line == null){
-					CountLineNumber(this, start);
-				}
-			}
-			Location.prototype.__defineGetter__("fileName", function(){
-				return file_cache[this.__file_id] || '';
-			});
-			Location.prototype.__defineGetter__("source", function(){
-				var data = source_cache[this.__source_id];
-				return data && data.source || '';
-			});
-			Location.prototype.__defineGetter__("line", function(){
-				var data = source_cache[this.__source_id];
-				return data && data[this.lineNumber-1][3] || '';
-			});
-			Location.prototype.fission = function (code, start, end){
-				return new Location(this.__file_id, this.__source_id, code, start, end);
-			}
-			function CountLineNumber(loc, start){
-				var data;
-				if (data = source_cache[loc.__source_id]){
-					for (var i=0, line_data; i < data.length; i++){
-						line_data = data[i];
-						if (start >= line_data[1] && start <= line_data[2]){
-							loc.lineNumber = line_data[0];
-							loc.columnNumber = start-line_data[1];
-							break;
-						}
-					}
-				}
-				return loc;
-			}
-			function CacheFile(file){
-				if (typeof file == 'number'){
-					return file;
-				}
-				if (file){
-					var index = file_cache.indexOf(file);
-					if (index == -1){
-						index = file_cache.push(file)-1;
-					}
-					return index;
-				}
-				return null;
-			}
-			function CacheSource(source){
-				if (typeof source == 'number'){
-					return source;
-				}
-				if (source){
-					var index = -1;
-					for (var i=0; i < source_cache.length; i++){
-						if (source_cache[i].text == source){
-							index = i;
-							break;
-						}
-					}
-					if (index == -1){
-						var lines = source.split('\n'), shift = 0, data = [];
-						for (var i=0, line; i < lines.length; i++){
-							line = lines[i];
-							data.push([i+1, shift, (shift += line.length+1)-1, line+'\n']);
-						}
-						data.source = source;
-						index = source_cache.push(data)-1;
-					}
-					return index;
-				}
-				return null;
-			}
-			return Location;
-		})();
-		module.exports = Location;
-	});Module.register('/Users/wl/Sites/TeaJS/src/syntax/source.tea', '../src/syntax/source.tea', function(exports, require, module, __filename, __dirname){
+	});
+	return module.exports;
+})('./core/token.js', './core', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Source = (function(){
-			var Splice = Array.prototype.splice,
-				Slice = Array.prototype.slice,
-				IndexOf = Array.prototype.indexOf,
-				Token = require("../src/syntax/token.tea"),
-				Location = require("../src/syntax/location.tea"),
-				PreProcess = require("../src/preprocess/index.tea");
-			function Source(source, file, ctx){
-				if (this.constructor != Source){
-					return new Source(source, file, ctx);
-				}
+			var Token, Location, re_cache;
+			Token = require("./token.js");
+			Location = require("./location.js");
+			re_cache = {};
+			function Source(text, file){
 				this.index = 0;
 				this.length = 0;
-				this.source = null;
-				this.fileName = null;
-				this.context = ctx || PreProcess.context();
 				if (arguments.length){
-					this.parse(source, file, this.context, true).clean();
+					this.read(text, file);
 				}
-			}
-			Source.prototype.parse = function (text, file, ctx, init){
-				if (ctx == null) ctx = this.context;
-				var loc, i, control_cache, token, code;
-				if (!file && !/^["']/.test(text) && Path.isPathText(text)){
-					file = text, text = null;
-				}
-				loc = new Location(file, text);
-				text = loc.source;
-				file = loc.fileName;
-				i = 0;
-				control_cache = {};
-				if (init || !this.source){
-					this.source = text;
-					this.fileName = file;
-				}
-				while (i < text.length && (token = Token(text, i))){
-					if (token.error){
-						throw tea.error(new Error(), token.error, [text, i, text[i], file]);
-					}
-					token.location = loc.fission(token.text, i);
-					if (this.length && this[this.length-1].is('LF')){
-						token.indent = token.type == 'BlankTokn' ? token.text.replace(/\t/g, tab_size).length : 0;
-					}
-					switch (code = token.text){
-						case '"':case '"""':case '""""':case '`':case "'":case "'''":case "''''":
-							token = ctx.processor.string(this, text, i, token);
-							break;
-						case '/*':case '#!':case '//':
-							token = ctx.processor.comm(this, text, i, token);
-							break;
-						case '/':
-							token = ctx.processor.regexp(this, text, i, token);
-							break;
-						case '#':
-							token = ctx.processor.pound(this, text, i, token, control_cache);
-							break;
-						default:
-							if (token.type == 'IdentifierTokn'){
-								token = ctx.processor.macro(this, text, i, token);
-							}
-							break;
-					}
-					if (typeof token == 'number'){
-						if (token < 0){
-							break;
-						}
-						i = token;
-					}else {
-						i = token.location.end+1;
-						this.add(token);
-					}
-				}
-				return this;
-			}
-			Source.prototype.__defineGetter__("text", function(){
-				return this.current.text;
-			});
-			Source.prototype.__defineGetter__("type", function(){
-				return this.current.type;
-			});
+			};
 			Source.prototype.__defineGetter__("current", function(){
 				return this.get(this.index);
+			});
+			Source.prototype.__defineGetter__("string", function(){
+				return this.join();
 			});
 			Source.prototype.__defineGetter__("peek", function(){
 				return this.get(this.nextIndex(this.index, true));
@@ -4760,52 +487,120 @@
 			Source.prototype.__defineGetter__("prev", function(){
 				return this.get(this.prevIndex(this.index, true));
 			});
-			Source.prototype.is = function (){
-				return this.current.is.apply(this[this.index], arguments);
-			}
-			Source.prototype.eq = function (){
-				return this.current.eq.apply(this[this.index], arguments);
-			}
-			Source.prototype.get = function (index){
-				return this[index] || {};
-			}
-			Source.prototype.add = function (tok){
-				if (!tok || !tok.istoken){
-					throw tea.error(new Error(), 'Add the wrong parameters('+isClass(tok)+'), Only to can add Lexeme object');
+			Source.prototype.read = function (text, file){
+				var loc, i, len, token;
+				loc = new Location(file, text);
+				text = loc.source;
+				file = loc.fileName;
+				this.index = 0;
+				this.length = 0;
+				i = 0;
+				len = text.length;
+				while (i < len && (token = Token.create(text, i, loc))){
+					if (token.error){
+						throw Error.create(token.error, [text, i, text[i], file], new Error());
+					}
+					i = token.location.end+1;
+					this.add(token);
 				}
-				this[this.length++] = tok;
+				return this.refresh();
+			};
+			Source.prototype.get = function (index){
+				return this[index] || new Token('\4');
+			};
+			Source.prototype.add = function (token){
+				if (!token || !token.isToken){
+					throw Error.create('Add the wrong parameters('+isClass(token)+'), Only to can add Lexeme object', new Error());
+				}
+				this[this.length++] = token;
 				return this;
-			}
+			};
 			Source.prototype.back = function (opt, catch_comm){
 				while (opt > 1){
 					this.index = this.prevIndex(this.index, opt--, catch_comm);
 				}
 				this.index = this.prevIndex(this.index, opt, catch_comm);
 				return this;
-			}
+			};
 			Source.prototype.next = function (opt, catch_comm){
 				while (opt > 1){
 					this.index = this.nextIndex(this.index, opt--, catch_comm);
 				}
 				this.index = this.nextIndex(this.index, opt, catch_comm);
 				return this;
-			}
+			};
 			Source.prototype.nextIndex = function (index, ig_lf, catch_comm){
-				return GoIndex(1, this, index, ig_lf, catch_comm);
-			}
+				return countIndex(1, this, index, ig_lf, catch_comm);
+			};
 			Source.prototype.prevIndex = function (index, ig_lf, catch_comm){
-				return GoIndex(-1, this, index, ig_lf, catch_comm);
-			}
+				return countIndex(-1, this, index, ig_lf, catch_comm);
+			};
+			Source.prototype.delete = function (a, b){
+				if (b == null) b = a;
+				for (var i=a; i <= b; i++){
+					this[i] = null;
+				}
+				return this;
+			};
+			Source.prototype.insert = function (pos, value, del_len){
+				var list, indent, head_token;
+				if (pos == null) pos = 0;
+				if (del_len == null) del_len = 0;
+				if (typeof value == 'string'){
+					value = new Source(value, 'preprocess/insert');
+				}else if (value.isToken){
+					value = [value];
+				}
+				list = [pos, del_len];
+				if (indent = this.lineIndent(pos)){
+					indent = SText.copy(' ', indent);
+				}
+				for (var token, i = 0; i < value.length; i++){
+					token = value[i];
+					if (!token || token.type == 'EOT'){
+						continue;
+					}
+					if (indent && token.indent >= 0){
+						if (token.is('BLANK')){
+							token.text += indent;
+							token.indent = token.text.length;
+						}else {
+							token.indent = null;
+							head_token = token.clone(indent, ['BLANK']);
+							head_token.indent = indent.length;
+							list.push(head_token);
+						}
+					}
+					list.push(token);
+				}
+				Array.prototype.splice.apply(this, list);
+				return this;
+			};
+			Source.prototype.clone = function (a, b){
+				var src, i;
+				src = new Source();
+				a = a < 0 ? this.length+a : (a || 0);
+				b = b < 0 ? this.length+b : (b || this.length-1);
+				for (i = a; i <= b; i++){
+					if (this[i]){
+						src.add(this[i]);
+					}
+				}
+				if (b != this.length-1){
+					src.add(new Token('\4'));
+				}
+				return src;
+			};
 			Source.prototype.indexPair = function (s1, s2, index, not_throw_error){
-				index = (index != null ? index : this.index);
-				var ab = IndexPair(this, s1, s2, index);
+				index = index != null ? index : this.index;
+				var ab = indexPair(this, s1, s2, index);
 				if (!ab && !not_throw_error){
-					throw tea.error(new Error(), 'Source index pair miss "'+s2+'" token', this[index], 'Source error');
+					throw Error.create(1004, s2, this[index], new Error());
 				}
 				return ab;
-			}
+			};
 			Source.prototype.indexLine = function (index){
-				index = (index != null ? index : this.index);
+				index = index != null ? index : this.index;
 				var a = index, b = index, len = this.length-2;
 				while (a > len || (a > 0 && this[a-1] && this[a-1].type != 'LF')){
 					a--;
@@ -4814,37 +609,44 @@
 					b++;
 				}
 				return [(a > len ? len : a), (b > len ? len : b), index];
-			}
-			Source.prototype.lineIndent = function (index){
-				index = (index != null ? index : this.index);
-				while (index >= 0){
-					if (this[index] && this[index].indent >= 0){
-						return this[index].indent;
-					}
-					index--;
-				}
-				return -1;
-			}
-			Source.prototype.trimIndent = function (a, b){
-				this.length && TrimIndent(this, a, b);
-				return this;
-			}
-			Source.prototype.indexOf = function (){
-				return IndexOf.apply(this, arguments);
-			}
-			Source.prototype.matchOf = function (re, index){
+			};
+			Source.prototype.indexOf = function (target, index){
+				var is_re, is_str;
 				if (index == null) index = 0;
-				var m, a, b;
-				if (m = this.source.match(re)){
-					for (var i=index, tk; i < this.length; i++){
+				if (!(is_re = target instanceof RegExp)){
+					is_str = typeof target == 'string';
+				}
+				for (var i = index; i < this.length; i++){
+					if (!this[i]){
+						continue;
+					}
+					if (is_re){
+						if (target.test(this[i].text)){
+							return i;
+						}
+					}else if (is_str){
+						if (this[i].text == target){
+							return i;
+						}
+					}else if (this[i] == target){
+						return i;
+					}
+				}
+			};
+			Source.prototype.matchOf = function (re, index){
+				var m;
+				if (index == null) index = 0;
+				var a, b;
+				if (m = this.string.match(re)){
+					for (var tk, i = index; i < this.length; i++){
 						tk = this[i];
 						if (!tk){
 							continue;
 						}
-						if (tk.start == m.index && tk.fileName == this.fileName){
+						if (tk.start == m.index){
 							a = i;
 						}
-						if (tk.end == m.index+m[0].length && tk.fileName == this.fileName){
+						if (tk.end == m.index+m[0].length){
 							b = i;
 						}
 						if (a != null && b != null){
@@ -4852,152 +654,88 @@
 						}
 					}
 				}
-			}
-			Source.prototype.delete = function (a, b){
-				if (b == null) b = a;
-				for (var i = a; i <= b; i++){
-					this[i] = null;
-				}
-				return this;
-			}
-			Source.prototype.insert = function (pos, list){
-				if (arguments.length == 1){
-					list = pos, pos = this.length;
-				}
-				list = list.istoken ? [list] : Slice.call(list);
-				var indent = this.lineIndent(pos);
-				for (var i=list.length-1, t; i >= 0; i--){
-					t = list[i];
-					if (!t || t.type == 'EOT'){
-						Splice.call(list, i, 1);
-					}else if (indent > 0 && t.indent >= 0){
-						t.indent += indent;
+			};
+			Source.prototype.lineIndent = function (index){
+				index = index != null ? index : this.index;
+				while (index >= 0){
+					if (this[index] && this[index].indent >= 0){
+						return this[index].indent;
 					}
+					index--;
 				}
-				list.unshift(pos, 0);
-				Splice.apply(this, list);
-				return this;
-			}
-			Source.prototype.clone = function (a, b){
-				var src = new Source();
-				a = typeof a != 'number' ? 0 : a;
-				b = typeof b != 'number' ? this.length : b;
-				for (var i = a; i < b; i++){
-					if (this[i]){
-						src.add(this[i]);
-					}
-				}
-				if (b != this.length){
-					src.add(this[this.length-1]);
-				}
-				return src;
-			}
-			Source.prototype.clean = function (){
-				var a;
-				a = -1;
-				for (var i=0, token; i < this.length; i++){
-					token = this[i];
-					if (!token){
-						continue;
-					}
-					if (token.type == 'EOT'){
-						this[i] = null;
-					}
-					if (token.is('LineHead')){
-						a = i;
-					}
-					if (token.is('LF')){
-						if (a != -1){
-							this.delete(a, i);
-						}
-						a = -1;
-						continue;
-					}
-					if (!token.is('BlankTokn')){
-						a = -1;
-					}
-				}
-				return this.refresh().add(Token('\4'));
-			}
-			Source.prototype.refresh = function (){
-				var target = this[this.index], a = 0, del_i = -1, del_len = 0;
-				for (var i=this.length-1, token; i >= 0; i--){
-					token = this[i];
-					if (token){
-						if (del_len){
-							Splice.call(this, del_i, del_len);
-						}
-						del_i = -1, del_len = 0;
-					}else {
-						del_i = i, del_len += 1;
-					}
-				}
-				if (del_len){
-					Splice.call(this, del_i, del_len);
-				}
-				if (target != this[this.index]){
-					this.index = this.indexOf(target);
-				}
-				return this;
-			}
-			Source.prototype.join = function (a, b){
-				if (isArray(a)){
-					b = a[1], a = a[0];
-				}
-				a = a < 0 ? this.length+a : (a || 0), b = b < 0 ? this.length+b : Math.min(b || Infinity, this.length);
-				var texts = [];
-				for (var i = a; i <= b; i++){
-					if (this[i] && this[i].text != '\4') texts.push(this[i].text);
-				}
-				return texts.join('');
-			}
-			function TrimIndent(src, a, b){
-				if (a == null) a = 0;
-				if (b == null) b = src.length-1;
-				var _a = a, _b = b;
-				while (src[_a].is('BlankTokn', 'LF')){
-					_a++;
-				}
-				if (_a > a){
-					if (src[--_a].type != 'LF'){
-						_a--;
-					}
-					src.delete(a, _a);
-				}
-				while (src[_b].is('BlankTokn', 'LF')){
-					_b--;
-				}
-				if (_b < b){
-					src.delete(++_b, b);
-				}
-				var min = -1;
-				for (var i = a; i <= b; i++){
-					if (src[i] && src[i].indent >= 0){
-						if (min == -1 || src[i].indent < min){
-							min = src[i].indent;
-						}
-					}
-				}
-				if (min > 0){
-					for (var i = a; i <= b; i++){
-						if (src[i] && src[i].indent >= 0){
-							src[i].indent -= min;
-							if (src[i].indent == 0){
-								src[i+1].indent = src[i].indent;
-								src[i++] = null;
-							}else if (src[i].type == 'BlankTokn'){
-								src[i].text = src[i].text.replace(/\t/g, tab_size).substr(0, src[i].indent);
+				return -1;
+			};
+			Source.prototype.trimIndent = function (a, b, len){
+				var i, token;
+				a = a < 0 ? this.length+a : (a || 0);
+				b = b < 0 ? this.length+b : (b || this.length-1);
+				if (len == null){
+					for (i = a; i <= b; i++){
+						token = this[i];
+						if (token && token.indent >= 0){
+							if (len == null || token.indent < len){
+								len = token.indent;
 							}
 						}
 					}
 				}
-				return src;
-			}
-			function GoIndex(ori, src, index, ig_lf, catch_comm){
+				if (len > 0){
+					for (i = a; i <= b; i++){
+						token = this[i];
+						if (token && token.indent >= 0){
+							token.indent = Math.max(token.indent-len, 0);
+							if (token.type = 'BLANK'){
+								token.text = token.text.substr(0, token.indent);
+							}
+						}
+					}
+				}
+				return this;
+			};
+			Source.prototype.refresh = function (index){
+				var target;
+				if (typeof index == 'number'){
+					this.index = index;
+				}
+				target = this[this.index];
+				clearSource(this);
+				for (var token, i = this.length - 1; i >= 0; i--){
+					token = this[i];
+					token.indent = -1;
+					if (!i || (token.type == 'LF' && (token = this[i+1]))){
+						if (token.type == 'BLANK'){
+							token.text = SText.spaceTab(token.text);
+							token.indent = token.text.length;
+						}else {
+							token.indent = 0;
+						}
+					}
+				}
+				if (target != this[this.index]){
+					index = this.indexOf(target);
+					if (index >= 0){
+						this.index = index;
+					}
+				}
+				return this;
+			};
+			Source.prototype.join = function (a, b){
+				if (isArray(a)){
+					b = a[1], a = a[0];
+				}
+				a = a < 0 ? this.length+a : (a || 0), b = b < 0 ? this.length+b : (b || b === 0 ? b : this.length);
+				var texts = [];
+				for (var i=a; i <= b; i++){
+					if (this[i] && this[i].text != '\4') texts.push(this[i].text);
+				}
+				return texts.join('');
+			};
+			Source.prototype.isSource = true;
+			function countIndex(ori, src, index, ig_lf, catch_comm){
 				var len = src.length-1, type;
 				while ((index += ori) >= 0 && index <= len){
 					type = src[index] && src[index].type;
-					if (!type || type == 'BlankTokn' || (!catch_comm && type == 'CommDecl') || (ig_lf && type == 'LF')){
+					if (!type || type == 'BLANK' || (!catch_comm && type == 'COMMENT') || (ig_lf && type == 'LF')){
 						continue;
 					}
 					return index;
@@ -5006,1569 +744,93 @@
 					return index > len ? len : index;
 				}
 				return index < 0 ? 0 : index;
-			}
-			function IndexPair(src, s1, s2, index){
-				var s1_re = new RegExp('^'+s1.replace(/([^\w\|])/g, '\\$1')+'$'),
-					s2_re = new RegExp('^'+s2.replace(/([^\w\|])/g, '\\$1')+'$'),
-					len = src.length,
-					a = -1,
-					jump = 0;
+			};
+			function indexPair(src, s1, s2, index){
+				var s1_re, s2_re, len, a, jump, text;
+				s1_re = re_cache[s1] || (re_cache[s1] = new RegExp('^('+SText.re(s1)+')$'));
+				s2_re = re_cache[s2] || (re_cache[s2] = new RegExp('^('+SText.re(s2)+')$'));
+				len = src.length;
+				a = -1;
+				jump = 0;
 				while (index < len){
-					if (src[index].text == '\\'){
-						index += 2;
-						continue;
-					}
-					if (s1_re.test(src[index].text)){
-						if (a == -1){
-							a = index;
-						}else if (s1 == s2){
-							return [a, index];
-						}else {
-							jump += 1;
+					if (src[index]){
+						text = src[index].text;
+						if (text == '\\'){
+							index += 2;
+							continue;
 						}
-					}else if (s2_re.test(src[index].text) && a != -1){
-						if (jump == 0) return [a, index];
-						jump -= 1;
+						if (s1_re.test(text)){
+							if (a == -1){
+								a = index;
+							}else if (s1 == s2 || s2_re.test(text)){
+								return [a, index];
+							}else {
+								jump += 1;
+							}
+						}else if (s2_re.test(text) && a != -1){
+							if (jump == 0){
+								return [a, index];
+							}
+							jump -= 1;
+						}
 					}
 					index += 1;
 				}
-			}
-			return Source;
-		})();
-		module.exports = Source;
-	});Module.register('/Users/wl/Sites/TeaJS/src/preprocess/require.tea', '../src/preprocess/require.tea', function(exports, require, module, __filename, __dirname){
-		var Context = require("../src/preprocess/context.tea");
-		function join(requires, main){
-			var reader = main.reader, modules = [];
-			for (var file in requires){
-				if (!requires.hasOwnProperty(file)) continue;
-				var item = requires[file];
-				var key = item[0],
-					ctx = item[1],
-					module_write = reader.new('ModuleReg').read("Module.register('#0', '#1', function(exports, require, module, __filename, __dirname){#2});", [file, key, reader.new('NodeStam', ctx.rewriter)]);
-				modules.push(module_write);
-			}
-			modules = reader.new('ModulePackage', requireTemplate(), reader.new('NodeStam', modules));
-			main.insert(0, modules);
-			return main;
-		};
-		function load(files, cache){
-			if (cache == null) cache = {};
-			for (var file in files){
-				if (!files.hasOwnProperty(file)) continue;
-				var key = files[file];
-				if (file == 'length' || cache.hasOwnProperty(file)){
-					continue;
-				}
-				if (debug.log){
-					debug.log('** require file: '+file);
-				}
-				var ctx = new Context({"file": file});
-				cache[file] = [key, ctx];
-				if (ctx.requires.length){
-					load(ctx.requires, cache);
-				}
-			}
-			return cache;
-		};
-		function requireTemplate(){
-			var format;
-			format = function(){
-				var _require, __modules, Module;
-				if (!global && typeof (window) != 'undefined'){
-					global = window;
-				}
-				_require = require;
-				require = function(key){
-					var mod = __modules[key];
-					if (mod){
-						if (mod.loaded){
-							return mod.exports;
-						}
-						return mod.load();
-					}else {
-						return module.require(key);
-					}
-				};
-				__modules = {};
-				Module = function(filename, creater){
-					this.id = filename;
-					this.exports = {};
-					this.filename = filename;
-					this.loaded = false;
-					this.creater = creater;
-					this.require = require;
-				};
-				Module.prototype.load = function(){
-					this.loaded = true;
-					this.creater(this.exports, require, this, this.filename, this.filename.replace(/\/.+$/g, ''));
-					module.constructor._cache[this.filename] = this;
-					return this.exports;
-				};
-				Module.register = function(filename, key, creater){
-					if (!(__modules.hasOwnProperty(key))){
-						__modules[key] = new Module(filename, creater);
-					}
-				};
 			};
-			return '('+format.toString().replace(/^\t|^ {4}/mg, '').replace(/\s*\}\s*$/, '#}')+')();\n\n';
-		}
-		module.exports.join = join;
-		module.exports.load = load;
-	});Module.register('/Users/wl/Sites/TeaJS/src/rewriter/index.tea', '../src/rewriter/index.tea', function(exports, require, module, __filename, __dirname){
-		var Reader = require("../src/rewriter/reader.tea"),
-			SourceMap = require("../src/rewriter/sourcemap.tea"),
-			Beautify = require("../src/rewriter/beautify.tea");
-		exports.read = function(ast, ctx){
-			if (!ctx) ctx = ast.context;
-			var write = Reader(ctx).read(ast);
-			return write;
-		};
-		exports.sourceMap = function(){
-			return new SourceMap();
-		};
-	});Module.register('/Users/wl/Sites/TeaJS/src/rewriter/reader.tea', '../src/rewriter/reader.tea', function(exports, require, module, __filename, __dirname){
-		var Reader = (function(){
-			var Writer = require("../src/rewriter/writer.tea");
-			var ES5 = require("../src/rewriter/ES5.tea");
-			var pattern_cache = {};
-			function Reader(ctx){
-				if (this.constructor != Reader){
-					return new Reader(ctx);
-				}
-				this.context = ctx;
-			}
-			Reader.prototype.new = function (type){
-				var write = new Writer(this, type);
-				if (arguments.length > 1){
-					write.read.apply(write, Hash.slice(arguments, 1));
-				}
-				return write;
-			}
-			Reader.prototype.read = function (node, do_each){
-				var res;
-				if (!node){
-					return;
-				}
-				if (!node.istoken && !node.isnode){
-					return node;
-				}
-				if (!do_each && (res = getReader(node.type, this, node))){
-					if (res.isnode){
-						return this.read(res, true);
-					}
-					return res;
-				}else if (node.isnode){
-					var write = this.new(node.type);
-					for (var i=0, item; i < node.length; i++){
-						item = node[i];
-						write.read(item);
-					}
-					return write;
-				}else if (node.istoken){
-					return node;
-				}
-			}
-			Reader.prototype.patt = function (patt, node, write){
-				var res;
-				if (!(patt = getPattern(patt, node))){
-					return;
-				}
-				if (!write) write = this.new(patt.name || node.type);
-				var patt_list = patt.list;
-				for (var i=0, chip; i < patt_list.length; i++){
-					chip = patt_list[i];
-					if (chip.ispattern){
-						if (res = parsePatternAccessor.call(this, chip, node)){
-							if (res.type == write.type){
-								for (var j=0; j < res.length; j++){
-									write.read(res[j]);
-								}
-							}else {
-								write.read(res);
-							}
-						}else if (res === null && typeof patt_list[i-1] == 'string'){
-							Array.prototype.pop.call(write);
-						}
-					}else if (chip){
-						write.read(chip);
-					}
-				}
-				return write;
-			}
-			Reader.compilePattern = function(source){
-				var m;
-				if (pattern_cache[source]){
-					return pattern_cache[source];
-				}
-				var chips = source.replace(/ ?\| ?/g, '|').split('|'), patt = [];
-				for (var i=0, chip; i < chips.length; i++){
-					chip = chips[i];
-					var ptn = {"condition": '', "list": [], "name": '', "source": chip};
-					if (m = chip.match(/^\(\:(\w+)\)\ ?/)){
-						ptn.name = m[1];
-						chip = chip.substr(m[0].length);
-					}
-					if (m = chip.match(/^\(\?(.*?)\)\ ?/)){
-						ptn.condition = compilePatternCondition(m[1]);
-						chip = chip.substr(m[0].length);
-					}
-					while (m = chip.match(/\b([A-Z]\w+[A-Z]\w+)\(#(\d+(?:\.\d+)*)?\)|#(\d+(?:\.\d+)*)?/)){
-						ptn.list.push(chip.slice(0, m.index));
-						ptn.list.push(compilePatternAccessor(m, ptn.source));
-						chip = chip.substr(m.index+m[0].length);
-					}
-					if (chip){
-						ptn.list.push(chip);
-					}
-					patt.push(ptn);
-				}
-				patt.isreader = true;
-				return pattern_cache[source] = patt;
-			};
-			function getReader(type, self, node){
-				var write, reader;
-				if (!reader && ES5.hasOwnProperty(type)){
-					reader = ES5[type];
-				}
-				if (reader){
-					if (typeof reader == 'function'){
-						write = self.new(type);
-						reader = reader.call(self, node, write) || write;
-					}
-					if (typeof reader == 'string' || reader.isreader){
-						return self.patt(reader, node);
-					}
-					return reader;
-				}
-				if (self.context && (reader = self.context.get(type, 'statement', 'expression'))){
-					return reader.read(self, node);
-				}
-			}
-			function getPattern(patt, node){
-				var item, patt = patt.isreader ? patt : Reader.compilePattern(patt);
-				for (var i=0; i < patt.length; i++){
-					if (!patt[i].condition){
-						return patt[i];
-					}
-					var conds = patt[i].condition;
-					for (var j=0, cond; j < conds.length; j++){
-						cond = conds[j];
-						item = getNodeItem(node, cond.indexs, true);
-						if (item && item[cond.fn].apply(item, cond.param)){
-							if (cond.logic != '&&'){
-								return patt[i];
-							}
-						}else if (cond.logic != '||'){
-							break;
-						}
-					}
-				}
-			}
-			function getNodeItem(node, indexs, strict){
-				var item = node;
-				if (indexs){
-					for (var _i=0, i; _i < indexs.length; _i++){
-						i = indexs[_i];
-						if (item[i]){
-							item = item[i];
-						}else {
-							if (strict){
-								return null;
-							}
-							break;
-						}
-					}
-					if (item == node || !item){
-						return null;
-					}
-				}
-				return item;
-			}
-			function initReader(reader){
-				for (var name in reader){
-					if (!reader.hasOwnProperty(name)) continue;
-					var ptn = reader[name];
-					if (typeof ptn == 'string'){
-						Reader.compilePattern(ptn);
-					}
-					if (/ /.test(name)){
-						delete reader[name];
-						for (var _i_ref = name.split(' '), _i=0, n; _i < _i_ref.length; _i++){
-							n = _i_ref[_i];
-							reader[n] = ptn;
-						}
-					}
-				}
-			}
-			function compilePatternCondition(text){
-				var m, list = [];
-				while (m = text.match(/^\ *#(\d+(?:\.\d+)*)? (is|eq) (.*?)(\&\&|\|\||$)/)){
-					list.push({"fn": m[2],
-						"indexs": m[1] && m[1].split('.'),
-						"param": m[3].trim().split(','),
-						"logic": m[4]});
-					if (m[4]){
-						text = text.substr(m[0].length);
+			function clearSource(src){
+				var len, a, list;
+				len = src.length;
+				for (var token, i = 0; i < src.length; i++){
+					token = src[i];
+					if (!token){
 						continue;
 					}
-					break;
-				}
-				return list;
-			}
-			function compilePatternAccessor(match, source){
-				var fn, index, param;
-				if (fn = match[1]){
-					index = match[2];
-				}else {
-					index = match[3];
-				}
-				if (index){
-					index = index.split('.');
-				}
-				return {"fn": fn, "indexs": index, "param": param, "ispattern": true, "source": source};
-			}
-			function parsePatternAccessor(patt, node){
-				var item, write;
-				if (!(item = getNodeItem(node, patt.indexs))){
-					return null;
-				}
-				if (!patt.fn){
-					write = item.istoken || item.isnode ? this.read(item, node == item) : item;
-				}else if (/^[A-Z]+$/.test(patt.fn) && this[patt.fn]){
-					write = item.isnode || item.istoken ? this.read(item, node == item) : item;
-					this[patt.fn](write);
-				}else if (write = getReader(patt.fn, this, item)){
-					return write;
-				}else {
-					throw tea.error(new Error(), 'writer patt has undefined function', [patt.source, -1, patt.fn]);
-				}
-				return write;
-			}
-			initReader(ES5);
-			Reader.prototype.COMMA = function (write){
-				return this.JOIN(write, ',');
-			}
-			Reader.prototype.JOIN = function (write, separator){
-				if (separator == null) separator = ' ';
-				for (var i = write.length-1; i >= 1; i--){
-					Array.prototype.splice.call(write, i, 0, separator);
-				}
-				return write;
-			}
-			Reader.prototype.VAR = function (){
-				var list = [];
-				for (var i=0; i < arguments.length; i++){
-					if (arguments[i]){
-						list.push(this.read(arguments[i]));
-					}
-				}
-				if (list.length){
-					this.COMMA(list);
-					var write = this.new('VarDecl', 'var #0', [list]);
-					return write;
-				}
-			}
-			return Reader;
-		})();
-		module.exports = Reader;
-	});Module.register('/Users/wl/Sites/TeaJS/src/rewriter/writer.tea', '../src/rewriter/writer.tea', function(exports, require, module, __filename, __dirname){
-		var Beautify = require("../src/rewriter/beautify.tea");
-		var Writer = (function(){
-			function Writer(reader, type){
-				this.length = 0;
-				this.type = type && type.type || type;
-				this.reader = reader;
-				this.iswriter = true;
-			}
-			Writer.prototype.__defineGetter__("text", function(){
-				return Writer.listToText(Beautify(this));
-			});
-			Writer.prototype.__defineGetter__("lastText", function(){
-				var last = this;
-				while (true){
-					if (last.istoken){
-						return last.text;
-					}
-					if (typeof last == 'string' || typeof last == 'number'){
-						return last;
-					}
-					if (last = last[last.length-1]){
+					if (token.type == 'EOT'){
+						src[i] = null;
 						continue;
 					}
-					return null;
-				}
-			});
-			Writer.prototype.insert = function (pos){
-				var argus = [pos, 0];
-				for (var i=1, item; i < arguments.length; i++){
-					item = arguments[i];
-					if (item.istoken || item.isnode){
-						item = this.reader.read(item);
-					}
-					if (item){
-						if (isArray(item)){
-							argus.push.apply(argus, item);
-						}else {
-							argus.push(item);
-						}
-					}
-				}
-				Array.prototype.splice.apply(this, argus);
-				return this;
-			}
-			Writer.prototype.add = function (){
-				for (var i=0, item; i < arguments.length; i++){
-					item = arguments[i];
-					if (item){
-						this[this.length++] = item;
-					}
-				}
-				return this;
-			}
-			Writer.prototype.delete = function (a, b){
-				if (b == null) b = a;
-				Array.prototype.splice.call(this, a, b-a+1);
-				return this;
-			}
-			Writer.prototype.read = function (test_patt){
-				if (typeof test_patt == 'string' && /#/.test(test_patt)){
-					this.reader.patt(test_patt, arguments[1], this);
-				}else {
-					for (var i=0, item; i < arguments.length; i++){
-						item = arguments[i];
-						if (!item){
-							continue;
-						}
-						if (item.istoken || item.isnode){
-							item = this.reader.read(item);
-						}else if (isArray(item)){
-							this.read.apply(this, item);
-							continue;
-						}
-						if (item){
-							this[this.length++] = item;
-						}
-					}
-				}
-				return this;
-			}
-			Writer.prototype.toList = function (not_beautify){
-				if (!not_beautify){
-					return Beautify(this);
-				}
-				var list = [];
-				for (var _i=0, item; _i < this.length; _i++){
-					item = this[_i];
-					if (!item) continue;
-					if (item.iswriter){
-						list.push.apply(list, item.toList(true));
-					}else {
-						list.push(item);
-					}
-				}
-				return list;
-			}
-			Writer.listToText = function(list){
-				var texts = [];
-				for (var _i=0, item; _i < list.length; _i++){
-					item = list[_i];
-					if (item.istoken){
-						texts.push(item.text);
-					}else if (item.iswriter || isArray(item)){
-						texts.push(Writer.listToText(item));
-					}else {
-						texts.push(item);
-					}
-				}
-				return texts.join('');
-			};
-			return Writer;
-		})();
-		module.exports = Writer;
-	});Module.register('/Users/wl/Sites/TeaJS/src/rewriter/beautify.tea', '../src/rewriter/beautify.tea', function(exports, require, module, __filename, __dirname){
-		function Beautify(writer){
-			var shell_comm = [], list = Beautify.start(writer, null, shell_comm);
-			if (shell_comm.length){
-				list.unshift(shell_comm[0], '\n');
-			}
-			return list;
-		}
-		Beautify.start = function(writer, not_concat, shell_comm){
-			var w_list = [];
-			for (var i=0, item; i < writer.length; i++){
-				item = writer[i];
-				switch (item.type){
-					case 'CommDecl':
-						if (item[0]){
-							item = item[0];
-						}
-						if (item.is('ShellComm')){
-							if (shell_comm){
-								shell_comm.push(item);
-							}
-							if (writer[i+1] == '\n'){
+					if (token.is('HEAD')){
+						a = i;
+						while (i < len){
+							if (!src[i]){
 								i++;
+								continue;
 							}
-							continue;
-						}
-						break;
-					case 'VarDecl':case 'LetDecl':
-						item = this.varList(item);
-						i = this.concatVarList(writer, i, item);
-						item = this.wrapList(item, writer.constructor.listToText(item));
-						break;
-					case 'JsonExpr':case 'ArrayExpr':
-						item = this.start(item, true, shell_comm);
-						item = this.wrapList(item, writer.constructor.listToText(item));
-						break;
-					case 'NodeStam':
-						item = this.start(item, null, shell_comm);
-						if (item.length && writer.type != 'Root'){
-							this.indentList(item);
-							this.trimList(item).unshift('\n\t');
-							item.push('\n');
-						}
-						break;
-					default:
-						if (item.iswriter){
-							item = this.start(item, null, shell_comm);
-						}else if (item == ','){
-							item = ', ';
-						}
-						break;
-				}
-				w_list.push(item);
-			}
-			if (not_concat){
-				return w_list;
-			}
-			return this.concatList(w_list);
-		};
-		Beautify.indentList = function(list){
-			for (var i=0, item; i < list.length; i++){
-				item = list[i];
-				if (item.istoken){
-					if (item.type != 'StringTokn'){
-						item.text = item.text.replace(/\n/g, '\n\t');
-					}
-				}else if (typeof item == 'string'){
-					list[i] = item.replace(/\n/g, '\n\t');
-				}
-			}
-			return list;
-		};
-		Beautify.wrapList = function(list, text){
-			if (text.length > 80 || /\n/.test(text)){
-				for (var i=0, item; i < list.length; i++){
-					item = list[i];
-					if (/^\s*,\s*$/.test(item)){
-						list[i] = ',\n';
-					}
-				}
-				list = this.concatList(list);
-				this.indentList(list);
-			}
-			return list;
-		};
-		Beautify.varList = function(writer){
-			var list = [];
-			for (var i=0, item; i < writer.length; i++){
-				item = writer[i];
-				if (item.type == 'ArgumentsDecl'){
-					list.push.apply(list, this.start(item, true));
-				}else if (item.iswriter){
-					list.push(this.start(item));
-				}else if (item == ','){
-					list.push(', ');
-				}else {
-					list.push(item);
-				}
-			}
-			return list;
-		};
-		Beautify.concatVarList = function(writer, index, list){
-			var _b, b = index;
-			while (true){
-				_b = b+1;
-				while (typeof writer[_b] == 'string' && /^[;|\n|\s]+$/.test(writer[_b])){
-					_b += 1;
-				}
-				if (writer[_b] && /LetDecl|VarDecl/.test(writer[_b].type)){
-					list.push(', ');
-					list.push.apply(list, this.trimList(this.varList(writer[_b]), /^(var\ |var\b|\ )/, /(;|\n)$/));
-					b = _b;
-					continue;
-				}
-				break;
-			}
-			return b;
-		};
-		Beautify.concatList = function(list){
-			var res_list = [];
-			for (var _i=0, item; _i < list.length; _i++){
-				item = list[_i];
-				if (isArray(item)){
-					res_list.push.apply(res_list, item);
-				}else {
-					res_list.push(item);
-				}
-			}
-			return res_list;
-		};
-		Beautify.trimList = function(list, left, right){
-			if (left == null) left = /^\s+/;
-			if (right == null) right = /\s+$/;
-			if (left){
-				this.trimLeft(list, left);
-			}
-			if (right){
-				this.trimRight(list, right);
-			}
-			return list;
-		};
-		Beautify.trimLeft = function(list, re){
-			if (re == null) re = /^\s+/;
-			while (list[0]){
-				if (list[0].istoken){
-					if (!(list[0].text = list[0].text.replace(re, ''))){
-						list.shift();
-						continue;
-					}
-				}else if (typeof list[0] == 'string'){
-					if (!(list[0] = list[0].replace(re, ''))){
-						list.shift();
-						continue;
-					}
-				}else if (list.hasOwnProperty('length')){
-					if (this.trimLeft(list[0], re).length == 0){
-						list.shift();
-						continue;
-					}
-				}
-				break;
-			}
-			return list;
-		};
-		Beautify.trimRight = function(list, re){
-			if (re == null) re = /\s+$/;
-			var last;
-			while (list[last = list.length-1]){
-				if (list[last].istoken){
-					if (!(list[last].text = list[last].text.replace(re, ''))){
-						list.pop();
-						continue;
-					}
-				}else if (typeof list[last] == 'string'){
-					if (!(list[last] = list[last].replace(re, ''))){
-						list.pop();
-						continue;
-					}
-				}else if (list.hasOwnProperty('length')){
-					if (this.trimRight(list[last], re).length == 0){
-						list.pop();
-						continue;
-					}
-				}
-				break;
-			}
-			return list;
-		};
-		module.exports = Beautify;
-	});Module.register('/Users/wl/Sites/TeaJS/src/rewriter/ES5.tea', '../src/rewriter/ES5.tea', function(exports, require, module, __filename, __dirname){
-		var ES5 = {'CommaExpr CommaStam ArgumentsDecl' : 'COMMA(#)',
-				'ArgumentsExpr CompelExpr ConditionStam' : '\(COMMA(#)\)',
-				'ParamsStam ParamsExpr' : '\(ParamsPatt(#)\)',
-				'ArrayExpr' : '\[COMMA(#)\]',
-				'JsonExpr' : '\{COMMA(#)\}',
-				'PrefixExpr PostfixExpr' : '#0#1',
-				'ReturnStam BreakStam ContinueStam ThrowStam' : '#0 #1',
-				'DotExpr' : '.#0',
-				'DebuggerStam' : '#0',
-				'FunctionDecl' : '#0 #1#2#3',
-				'FunctionExpr' : '#0#1#2',
-				'ExportDecl' : '#1',
-				'IfPatt' : '#0 #1#2',
-				'ElseIfPatt' : '#0 if #1#2',
-				'ElsePatt' : '#0 #1',
-				'WhileStam' : '#0 #1#2',
-				'WithStam' : '#0 #1#2',
-				'TryPatt' : '#0 #1',
-				'CatchPatt' : '#0 #1 #2',
-				'FinallyPatt' : '#0 #1',
-				'ThisExpr' : 'this#1',
-				'LabelStam' : '#0#1 #2',
-				'ForBaseConditionPatt' : '(#0; #1; #2)',
-				'ForInConditionPatt' : '(#0 #1 #2)',
-				'UnaryExpr' : '(? #0 eq +) Math.abs(#1) | (? #0 is SymbolTokn) #0#1 | #0 #1',
-				'NotExpr' : '(? #1 is ValueExpr) !#0 | !(#1)',
-				'TernaryExpr' : '(? #2 is ExprStam && #4 is ExprStam) #0 #1 #2 #3 #4 | if (#0) #2; else #4',
-				'LambdaExpr' : '(? #1 is ReturnStam) function#0{#1} | function#0{return #1}',
-				'Root' : 'NodeStam(#0)',
-				'BlockStam IndentBlockStam LineBlockStam StamBlockStam' : '{NodeStam(#)}'};
-		ES5.TestPatt = function(node, __write){
-			if (tea.argv['--test']){
-				__write.add(node);
-			}
-		};
-		ES5.CommDecl = function(node, __write){
-			if (!tea.argv['--clear'] || node.text[0] == '#'){
-				__write.add(node);
-			}
-		};
-		ES5.IdentifierExpr = function(node, __write){
-			var let_name, id = node[0], scope = node.scope;
-			if (let_name = scope.getLet(id.text)){
-				id.text = let_name;
-			}else if (this.class_scope){
-				switch (scope.isDefined(id.text)){
-					case 'static':case 'unknow':
-						if (this.class_scope.variables[id.text] == 'static'){
-							id.text = this.class_scope.name+'.'+id.text;
-						}
-						break;
-				}
-			}
-			__write.read(id);
-		};
-		ES5.ComputeExpr = function(node, __write){
-			var list = [];
-			for (var i=0; i < node.length; i++){
-				switch (node[i].istoken && node[i].text){
-					case '**':
-						list.push('Math.pow(', list.pop(), ', ', node[++i], ')');
-						break;
-					case '\\':
-						list.push('Math.floor(', list.pop(), '/', node[++i], ')');
-						break;
-					default:
-						list.push(node[i]);
-						break;
-				}
-			}
-			__write.read(list);
-		};
-		ES5.CompareExpr = function(node, __write){
-			var list = [];
-			if (node.length == 5 && node[3].eq('<', '>', '>=', '<=')){
-				return '#0 #1 #2 && #2 #3 #4';
-			}
-			for (var i=0; i < node.length; i++){
-				switch (i%2 && node[i].text){
-					case 'as':
-						if (node[i+1].type == 'StringTokn'){
-							list.push('typeof ', list.pop(), ' == ', node[++i]);
-						}else {
-							list.push(' instanceof ', node[++i]);
-						}
-						break;
-					case 'in':
-						if (node[i+1].type == 'ArrayExpr'){
-							list.push(node[++i], '.indexOf(', list.pop(), ')>=0');
-						}else {
-							list.push(node[++i], '.hasOwnProperty(', list.pop(), ')');
-						}
-						break;
-					case 'of':
-						list.push('[].indexOf.call(', node[++i], ', ', list.pop(), ')>=0');
-						break;
-					case 'is':
-						node[i].text = ' === ';
-						list.push(node[i]);
-						break;
-					case 'not is':
-						node[i].text = ' !== ';
-						list.push(node[i]);
-						break;
-					default:
-						if (i%2){
-							node[i].text = ' '+node[i].text+' ';
-						}
-						list.push(node[i]);
-						break;
-				}
-			}
-			__write.read(list);
-		};
-		ES5.LogicExpr = function(node, __write){
-			var i;
-			for (i = 1; i < node.length; i += 2){
-				switch (node[i].text){
-					case 'and':
-						node[i].text = '&&';
-						break;
-					case 'or':
-						node[i].text = '||';
-						break;
-				}
-			}
-			if (node.length == 3){
-				if (node[2].is('ExprStam')){
-					return '#0 #1 #2';
-				}
-				if (node.parent.is('NodeStam')){
-					if (node[1].text == '||'){
-						if (node[0].is('ValueExpr')){
-							return 'if (!#0) #2';
-						}
-						return 'if (!(#0)) #2';
-					}
-					return 'if (#0) #2';
-				}
-				return '#0 #1 (#2)';
-			}
-			__write.read(this.JOIN(Hash.slice(node), ' '));
-		};
-		ES5['Ternary2.5Expr'] = function(node, __write){
-			if (node.parent.is('NodeStam')){
-				return 'if (#0) #2';
-			}else {
-				if (!node[0].is('ValueExpr')){
-					var ref = allocateRefName(node.scope);
-					return '(('+ref+' = #0) != null ? '+ref+' : #2)';
-				}
-			}
-			return '(#0 != null ? #0 : #2)';
-		};
-		ES5.SeleteStam = function(node, __write){
-			switch (node[1].text){
-				case 'if':case '<-':
-					return 'if (#2) #0';
-				case 'or':case '||':
-					if (node[0].is('ValueExpr')){
-						return 'if (!#0) #2';
-					}
-					return 'if (!(#0)) #2';
-				default:
-					return 'if (#0) #2';
-			}
-		};
-		ES5.AssignmentExpr = function(node, __write){
-			var left = node[0], right = node[2];
-			if (left.type == 'ArrayPatt'){
-				return assignmentArrayPatt.call(this, __write, left, right, node);
-			}else if (left.type == 'AccessorPatt' && left[left.length-1].type == 'SlicePatt'){
-				return assignmentSlicePatt.call(this, __write, left, right, node);
-			}else if (node.parent.type == 'ArgumentsExpr'){
-				return left;
-			}else {
-				switch (node[1].text){
-					case '?=':
-						if (node.parent && node.parent.is('NodeStam')){
-							return 'if (#0 == null) #0 = #2';
-						}
-						return '(#0 == null && (#0 = #2))';
-					case '|=':
-						if (node.parent && node.parent.is('NodeStam')){
-							return 'if (!#0) #0 = #2';
-						}
-						return '(!#0 && (#0 = #2))';
-				}
-			}
-			if (node.parent.type == 'JsonExpr'){
-				if (node[0].is('IdentifierTokn')){
-					return '"#0"#1 #2';
-				}
-			}
-			return '#0 #1 #2';
-		};
-		ES5.AssignmentDecl = ES5.AssignmentExpr;
-		ES5.ParamsPatt = function(node, __write){
-			for (var i=0, item; i < node.length; i++){
-				item = node[i];
-				if (item.istoken && item.text == ','){
-					__write.add('null');
-				}else {
-					__write.read(item);
-				}
-			}
-			this.COMMA(__write);
-		};
-		ES5.SlicePatt = function(node, __write){
-			var ab = accessorSlicePatt.call(this, node);
-			if (!ab[1]){
-				__write.read('.slice(', ab[0] || '', ')');
-			}else {
-				__write.read('.slice(', ab[0] || '0', ', ', ab[1], ')');
-			}
-		};
-		ES5.MemberExpr = function(node, __write){
-			if (node[0].type == 'UnaryExpr' && node[0][0].text == '-'){
-				var parent = node.parent.clone();
-				parent.length = node.index;
-				if (parent){
-					__write.read('[#0.length#1]', [parent, node[0]]);
-				}
-			}else {
-				__write.read('[', node[0], ']');
-			}
-		};
-		ES5.MemberPatt = function(node, __write){
-			switch (node[0].text){
-				case '::':
-					node[0].text = '.prototype';
-					break;
-				case '..':
-					node[0].text = '.constructor';
-					break;
-			}
-			return '#0.#1';
-		};
-		ES5.LetDecl = function(node, __write){
-			node[0].text = 'var';
-			resetDefineVariableDecl(node[1], node.scope, 'let', 'let_');
-			return '#0 #1';
-		};
-		ES5.VarDecl = function(node, __write){
-			resetDefineVariableDecl(node[1], node.scope, 'defined');
-			return '#0 #1';
-		};
-		ES5.DoWhileStam = function(node, __write){
-			if (node[2]){
-				return '#0 #1 #2 #3';
-			}else {
-				return '#0{NodeStam(#1)break;} while (true)';
-			}
-		};
-		ES5.TryStam = function(node, __write){
-			if (node.length > 1){
-				return '#';
-			}else {
-				return '# catch (_e){}';
-			}
-		};
-		ES5.SwitchStam = function(node, __write){
-			var block = node[2],
-				block_body = this.new('NodeStam'),
-				exp_cache = [],
-				case_write,
-				sub_block;
-			for (var _i=0, item; _i < block.length; _i++){
-				item = block[_i];
-				if (!case_write) case_write = this.new(item.type);
-				if (item.type == 'CaseStam'){
-					for (var _j=0, key; _j < item[1].length; _j++){
-						key = item[1][_j];
-						case_write.read(item[0], ' ', key, ':');
-					}
-					sub_block = item[3];
-				}else {
-					case_write.read(item[0], ':');
-					sub_block = item[2];
-				}
-				if (sub_block){
-					var sub_write = ES5.SwitchCaseBlock.call(this, sub_block, this.new('NodeStam'));
-					block_body.read(case_write.read(sub_write));
-					case_write = null, sub_block = null;
-				}
-			}
-			__write.read(node[0], ' ', node[1], this.new(block.type, '{', block_body, '}'));
-		};
-		ES5.SwitchCaseBlock = function(node, __write){
-			var last = node.length-1;
-			while (node[last] && node[last].is('CommDecl')){
-				last -= 1;
-			}
-			var insert_break = true;
-			if (node[last] && node[last].is('ReturnStam', 'BreakStam', 'ContinueStam')){
-				if (node[last].type == 'ContinueStam'){
-					node[last] = null;
-				}
-				insert_break = false;
-			}
-			ES5.NodeStam.call(this, node, __write);
-			if (insert_break){
-				__write.read('\nbreak;');
-			}
-			return __write;
-		};
-		ES5.forCondition = function(node, __write){
-			var scope = node.scope,
-				exp1 = node[0],
-				exp2 = node[1],
-				exp3 = node[2],
-				$mark = exp2 && exp2.text || '->',
-				$var,
-				$i,
-				$i_text,
-				$def,
-				$temp,
-				$len,
-				$tar,
-				$tar_exp;
-			if (exp1.type == 'VarDecl'){
-				$var = true, exp1 = exp1[1];
-			}
-			if (!exp3){
-				exp3 = exp1, exp1 = null;
-			}
-			if (exp1){
-				switch (exp1.type){
-					case 'CommaExpr':case 'ArgumentsDecl':
-						$i = exp1[0], $temp = exp1[1];
-						break;
-					default:
-						$i = exp1;
-						break;
-				}
-			}
-			if ($i){
-				if ($i.type == 'AssignmentDecl' || $i.type == 'AssignmentExpr'){
-					$def = $i[2], $i = $i[0];
-				}else if ($i.type == 'ConstTokn'){
-					$def = $i, $i = null;
-				}
-				if ($i){
-					if ($i.type == 'IdentifierExpr'){
-						$i = $i[0];
-					}
-					if ($i.type != 'IdentifierTokn'){
-						tea.throw('for condition(3) statiment syntax error!', $i);
-					}
-					if (/\=|of/.test($mark)){
-						$temp = $i, $i = null;
-					}
-				}
-			}
-			if (!$i){
-				$var = true, $i = allocateVarName(scope);
-			}
-			$i_text = $i.text || $i;
-			var def_type = scope.isDefined($i_text);
-			$var = $var || !def_type || def_type == 'let';
-			if (exp3.type == 'CommaExpr' && exp3.length == 1){
-				exp3 = exp3[0];
-			}
-			switch (exp3.is('ArrayExpr', 'JsonExpr', 'AccessorExpr', 'IdentifierExpr', 'AtExpr', 'NumTokn')){
-				case 'AccessorExpr':case 'IdentifierExpr':case 'AtExpr':
-					$tar = exp3;
-					break;
-				case 'NumTokn':
-					$len = this.new('NumTokn').read(exp3);
-					break;
-				default:
-					$tar = $i_text+'_ref';
-					$tar_exp = this.new('AssignmentExpr').read($tar, ' = ', exp3);
-					break;
-			}
-			$len = $len || this.new('AssignmentExpr').read($tar, '.length');
-			$tar = this.new('IdentifierExpr').read($tar);
-			$i = this.new('IdentifierExpr').read($i);
-			return [$mark, $var, $i, $def, $temp, $len, $tar, $tar_exp];
-		};
-		ES5.ForStam = function(node, __write){
-			var block_body, condition = node[1];
-			if (condition.type == 'ForBaseConditionPatt'){
-				return '#0 #1#2';
-			}
-			var scope = node.scope,
-				_ref = ES5.forCondition.call(this, condition), $mark = _ref[0], $var = _ref[1], $i = _ref[2], $def = _ref[3], $temp = _ref[4], $len = _ref[5], $tar = _ref[6], $tar_exp = _ref[7];
-			scope.setLet('__length', $len.text);
-			scope.setLet('__index', $i.text);
-			scope.setLet('__target', $tar.text);
-			var cond_body = this.new('ConditionBody');
-			block_body = this.new('NodeStam');
-			if (/in|of/.test($mark)){
-				cond_body.read($var ? 'var ' : '', $i, ' in ', $tar);
-				if ($tar_exp){
-					__write.read(this.VAR($tar_exp), ';\n');
-				}
-				block_body.add(this.new('IfStam', 'if (!#0.hasOwnProperty(#1)) continue;\n', [$tar, $i]));
-				if ($temp){
-					block_body.add(this.new('AssignmentExpr', 'var #0 = #1[#2];\n', [$temp, $tar, $i]));
-				}
-			}else {
-				if ($mark[0] == '<'){
-					if ($def = $def || [$tar, '.length-1']){
-						$def = [$i, '=', $def];
-					}
-					cond_body.read('#0; #1 >= #2; #1--', [this.VAR($tar_exp, $def, $temp), $i, '0']);
-				}else {
-					if ($def = $def || $var && '0'){
-						$def = [$i, '=', $def];
-					}
-					cond_body.read('#0; #1 < #2; #1++', [this.VAR($tar_exp, $def, $temp), $i, $len]);
-				}
-				if ($temp){
-					block_body.add(this.new('AssignmentExpr', '#0 = #1[#2];\n', [$temp, $tar, $i]));
-				}
-			}
-			ES5.NodeStam.call(this, node[2], block_body);
-			__write.add(node[0], ' ', this.new('ForConditionPatt', '(', cond_body, ')'), this.new(node[2].type, '{', block_body, '}'));
-		};
-		ES5.PackageExpr = function(node, __write){
-			if (node.length == 2){
-				return '(function()#1)()';
-			}
-			var params = this.new('ParamsExpr'),
-				argus = this.new('ArgumentsExpr'),
-				has_ass = false;
-			if (node[1].length){
-				resetDefineVariableDecl(node[1], node.scope, 'argument');
-				for (var i=0, item; i < node[1].length; i++){
-					item = node[1][i];
-					if (item.type == 'AssignmentDecl'){
-						has_ass = true;
-						argus.read(item[0]);
-						params.read(item[2]);
-					}else {
-						argus.read('_'+i);
-						params.read(item);
-					}
-				}
-			}
-			__write.read('(function(#0)#1)(#2)', [this.COMMA(argus), node[2], this.COMMA(params)]);
-		};
-		ES5.ClassExpr = function(node, __write){
-			var _i = 1, scope = node.scope, name, extend, block, is_ass = false;
-			if (node[_i].type == 'IdentifierTokn'){
-				name = node[_i++];
-			}
-			if (node[_i].type == 'ExtendsExpr'){
-				extend = node[_i++];
-			}
-			if (!name){
-				if (node.parent.type == 'AssignmentDecl'){
-					is_ass = true;
-					name = node.parent[0];
-				}else if (node.parent.type == 'AssignmentExpr'){
-					is_ass = true;
-					name = node.parent[0][0];
-				}
-			}
-			if (!name){
-				throw tea.error(new Error(), 321, node[0]);
-			}
-			scope.name = name.text;
-			block = node[_i];
-			var old_scope = this.class_scope;
-			this.class_scope = scope;
-			var block_write = this.new('NodeStam');
-			ES5.NodeStam.call(this, block, block_write);
-			_i = 0;
-			for (; _i < block_write.length; _i++){
-				if (block_write[_i].type){
-					if (/VarDecl|LetDecl|Assignment|Require/.test(block_write[_i].type)){
-						continue;
-					}
-				}else if (typeof block_write[_i] == 'string' && /\s*(\n|;|,)\s*/.test(block_write[_i])){
-					continue;
-				}
-				break;
-			}
-			if (extend){
-				block_write.insert(_i, ES5.ExtendsExpr.call(this, extend));
-			}
-			var construct_write = this.new('ConstructorStam'),
-				construct_body = this.new('NodeStam');
-			if (scope.inits.length){
-				construct_body.read(scope.inits);
-			}
-			if (scope.construct){
-				ES5.NodeStam.call(this, scope.construct[2], construct_body);
-				construct_write.read('function #0#1{#2}\n', [name, scope.construct[1], construct_body]);
-			}else {
-				construct_write.read('function #0(){#1}\n', [name, construct_body]);
-			}
-			block_write.insert(_i, construct_write);
-			block_write.read('\nreturn #0;', [name]);
-			if (is_ass){
-				__write.read('(function(){#0})()', [block_write]);
-			}else {
-				__write.read('var #1 = (function(){#0})()', [block_write, name]);
-			}
-			this.class_scope = old_scope;
-		};
-		ES5.ExtendsExpr = function(node, __write){
-			if (!__write) __write = this.new('ExtendsExpr');
-			var scope = node.scope, name = scope.name, list = node[1];
-			__write.read('#0.prototype = new #1();\n#0.prototype.constructor = #0;\n#0.prototype.__super__ = #1.prototype;\n', [name, list[0]]);
-			if (list.length > 1){
-				__write.read('#0.__extends = function(){\n    for (var i=0; i<arguments.length; i++){\n        var _super = arguments[i].prototype;\n        for (var name in _super)\n            if (_super[name].hasOwnProperty(name))\n                this.prototype[name] = _super[name];\n    }\n};\n#0.__extends(COMMA(#1));\n', [name, Hash.slice(list, 1)]);
-			}
-			return __write;
-		};
-		ES5.SuperExpr = function(node, __write){
-			var acc = node[0], pam = node[1], supe = acc[0];
-			supe.text = 'this.__super__';
-			if (acc.length == 1){
-				supe.text += '.'+(node.scope.name || 'constructor');
-			}
-			if (pam){
-				var pam_write = this.read(pam);
-				pam_write[1].insert(0, 'this', ', ');
-				__write.read(acc, '.call', pam_write);
-			}else {
-				return '#0.call(this, arguments)';
-			}
-		};
-		ES5.AtExpr = function(node, __write){
-			var scope = node.scope;
-			if (scope.type == 'ClassExpr'){
-				node[0].text = scope.name;
-			}else {
-				scope = scope.queryParent('ClassExpr');
-				if (scope && classStaticAtSymbol(scope, node)){
-					node[0].text = scope.name;
-				}else {
-					node[0].text = 'this';
-				}
-			}
-			return '#';
-		};
-		ES5.SetterDecl = function(node, __write){
-			if (node.parent.type == 'JsonExpr'){
-				return '#0 #1#2#3';
-			}
-			var class_scope = node.scope.parent;
-			if (class_scope.type == 'ClassExpr'){
-				var type = node.type == 'SetterDecl' ? '__defineSetter__' : '__defineGetter__';
-				if (node.length < 4){
-					__write.read('#0.prototype.'+type+'("#1", function()#2)', [class_scope.name, node[1], node[2]]);
-				}else {
-					__write.read('#0.prototype.'+type+'("#1", function#2#3)', [class_scope.name, node[1], node[2], node[3]]);
-				}
-			}
-		};
-		ES5.GetterDecl = ES5.SetterDecl;
-		ES5.MethodDecl = function(node, __write){
-			if (node.parent.type == 'JsonExpr'){
-				return '"#0": function#1#2';
-			}
-			var scope = node.scope, class_scope = scope.parent;
-			switch (class_scope.type){
-				case 'ClassExpr':
-					var class_name = class_scope.name;
-					if (scope.name == 'constructor'){
-						class_scope.construct = node;
-						return '';
-					}else {
-						__write.read('#0.prototype.#1 = function #2#3', [class_name, node[0], node[1], node[2]]);
-					}
-					break;
-				default:
-					return 'function #0#1#2';
-			}
-		};
-		ES5.StaticDecl = function(node, __write){
-			var class_scope = node.scope;
-			if (class_scope.type != 'ClassExpr'){
-				class_scope = class_scope.parent;
-			}
-			var exp = node[1];
-			if (exp.type == 'ArgumentsDecl'){
-				for (var i=0, item; i < exp.length; i++){
-					item = exp[i];
-					if (item.type == 'AssignmentDecl'){
-						__write.read('#0.#1 #2 #3;', [class_scope.name, item[0], item[1], item[2]]);
-					}else {
-						__write.read('#0.#1 = null;', [class_scope.name, item]);
-					}
-					if (i < exp.length-1){
-						__write.add('\n');
-					}
-				}
-			}else {
-				__write.read('#0.#1 = function#2#3;', [class_scope.name, exp[0], exp[1], exp[2]]);
-			}
-		};
-		ES5.ProtoDecl = function(node, __write){
-			var class_scope = node.scope.queryParent('ClassExpr');
-			if (!class_scope){
-				throw tea.error(new Error(), 325, node[0]);
-			}
-			var exp = node[1], class_name = class_scope.name;
-			if (exp.type == 'ArgumentsDecl'){
-				for (var i=0, item; i < exp.length; i++){
-					item = exp[i];
-					if (item.type == 'AssignmentDecl'){
-						__write.read('#0.prototype.#1 #2 #3;', [class_name, item[0], item[1], item[2]]);
-					}else {
-						__write.read('#0.prototype.#1 = null;', [class_name, item]);
-					}
-					if (i < exp.length-1){
-						__write.add('\n');
-					}
-				}
-			}else {
-				__write.read('#0.prototype.#1 = function#2#3;', [class_name, exp[0], exp[1], exp[2]]);
-			}
-		};
-		ES5.InitDecl = function(node, __write){
-			var class_scope = node.scope;
-			if (class_scope.type != 'ClassExpr'){
-				throw tea.error(new Error(), 326, node[0]);
-			}
-			var exp = node[1], write = this.new('InitDecl');
-			if (exp.type == 'ArgumentsDecl'){
-				for (var i=0, item; i < exp.length; i++){
-					item = exp[i];
-					if (item.type == 'AssignmentDecl'){
-						write.read('this.#0 #1 #2;\n', item);
-					}else {
-						write.read('this.# = null;\n', item);
-					}
-				}
-			}else {
-				write.read('this.#0 = function#1#2;\n', exp);
-			}
-			class_scope.inits.push(write);
-			return '';
-		};
-		ES5.RequireStam = function(node, __write){
-			var format,
-				type,
-				write,
-				_format,
-				scope = tea.argv['--join'] ? node.scope.root : 0,
-				params = parseRequire(node[1], scope);
-			if (params.length > 1){
-				if (node.parent.is('AssignmentDecl', 'AssignmentExpr')){
-					if (node.parent[0].type == 'ArrayExpr'){
-						format = '#0(#1)';
-						type = 'arr';
-						write = this.new('ArrayExpr');
-					}else {
-						format = '"#2": #0(#1)';
-						type = 'json';
-						write = this.new('JsonExpr');
-					}
-				}else {
-					format = 'var #2 = #0(#1)';
-					type = 'var';
-					write = this.new('VarExpr');
-				}
-			}else {
-				write = __write;
-				format = '#0(#1)';
-			}
-			for (var i=0; i < params.length; i++){
-				_format = params[i].name ? format : '#0(#1)';
-				write.read(this.new('RequireExpr', _format, [node[0], params[i].expr, params[i].name]));
-			}
-			switch (type){
-				case 'var':
-					__write.read(this.JOIN(write, ';\n'));
-					break;
-				case 'json':
-					__write.read('{', this.JOIN(write, ', '), '}');
-					break;
-				case 'arr':
-					__write.read('[', this.JOIN(write, ', '), ']');
-					break;
-			}
-		};
-		ES5.NodeStam = function(node, __write){
-			var res;
-			if (!__write) __write = this.new('NodeStam');
-			var len = node.length-1;
-			for (var i=0, item; i < node.length; i++){
-				item = node[i];
-				res = this.read(item);
-				if (res && (res.istoken || res.length)){
-					__write.add(res);
-					if (item.type != 'CommDecl' && (item.is('AssignmentExpr', 'ClausesStam', 'CommaStam') || !/(\}|;)$/.test(res.lastText))){
-						__write.add(';');
-					}
-					if (i < len){
-						__write.add('\n');
-					}
-				}
-			}
-			nodeVarSafety.call(this, node, __write);
-			return __write;
-		};
-		function nodeVarSafety(node, __write){
-			var argv = tea.argv || {}, scope = node.scope, a = 0;
-			while (__write[a] && (__write[a].type == 'CommDecl' || __write[a] == '\n')){
-				a += 1;
-			}
-			if (!argv['--safe']){
-				var un_defineds = scope.get('undefined');
-				if (un_defineds && un_defineds.length){
-					__write.insert(a, this.VAR.apply(this, un_defineds), ';\n');
-				}
-			}
-			var argus = scope.argumentsDefine;
-			if (argus && argus.length){
-				var write = this.new('ArgumentsStam');
-				for (var i=0; i < argus.length; i++){
-					write.read('if (#0 == null) #0 #1 #2;\n', argus[i]);
-				}
-				__write.insert(0, write);
-			}
-			var exts = scope.exports;
-			if (exts && exts.length){
-				var write = this.new('ExportStam');
-				for (var i=0; i < exts.length; i++){
-					write.add('\nmodule.exports.'+exts[i]+' = '+exts[i]+';');
-				}
-				__write.add(write);
-			}
-		}
-		function assignmentSlicePatt(__write, left, right, node){
-			left.length -= 1;
-			if (left[left.length].length == 0){
-				__write.read('#0.push(#1)', [left, right]);
-			}else {
-				var ab = accessorSlicePatt.call(this, left[left.length], true);
-				__write.read('#0.splice.apply(#0, [#1, #2].concat(#3))', [left, ab[0], ab[1], right]);
-			}
-		}
-		function assignmentArrayPatt(__write, left, right, node){
-			var ref;
-			if (right.type == 'ArrayExpr'){
-				for (var i=0; i < left.length; i++){
-					if (i > 0){
-						__write.add(', ');
-					}
-					if (right[i]){
-						__write.read('#0 #1 #2', [left[i], node[1], right[i]]);
-					}else {
-						throw tea.error(new Error(), 'array pattern assignment declaration syntax error', right[i-1]);
-					}
-				}
-			}else {
-				if (right.is('IdentifierExpr')){
-					ref = right;
-				}else {
-					var ref = allocateRefName(node.scope);
-					if (node.parent.parent.type == 'VarDecl'){
-						node.scope.set('defined', ref, true);
-					}
-					__write.read(this.new('AssignmentExpr', '#0 = #1', [ref, right]));
-				}
-				for (var i=0; i < left.length; i++){
-					__write.read(this.new('AssignmentExpr', '#0 #1 #2[#3]', [left[i], node[1], ref, i+'']));
-				}
-				this.COMMA(__write);
-			}
-		}
-		function accessorSlicePatt(node, count_b){
-			var a, b;
-			if (node.length == 3){
-				a = node[0], b = node[2];
-			}else if (node.length == 2){
-				if (node[0].text == ':'){
-					a = 0, b = node[1];
-				}else {
-					a = node[0], b = 0;
-				}
-			}else if (node.length >= 1){
-				a = 0, b = 0;
-			}
-			if (count_b){
-				var parent = node.parent, write = this.new('AccessorExpr');
-				if (b){
-					write.type = 'ComputeExpr';
-					if (b[0] && b[0].text == '-'){
-						write.read(parent, '.length', b);
-					}else {
-						write.read(b, '-', a);
-					}
-					b = write;
-				}else {
-					b = write.read(parent, '.length');
-				}
-			}
-			return [a, b];
-		}
-		function resetDefineVariableDecl(decl_list, scope, type, prefix){
-			for (var i=0, left; i < decl_list.length; i++){
-				left = decl_list[i];
-				if (left.type == 'AssignmentDecl'){
-					left = left[0];
-				}
-				if (left.type == 'ArrayPatt'){
-					for (var _i=0, item; _i < left.length; _i++){
-						item = left[_i];
-						item.text = resetDefine(scope, type, item.text, prefix);
-					}
-				}else if (left.istoken){
-					left.text = resetDefine(scope, type, left.text, prefix);
-				}else {
-					decl_list[i] = resetDefine(scope, type, decl_list[i], prefix);
-				}
-			}
-		}
-		function resetDefine(scope, type, name, prefix){
-			scope.set(type, name, true);
-			if (prefix){
-				if (type == 'let'){
-					scope.lets[name] = prefix+name;
-				}
-				return prefix+name;
-			}
-			return name;
-		}
-		function allocateVarName(scope){
-			var keymap = 'ijklmnopqrstuvwxyz';
-			for (var i=0; i < keymap.length; i++){
-				if (!scope.isDefined('_'+keymap[i])){
-					var key = '_'+keymap[i];
-					scope.set('let', key);
-					return key;
-				}
-			}
-			return '__i';
-		}
-		function allocateRefName(scope){
-			var i = 0, name = '_ref', stat = scope.isDefined(name, null, 1);
-			while (true){
-				if (!stat || stat == 'let'){
-					scope.set('undefined', name);
-					return name;
-				}
-				name += i++;
-				stat = scope.isDefined(name, null, 1);
-			}
-		}
-		function classStaticAtSymbol(clas_scope, node){
-			if (clas_scope.type = 'ClassExpr'){
-				if (node.length > 1 && node[1].type == 'DotExpr'){
-					var member = node[1][0];
-					if (member.type == 'IdentifierTokn' && clas_scope.statics.indexOf(member.text) != -1){
-						var name = member.text;
-						if (clas_scope.protos.indexOf(name) == -1){
-							return name;
-						}
-					}
-				}
-			}
-			return false;
-		}
-		function parseRequire(node, scope){
-			var list = [], root_dir = node.root.filePath || '';
-			for (var i=0, item; i < node.length; i++){
-				item = node[i];
-				if (item.is('StringTokn')){
-					if (scope && Path.isPathText(item.text)){
-						var files = Path.parseFile(item.text, root_dir, ['.js', '.tea']);
-						if (!files.error){
-							for (var _i=0, file; _i < files.length; _i++){
-								file = files[_i];
-								list.push({"name": parseRequireName(file),
-									"expr": item.clone('"'+scope.addRequire(file)+'"'),
-									"file": file});
+							if (src[i].type == 'LF'){
+								if (src[a].indent >= 0){
+									src.delete(a, i);
+								}else {
+									src.delete(a, i-1);
+								}
+								break;
 							}
-							continue;
-						}
-						if (debug.log){
-							debug.log('** [Require: Can not join file: '+item.text+']');
+							if (src[i].is('BLANK', 'END')){
+								i++;
+								continue;
+							}
+							break;
 						}
 					}
-					list.push({"name": parseRequireName(item.text), "expr": item, "file": ''});
-				}else {
-					list.push({"name": '', "expr": item, "file": ''});
 				}
-			}
-			return list;
-		}
-		function parseRequireName(file){
-			return Text.getName(file);
-		}
-		module.exports = ES5;
-	});Module.register('/Users/wl/Sites/TeaJS/src/rewriter/sourcemap.tea', '../src/rewriter/sourcemap.tea', function(exports, require, module, __filename, __dirname){
+				list = [];
+				for (var token, i = 0; i < src.length; i++){
+					token = src[i];
+					if (token){
+						list.push(token);
+					}
+					src[i] = null;
+				}
+				src.length = 0;
+				Array.prototype.push.apply(src, list);
+				return src.add(new Token('\4'));
+			};
+			return Source;
+		})()
+		module.exports = Source;
+	});
+	return module.exports;
+})('./core/source.js', './core', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var SourceMap = (function(){
 			var VLQ_SHIFT, VLQ_CONTINUATION_BIT, VLQ_VALUE_MASK, BASE64_CHARS;
 			VLQ_SHIFT = 5;
@@ -6582,50 +844,25 @@
 				this.names = [];
 				this._sources = [];
 				this._mappings = [];
-			}
-			SourceMap.prototype.__defineGetter__("sources", function(){
-				var ss = [], dir = Path.dirname(this.file);
-				for (var _i=0, file; _i < this._sources.length; _i++){
-					file = this._sources[_i];
-					ss.push(Path.relative(dir, file));
-				}
-				return ss;
-			});
-			SourceMap.prototype.__defineGetter__("mappings", function(){
-				return this._mappings.join('');
-			});
-			SourceMap.prototype.addSource = function (file){
-				var i = this._sources.indexOf(file);
-				if (i == -1){
-					return this._sources.push(file)-1;
-				}
-				return i;
-			}
-			SourceMap.prototype.addName = function (name){
-				var i = this.names.indexOf(name);
-				if (i == -1){
-					return this.names.push(name)-1;
-				}
-				return i;
-			}
-			SourceMap.prototype.parse = function (writer, src){
-				var loc,
-					vlq,
-					m,
-					line = '',
-					line_num = 1,
-					add_comma,
-					last_vlq,
-					last_col = 0,
-					last_loc_line = 1,
-					last_loc_col = 0;
-				for (var i_ref = writer.toList(), i=0, item; i < i_ref.length; i++){
-					item = i_ref[i];
-					if (item.istoken){
+			};
+			SourceMap.prototype.parse = function (card){
+				var list, sources, line, line_num, add_comma, last_vlq, last_col, last_loc_line, last_loc_col, loc, vlq, m;
+				list = card.toList();
+				sources = this._sources;
+				line = '';
+				line_num = 1;
+				add_comma = null;
+				last_vlq = null;
+				last_col = 0;
+				last_loc_line = 1;
+				last_loc_col = 0;
+				for (var item, i = 0; i < list.length; i++){
+					item = list[i];
+					if (item.isToken){
 						if (item.location && item.location.fileName){
 							loc = item.location;
-							vlq = SourceMap.encodeVlq(line.length-last_col, this.addSource(loc.fileName), loc.lineNumber-last_loc_line, loc.columnNumber-last_loc_col);
-							if (add_comma) this._mappings.push(','); else add_comma = true;
+							vlq = encodeVlq(line.length-last_col, sourceId(sources, loc.fileName), loc.lineNumber-last_loc_line, loc.columnNumber-last_loc_col);
+							add_comma ? this._mappings.push(',') : (add_comma = true);
 							this._mappings.push(vlq);
 							last_vlq = vlq;
 							last_col = line.length;
@@ -6646,22 +883,50 @@
 					}
 				}
 				return this;
-			}
-			SourceMap.prototype.__defineGetter__("data", function(){
-				return {"version": 3,
+			};
+			SourceMap.prototype.addName = function (name){
+				var i = this.names.indexOf(name);
+				if (i == -1){
+					return this.names.push(name)-1;
+				}
+				return i;
+			};
+			SourceMap.prototype.__defineGetter__("sources", function(){
+				var ss = [];
+				var dir = Fp.dirName(this.file);
+				for (var file, i = 0; i < this._sources.length; i++){
+					file = this._sources[i];
+					ss.push(Fp.relative(dir, file));
+				}
+				return ss;
+			});
+			SourceMap.prototype.__defineGetter__("mappings", function(){
+				return this._mappings.join('');
+			});
+			SourceMap.prototype.__defineGetter__("text", function(){
+				var data;
+				data = {
+					"version": 3,
 					"file": this.file || '',
 					"sourceRoot": '',
 					"sources": this.sources,
 					"names": this.names,
 					"mappings": this.mappings};
+				return SText(data);
 			});
-			SourceMap.prototype.__defineGetter__("text", function(){
-				return Text(this.data);
-			});
-			SourceMap.encodeVlq = function(){
-				var signBit, valueToEncode, answer, nextChunk, vlq = '';
-				for (var _i=0, value; _i < arguments.length; _i++){
-					value = arguments[_i];
+			function sourceId(sources, filename){
+				var i;
+				i = sources.indexOf(filename);
+				if (i == -1){
+					return sources.push(filename)-1;
+				}
+				return i;
+			};
+			function encodeVlq(){
+				var vlq, signBit, valueToEncode, answer, nextChunk;
+				vlq = [];
+				for (var value, i = 0; i < arguments.length; i++){
+					value = arguments[i];
 					signBit = value < 0 ? 1 : 0;
 					valueToEncode = (Math.abs(value)<<1)+signBit;
 					answer = '';
@@ -6671,143 +936,7433 @@
 						if (valueToEncode){
 							nextChunk = nextChunk|VLQ_CONTINUATION_BIT;
 						}
-						answer += this.encodeBase64(nextChunk);
+						answer += encodeBase64(nextChunk);
 					}
-					vlq += answer;
+					vlq.push(answer);
 				}
-				return vlq;
+				return vlq.join('');
 			};
-			SourceMap.encodeBase64 = function(value){
+			function encodeBase64(value){
 				if (BASE64_CHARS[value]){
 					return BASE64_CHARS[value];
 				}
-				throw tea.error(new Error(), "Cannot Base64 encode value: "+value);
+				throw Error.create("Cannot Base64 encode value: "+value, new Error());
 			};
 			return SourceMap;
-		})();
+		})()
 		module.exports = SourceMap;
 	});
-})();
-
-var ctx;
-var Tea = require("../src/tea.tea");
-var ChildProcess = require("child_process");
-if (!module.parent){
-	tea.argv.parse(process.argv);
-	if (tea.argv['--tab']){
-		tea.tabSize(tea.argv['--tab']);
-	}
-	if (tea.argv['--help']){
-		tea.argv.showHelp();
-		tea.exit();
-	}
-	if (!tea.argv['--file'] && !tea.argv['--path'] && !tea.argv['--eval']){
-		if (process.argv.length > 2){
-			print('* g{Are you r{NongShaLei}!!}');
-		}
-		tea.argv.showHelp();
-		tea.exit();
-	}
-	if (tea.argv['--define']){
-		var define_file = tea.checkFile(tea.argv['--define']);
-		if (!define_file){
-			print('* g{Cant find define file as r{"'+tea.argv['--define']+'"}!!}');
-			tea.exit();
-		}
-		tea.preprocess.setDefault(define_file);
-	}
-	if (tea.argv['--debug']){
-		debug.enable(tea.argv['--debug'] === true ? 'all' : tea.argv['--debug']);
-	}else if (tea.argv['--verbose']){
-		debug.enable('log');
-	}
-	if (tea.argv['--eval']){
-		ctx = tea.context({"text": tea.argv['--eval'], "file": 'by tea eval cmd'});
-	}else {
-		if (tea.argv.file){
-			if (debug.log){
-				debug.log('* b{Compile:} d{"'+tea.argv.file+'"}');
-			}
-			ctx = tea.context(tea.argv);
-		}else if (tea.argv.dir){
-			if (debug.log){
-				debug.log('* g{Building folder:} "'+tea.argv.dir+'"');
-			}
-			var file_list = Path.scanAllPath(tea.argv.dir, /\.js$|\.tea$/, 10).allfiles;
-			if (file_list.length){
-				for (var i=0, file; i < file_list.length; i++){
-					file = file_list[i];
-					if (debug.log){
-						debug.log('  * b{Compile:} d{"'+file+'"}');
+	return module.exports;
+})('./core/sourcemap.js', './core', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Node
+		Node = require("./node.js")
+		var Syntax = (function(){
+			function Syntax(type){
+				this.type = type;
+				// @.subType     = null;
+				this.length = 0;
+				if (arguments.length > 1){
+					this.add.apply(this, Jsop.toArray(arguments, 1));
+				}
+			};
+			Syntax.prototype = Object.create(Node.prototype);
+			Syntax.prototype.__super__ = Node.prototype;
+			Syntax.prototype.constructor = Syntax;
+			Syntax.prototype.__defineGetter__("text", function(){
+				var tokens, texts;
+				tokens = this.tokens();
+				texts = [];
+				for (var tk, i = 0; i < tokens.length; i++){
+					tk = tokens[i];
+					texts.push(tk.text);
+				}
+				return texts.join('');
+			});
+			Syntax.prototype.add = function (){
+				for (var item, i = 0; i < arguments.length; i++){
+					item = arguments[i];
+					if (!item){
+						continue;
 					}
-					ctx = tea.context(tea.argv.copy({"file": file}));
-					ctx.echo();
-					if (debug.log){
-						debug.log('  * g{Output to:} "'+ctx.argv.out+'"');
+					if (item.isSyntax || item.isToken){
+						item.parent = this;
+						this[this.length++] = item;
+					}else if (isArray(item)){
+						if (item.length){
+							this.add.apply(this, item);
+						}
+					}else {
+						throw Error.create('Syntax can only add object of "Syntax" or "Code" and "NaN" types ! >> '+item, new Error());
 					}
 				}
+				return this;
+			};
+			Syntax.prototype.insert = function (pos){
+				var args;
+				args = Jsop.toArray(arguments, 1);
+				for (var i = pos; i < this.length; i++){
+					args.push(this[i]);
+				}
+				this.length = pos;
+				this.add.apply(this, args);
+				return this;
+			};
+			Syntax.prototype.clone = function (){
+				var node = new Syntax(this.type);
+				for (var i = 0; i < this.length; i++){
+					node[node.length++] = this[i];
+				}
+				node.parent = this.parent;
+				node.scope = this.scope;
+				return node;
+			};
+			Syntax.prototype.isSyntax = true;
+			return Syntax;
+		})()
+		module.exports = Syntax;
+	});
+	return module.exports;
+})('./core/syntax.js', './core', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Scope = (function(){
+			var scope_map, decl_types;
+			scope_map = {};
+			decl_types = ["function", "static", "proto", "name", 'class', 'argument'];
+			function Scope(type, node, parent){
+				this.type = type;
+				this.target = node;
+				this.name = null;
+				this.variables = {};
+				this.undefines = {};
+				this.cache = {};
+				if (this.type == 'Class'){
+					this.protos = {};
+					this.statics = {};
+				}
+				if (parent){
+					this.upper = parent;
+					!parent.subs && (parent.subs = []);
+					parent.subs.push(this);
+				}
+			};
+			Scope.prototype.__defineGetter__("valid", function(){
+				var scope;
+				scope = this;
+				while (scope.type == 'Let'){
+					scope = scope.upper;
+				}
+				return scope;
+			});
+			Scope.prototype.__defineGetter__("parent", function(){
+				var upper;
+				upper = this.upper;
+				while (upper.type == 'Let'){
+					upper = upper.upper;
+				}
+				return upper;
+			});
+			Scope.prototype.__defineGetter__("root", function(){
+				var rot;
+				rot = this;
+				while (rot && rot.type != 'Root'){
+					rot = rot.upper;
+				}
+				return rot;
+			});
+			Scope.prototype.query = function (name){
+				var scope;
+				scope = this;
+				while (scope && (scope.type != name && scope.name != name)){
+					if (scope.type == 'Root' || scope.type == 'Global'){
+						return;
+					}
+					scope = scope.upper;
+				}
+				return scope;
+			};
+			Scope.prototype.define = function (state, id, alias){
+				var scope;
+				if (state.isToken || state.isSyntax){
+					alias = id, id = state, state = null;
+				}
+				if (id.isToken){
+					id = id.parent;
+				}
+				if (!state){
+					state = checkScopeMap(id);
+					if (!alias && state == 'let'){
+						alias = 'l_$';
+					}
+				}
+				if (!state){
+					return;
+				}
+				if (id.type == 'NameExpr'){
+					this.name = id[0].text;
+				}
+				switch (state){
+					case 'name':
+						this.name = id[0].text;
+						break;
+					case 'function':case 'class':
+						setDefine(this.parent, id, state, alias);
+						break;
+					case 'proto':case 'static':
+						if (!(scope = this.query('Class'))){
+							throw Error.create(1002, id, new Error());
+						}
+						setDefine(scope, id, state, alias);
+						break;
+					case 'for_let':
+						setDefine(this, id, state, alias);
+						break;
+					case 'let':
+						if (!alias && id.parent && id.query('LetStam')){
+							alias = 'l_$';
+						}
+						setDefine(this, id, state, alias);
+						break;
+					default:
+						setDefine(this.valid, id, state, alias);
+						break;
+				}
+				return state;
+			};
+			function setDefine(scope, ids, state, alias){
+				var variables, text, exist;
+				variables = scope[state+'s'] || scope.variables;
+				if (typeof ids == 'string'){
+					ids = [{"text": ids}];
+				}
+				for (var id, i = 0; i < ids.length; i++){
+					id = ids[i];
+					text = id.text;
+					if (variables.hasOwnProperty(text)){
+						exist = variables[text];
+						if (exist[0] == 'const'){
+							throw Error.create(1003, vars, new Error());
+						}
+						if (state == 'undefined' || state == 'unknow'){
+							continue;
+						}
+					}else if (state == 'undefined' || state.indexOf('undefined') != -1){
+						scope.undefines[text] = id.isToken ? id : text;
+					}
+					!variables[text] && (variables[text] = [undefined]);
+					variables[text][0] = state;
+					if (alias){
+						variables[text][1] = alias.replace(/\$/g, text);
+					}
+				}
+			};
+			Scope.prototype.state = function (target, level){
+				var state;
+				if (level == null) level = 0;
+				if (state = this.check(target, level, true)){
+					return state[0];
+				}
+			};
+			Scope.prototype.alias = function (target, level){
+				var state;
+				if (level == null) level = 0;
+				if (state = this.check(target, level, true)){
+					return state[1];
+				}
+			};
+			Scope.prototype.check = function (target, level, not_define){
+				var name, ref, scope, state, stop, _scope;
+				if (level == null) level = 0;
+				ref = checkTarget(target), target = ref[0], name = ref[1];
+				scope = this;
+				if (scope.variables.hasOwnProperty(name)){
+					return scope.variables[name];
+				}
+				while (scope.type == 'Let'){
+					scope = scope.upper;
+					if (scope.variables.hasOwnProperty(name)){
+						return scope.variables[name];
+					}
+				}
+				if (level !== 1){
+					if (target && !not_define){
+						state = checkScopeMap(target);
+						if (state && state != 'undefined' && state != 'unknow'){
+							return [this.define(state, target)];
+						}
+					}
+					if (level.isScope){
+						stop = level;
+						level = 0;
+					}
+					_scope = null;
+					while (scope = scope.upper){
+						if (scope == stop && scope != _scope && --level){
+							break;
+						}
+						_scope = scope;
+						if (scope.variables.hasOwnProperty(name)){
+							state = scope.variables[name];
+							this.variables[name] = [/undefined|defined|name/.test(state[0]) ? 'unknow' : state[0], state[1]];
+							return scope.variables[name];
+						}
+					}
+					if (state){
+						return [this.define(state, target)];
+					}
+				}
+			};
+			Scope.prototype.member = function (target){
+				var name, ref, cls;
+				ref = checkTarget(target), target = ref[0], name = ref[1];
+				if (cls = this.query('Class')){
+					if (cls.protos.hasOwnProperty(name)){
+						return 'proto';
+					}
+					if (cls.statics.hasOwnProperty(name)){
+						return 'static';
+					}
+				}
+			};
+			Scope.prototype.cachePush = function (name, something){
+				var cache;
+				cache = this.cache;
+				!cache[name] && (cache[name] = []);
+				cache[name].push(something);
+				return cache[name];
+			};
+			Scope.prototype.isScope = true;
+			Scope.init = function(ast, check_define, __scope){
+				var type;
+				if (!__scope){
+					__scope = new Scope(ast.is('Let', 'Class', 'Function', 'Root') || 'Root', ast);
+					ast.scope = __scope;
+				}
+				for (var node, i = 0; i < ast.length; i++){
+					node = ast[i];
+					if (type = node.is('Let', 'Class', 'Function', 'Root')){
+						node.scope = new Scope(type, node, __scope);
+						Scope.init(node, check_define, node.scope);
+					}else {
+						node.scope = __scope;
+						if (scope_map[node.type]){
+							if (type = checkScopeMap(node, scope_map[node.type])){
+								if (decl_types.indexOf(type) != -1){
+									__scope.define(type, node);
+								}
+							}
+						}
+						if (node.isSyntax){
+							Scope.init(node, check_define, __scope);
+						}
+					}
+				}
+				return ast.scope;
+			};
+			Scope.defineScope = function(patt){
+				var slices;
+				slices = SText.split(patt, '->', true);
+				compileScopeMap(slices.pop(), slices.reverse(), 0, scope_map);
+			};
+			Scope.test = function(node){
+				return !!scope_map[node.type];
+			};
+			function compileScopeMap(type, patt, index, __sub){
+				var names, test, top, ref, m, testIndex, sub, sub2;
+				names = patt[index];
+				if (names[0] == '<'){
+					names = names.substr(1).trim();
+					test = true;
+				}else if (/\<\-/.test(names)){
+					ref = names.split('<-'), top = ref[0], names = ref[1];
+					top = top.trim().split(' ');
+				}
+				names = names.trim().split(' ');
+				for (var name, i = 0; i < names.length; i++){
+					name = names[i];
+					if (m = name.match(/^(\w+)\[(\d+)\]$/)){
+						name = m[1];
+						testIndex = m[2];
+					}
+					sub = sub2 = null;
+					if (test){
+						__sub[name] = __sub[name] || {};
+						sub = __sub;
+						if (testIndex){
+							__sub[name].testIndex = true;
+							sub2 = __sub[name][testIndex] = __sub[name][testIndex] || {};
+						}else {
+							sub2 = __sub[name].subs = __sub[name].subs || {};
+						}
+					}else {
+						sub = __sub[name] = __sub[name] || {};
+						if (testIndex){
+							__sub[name].testIndex = true;
+							sub = __sub[name][testIndex] = __sub[name][testIndex] || {};
+						}
+					}
+					if (top){
+						__sub[name].tops = top;
+						top.default = type;
+					}
+					if (index < patt.length-1){
+						compileScopeMap(type, patt, index+1, sub);
+						if (sub2){
+							compileScopeMap(type, patt, index+1, sub2);
+						}
+					}else if (!top){
+						__sub[name].default = type;
+					}
+				}
+			};
+			function checkScopeMap(node, _map, _not_def){
+				var parent, map, index, ref;
+				if (!_map){
+					if (scope_map[node.type]){
+						return checkScopeMap(node, scope_map[node.type]);
+					}
+					return;
+				}
+				if (parent = node.parent){
+					if (parent.type == 'ArgusStam'){
+						parent = parent.parent;
+					}
+					if (parent && (map = _map[parent.type])){
+						if (map.testIndex){
+							index = node.index;
+							if (map[index]){
+								if (ref = checkScopeMap(parent, map[index], true) || map.default){
+									return ref;
+								}
+							}
+							return checkScopeMap(parent, map, true) || _map.default;
+						}
+						return checkScopeMap(parent, map);
+					}
+					if (_map.tops){
+						if (parent.scope && _map.tops.indexOf(parent.scope.valid.type) != -1){
+							return _map.tops.default;
+						}
+					}
+				}
+				if (_map.subs){
+					return checkScopeMap(node, _map.subs);
+				}
+				if (!_not_def && _map.default){
+					return _map.default;
+				}
+			};
+			function checkTarget(target){
+				var name;
+				if (target.isSyntax || target.isToken){
+					name = target.text;
+					if (target.isToken){
+						target = target.parent;
+					}
+				}else {
+					name = target;
+					target = null;
+				}
+				return [target, name];
+			};
+			return Scope;
+		})()
+		module.exports = Scope;
+	});
+	return module.exports;
+})('./core/scope.js', './core', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Card = (function(){
+			var not_semicolon, width_limit;
+			not_semicolon = /^(COMMENT|IfStam|WhileStam|DoWhileStam|WithStam|ForStam|SwitchStam|CaseStam|DefaultStam)$/;
+			width_limit = 80;
+			Card.prototype.isCard = true;
+			function Card(type){
+				this.type = type || '';
+				this.length = 0;
+				if (arguments.length > 1){
+					this.add.apply(this, Jsop.toArray(arguments, 1));
+				}
+			};
+			Card.prototype.add = function (){
+				var type;
+				for (var item, i = 0; i < arguments.length; i++){
+					item = arguments[i];
+					if (!item){
+						continue;
+					}
+					if (item.isToken){
+						if (!item.is('EOT')){
+							this[this.length++] = item;
+						}
+						continue;
+					}
+					type = typeof item;
+					if (item.isCard || type == 'string'){
+						this[this.length++] = item;
+						continue;
+					}
+					if (type == 'number'){
+						this[this.length++] = item+'';
+						continue;
+					}
+					if (isArray(item)){
+						this.add.apply(this, item);
+						continue;
+					}
+					throw Error.create(5004, isClass(item), new Error());
+				}
+				return this;
+			};
+			Card.prototype.insert = function (pos){
+				var args;
+				args = Jsop.toArray(arguments, 1);
+				for (var i = pos; i < this.length; i++){
+					args.push(this[i]);
+				}
+				this.length = pos;
+				this.add.apply(this, args);
+				return this;
+			};
+			Card.prototype.delete = function (a, b){
+				if (b == null) b = a;
+				Array.prototype.splice.call(this, a, b-a+1);
+				return this;
+			};
+			Card.prototype.__defineGetter__("text", function(){
+				return this.toScript();
+			});
+			Card.prototype.toScript = function (){
+				if (!this._formated){
+					format(this);
+				}
+				return toText(this);
+			};
+			Card.prototype.toList = function (){
+				var list;
+				list = [];
+				for (var item, i = 0; i < this.length; i++){
+					item = this[i];
+					if (!item) continue;
+					if (item.isCard){
+						list.push.apply(list, item.toList());
+					}else {
+						list.push(item);
+					}
+				}
+				return list;
+			};
+			function toText(list){
+				var texts = [];
+				for (var item, i = 0; i < list.length; i++){
+					item = list[i];
+					if (item.isToken){
+						if (item.is('EOT')){
+							continue;
+						}
+						texts.push(item.text);
+					}else if (item.isCard || isArray(item)){
+						texts.push(toText(item));
+					}else {
+						texts.push(item);
+					}
+				}
+				return texts.join('');
+			};
+			function countText(card){
+				var texts;
+				texts = [];
+				for (var item, i = 0; i < card.length; i++){
+					item = card[i];
+					if (!item){
+						continue;
+					}
+					if (item.isToken){
+						texts.push(item.text);
+					}else if (item.isCard){
+						texts.push(countText(item));
+					}else {
+						texts.push(item);
+					}
+				}
+				return texts.join('');
+			};
+			function countTextLen(card, limit){
+				var len;
+				len = 0;
+				for (var item, i = 0; i < card.length; i++){
+					item = card[i];
+					if (limit && len >= limit){
+						return len;
+					}
+					if (item.isToken){
+						len += item.text.length;
+					}else if (item.isCard || isArray(item)){
+						len += countTextLen(item, limit && limit-len);
+					}else {
+						len += item.length;
+					}
+				}
+				return len;
+			};
+			function format(card){
+				each(card);
+				if (card.type == 'Root'){
+					if (card.length){
+						lineFeed(card);
+					}
+				}
+				return card;
+			};
+			function each(card){
+				var parent;
+				parent = card.type;
+				for (var item, i = 0; i < card.length; i++){
+					item = card[i];
+					if (!item){
+						continue;
+					}
+					switch (item.type){
+						case 'COMMENT':
+							if (Argv['--clear']){
+								card[i] = null;
+							}
+							break;
+						case 'ArrayExpr':
+							formatArray(item);
+							break;
+						case 'JsonExpr':
+							formatJson(item);
+							break;
+						case 'VarStam':case 'ConstStam':case 'LetStam':
+							formatVar(item);
+							break;
+						case 'Block':
+							if (item.length){
+								each(item);
+								lineFeed(item, parent);
+								indentLine(item, parent);
+								if (card.type == 'BlockNode'){
+									item.add('\n');
+								}else if (typeof card[i+1] == 'string' && /^\s*}/.test(card[i+1])){
+									item.add('\n');
+								}
+							}
+							break;
+						default:
+							if (item.isCard){
+								each(item);
+							}else if (item == ','){
+								card[i] = ', ';
+							}
+							break;
+					}
+				}
+				return card;
+			};
+			function lineFeed(card, parent){
+				for (var line, i = card.length - 1; i >= 0; i--){
+					line = card[i];
+					if (line){
+						if (!not_semicolon.test(line.type) && parent != 'Block'){
+							card.insert(i+1, ';');
+						}
+						if (i || parent && parent != 'Block'){
+							card.insert(i, '\n');
+						}
+					}
+				}
+			};
+			function indentLine(card, parent){
+				for (var item, i = 0; i < card.length; i++){
+					item = card[i];
+					if (item == '\n'){
+						card[i] = '\n\t';
+						continue;
+					}else if (i === 0 && parent){
+						card.insert(0, '\t');
+						continue;
+					}
+					if (item.isToken){
+						if (!item.is('STRING')){
+							card[i] = item.text.replace(/\n/g, '\n\t');
+						}
+						continue;
+					}
+					if (item.isCard){
+						indentLine(item);
+						continue;
+					}
+					if (typeof item == 'string'){
+						card[i] = item.replace(/\n/g, '\n\t');
+					}
+				}
+				return card;
+			};
+			function formatArray(card){
+				var comma;
+				comma = card[1];
+				if (comma && comma.type == 'CommaExpr'){
+					if (countTextLen(comma, width_limit) >= width_limit){
+						for (var i = 0; i < comma.length; i++){
+							if (comma[i].isCard){
+								each(comma[i]);
+							}else if (comma[i] == ', ' || comma[i] == ','){
+								comma[i] = ',\n';
+							}
+						}
+						comma.insert(0, '\n');
+						indentLine(comma);
+						return;
+					}
+				}
+				each(card);
+			};
+			function formatJson(card){
+				var comma;
+				comma = card[1];
+				if (comma && comma.type == 'CommaExpr'){
+					if (countTextLen(comma, width_limit) >= width_limit){
+						for (var i = 0; i < comma.length; i++){
+							if (comma[i].isCard){
+								each(comma[i]);
+							}else if (comma[i] == ', ' || comma[i] == ','){
+								comma[i] = ',\n';
+							}
+						}
+						comma.insert(0, '\n');
+						indentLine(comma);
+						return;
+					}
+				}
+				each(card);
+			};
+			function formatVar(card){
+				var comma, text;
+				comma = card[1];
+				if (comma && comma.type == 'CommaExpr'){
+					text = countText(comma);
+					if (/\=/.test(text) && text.length >= width_limit){
+						for (var i = 0; i < comma.length; i++){
+							if (comma[i].isCard){
+								each(comma[i]);
+							}else if (comma[i] == ', ' || comma[i] == ','){
+								comma[i] = ',\n';
+							}
+						}
+						indentLine(comma);
+						return;
+					}
+				}
+				each(card);
+			};
+			return Card;
+		})()
+		module.exports = Card;
+	});
+	return module.exports;
+})('./core/card.js', './core', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Pattern = require("./pattern.js")
+		var Grammar = require("./grammar.js")
+		function create(prepor){
+			return new Grammar(prepor);
+		}
+		module.exports.create = create
+		function pattern(text, src, prepor){
+			var patt, grm, node;
+			patt = Pattern.compile(text);
+			if (src){
+				grm = new Grammar(prepor);
+				node = grm.pattern(patt, src);
+				return node;
+			}
+			return patt;
+		}
+		module.exports.pattern = pattern
+		function parser(name, src, params, prepor){
+			var grm, node;
+			grm = new Grammar(prepor);
+			node = grm.parser(name, src, params, true);
+			if (node && !node.isSyntax && node.length == 1){
+				node = node[0];
+			}
+			return node;
+		}
+		module.exports.parser = parser
+		function define(name, patt, mode){
+			var debug;
+			if (mode == 'debug'){
+				mode = null;
+				debug = true;
+			}
+			if (!mode){
+				if (name.match(/\w+(Token|Expr|Decl|Patt|Stam)$/)){
+					mode = 'ret node';
+				}else {
+					mode = 'not check';
+				}
+			}
+			if (typeof patt == 'function'){
+				Grammar[name] = {"name": name, "mode": mode, "fn": patt, "debug": debug};
 			}else {
-				print("* r{The folder not find file!!}");
+				Grammar[name] = {"name": name, "mode": mode, "pattern": Pattern.compile(patt), "debug": debug};
+				if (debug){
+					print('| * '+name, Grammar[name].pattern);
+				}
 			}
-			tea.exit();
-		}else {
-			print('"g{Cant find r{"'+tea.argv.file+'"} file}"');
-			tea.exit();
+			return Grammar[name];
 		}
-	}
-	if (tea.argv['--token']){
-		print('* r{The parse tokens}');
-		console.log(print.toText(ctx.source).replace(/^/mg, '\t'));
-		print('* r{The parse source}');
-		console.log(print.border(ctx.source.join()).replace(/^/mg, '\t'));
-	}
-	if (tea.argv['--ast']){
-		print('* r{The root node}');
-		console.log(print.toText(ctx.ast).replace(/^/mg, '\t'));
-		print('* r{The node space}');
-		console.log(print.toText(ctx.scope).replace(/^/mg, '\t'));
-	}
-	if (tea.argv['--token'] || tea.argv['--ast']){
-		tea.exit();
-	}
-	if (tea.argv['--out']){
-		if (tea.argv['--map']){
-			ctx.echo(tea.argv.out, tea.argv['--map']);
-			if (debug.log){
-				debug.log('* g{Output and source map to} : "'+tea.argv.out+'"');
+		module.exports.define = define;
+	});
+	return module.exports;
+})('./core/grammar/index.js', './core/grammar', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Standard, versions
+		Standard = require("./standard.js")
+		exports.versions = (versions = [])
+		function create(version, prepor){
+			if (!(Standard.hasOwnProperty(version))){
+				throw Error.create(5007, version, new Error());
 			}
-		}else {
-			ctx.echo(tea.argv.out);
-			if (debug.log){
-				debug.log('* g{Output to} : "'+tea.argv.out+'"');
+			return new Standard(version, prepor);
+		}
+		module.exports.create = create
+		function define(name, map){
+			var std_obj;
+			if (versions.indexOf(name) == -1){
+				versions.push(name);
+				!Standard[name] && (Standard[name] = {});
+			}
+			std_obj = compile(map, Standard[name]);
+			return std_obj;
+		}
+		module.exports.define = define
+		function compile(map, std_obj){
+			var std, ref;
+			for (var names in map){
+				if (!map.hasOwnProperty(names)) continue;
+				var item = map[names];
+				std = _compile(item);
+				for (var ref = names.split(' '), name, i = 0; i < ref.length; i++){
+					name = ref[i];
+					if (!/^[A-Z]/.test(name)){
+						throw Error.create(5001, name, new Error());
+					}
+					std_obj[name] = std;
+				}
+			}
+			return std_obj;
+		}
+		module.exports.compile = compile
+		function _compile(data){
+			var stds;
+			stds = {};
+			stds.isStandard = true;
+			if (typeof data == 'string' || typeof data == 'function'){
+				stds['default'] = data;
+			}else if (isArray(data)){
+				stds = [];
+				stds.isStandard = 'list';
+				for (var i = 0; i < data.length; i++){
+					stds.push(_compile(data[i]));
+				}
+			}else {
+				for (var cond in data){
+					if (!data.hasOwnProperty(cond)) continue;
+					var val = data[cond];
+					if (typeof val == 'object'){
+						val = _compile(val);
+					}
+					stds[cond.replace(/\s*\n\s*/g, ' ')] = val;
+				}
+			}
+			return stds;
+		};
+	});
+	return module.exports;
+})('./core/standard/index.js', './core/standard', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Processor, Gatherer, Template, Source, bases
+		Processor = require("./prepor")
+		Gatherer = require("./gatherer")
+		Template = require("./template.js")
+		Source = require("../core/source.js")
+		bases = new Processor()
+		function create(something){
+			var prepor;
+			prepor = new Processor();
+			prepor.extend(bases);
+			if (something){
+				if (something.isSource){
+					gather(something, prepor);
+				}else {
+					prepor.extend(something);
+					prepor.parent = something;
+				}
+			}
+			return prepor;
+		}
+		module.exports.create = create
+		function gather(src, prepor){
+			!prepor && (prepor = new Processor());
+			for (var token, i = 0; i < src.length; i++){
+				token = src[i];
+				if (!token){
+					continue;
+				}
+				if (Gatherer[token.type]){
+					i = Gatherer[token.type](prepor, src, i) || i;
+				}
+			}
+			src.refresh(0);
+			return prepor;
+		}
+		module.exports.gather = gather
+		function concatModule(main, list){
+			return Template.concatModule(main, list);
+		}
+		module.exports.concatModule = concatModule
+		function load(files){
+			var src, prepor;
+			if (typeof files == 'string'){
+				files = [files];
+			}
+			for (var file, i = 0; i < files.length; i++){
+				file = files[i];
+				if (src = new Source(null, file)){
+					if (prepor = gather(src)){
+						extend(prepor);
+					}
+				}
+			}
+			return bases;
+		}
+		module.exports.load = load
+		function extend(prepor){
+			bases.extend(prepor);
+			return bases;
+		}
+		module.exports.extend = extend;
+	});
+	return module.exports;
+})('./preprocess/index.js', './preprocess', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Token, Node, Grammar, Scope, Standard, ref, names, values, ref0, mode, ref1, ref2
+		Token = require("../core/token.js")
+		Node = require("../core/node.js")
+		Grammar = require("../core/grammar")
+		Scope = require("../core/scope.js")
+		Standard = require("../core/standard")
+		for (var name in (ref = require("./token.js"))){
+			if (!ref.hasOwnProperty(name)) continue;
+			var value = ref[name];
+			names = name.split(' ').filter(function($){return $});
+			values = value.replace(/([^\n])\s*\n+\s*/g, '$1  ').split('  ').filter(function($){return $});
+			Token.define(names, values);
+		}
+		for (var name in (ref0 = require("./syntax"))){
+			if (!ref0.hasOwnProperty(name)) continue;
+			var value = ref0[name];
+			mode = null;
+			if (typeof value == 'string'){
+				value = value.replace(/\n\s*/g, ' ');
+			}
+			if (/:debug$/.test(name)){
+				mode = 'debug';
+				name = name.slice(0, -6);
+			}
+			Grammar.define(name, value, mode);
+		}
+		for (var name in (ref1 = require("./node.js"))){
+			if (!ref1.hasOwnProperty(name)) continue;
+			var value = ref1[name];
+			names = name.split(' ').filter(function($){return $});
+			values = value.replace(/\s*\n+\s*/g, '  ').split('  ').filter(function($){return $});
+			Node.define(names, values);
+		}
+		for (var ref2 = require("./scope.js"), value, i = 0; i < ref2.length; i++){
+			value = ref2[i];
+			Scope.defineScope(value);
+		}
+		Standard.define('es5', require("./standards/es5"));
+	});
+	return module.exports;
+})('./settings/index.js', './settings', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var pair, pair_re, sep_cache, tabsize;
+		module.exports = SText;
+		pair = {'(': ')', '[': ']', '{': '}', '\'': '\'', '\"': '\"', '`': '`'};
+		pair_re = new RegExp('\\'+Object.keys(pair).join('|\\'), 'g');
+		sep_cache = {};
+		function SText(something, qq){
+		    var cache, text;
+		    if (typeof something == 'object'){
+		        cache = [];
+		        text = JSON.stringify(something, function(key, value){
+		            if (typeof value === 'object' && value !== null){
+		                if (cache.indexOf(value) !== -1){
+		                    return '[circular]';
+		                }
+		                cache.push(value);
+		            }
+		            return value;
+		        });
+		        if (arguments.length > 1){
+		            arguments[0] = text;
+		            text = format.apply(this, arguments);
+		        }
+		    }else {
+		        text = format.apply(this, arguments);
+		    }
+		    return text;
+		};
+		exports.tabsize = (tabsize = '    ');
+		function format(text, qq){
+		    var i;
+		    if (!text){
+		        return text+'';
+		    }
+		    text = JSON.stringify(text);
+		    text = text.replace(/^\"|\"$/g, '');
+		    if (/%[%sdj]/.test(text) && arguments.length > 1){
+		        i = 1;
+		        text = text.replace(/%[%sdj]/g, function($){
+		            if ($ == '%%') return '%';
+		            if (i >= arguments.length) return $;
+		            return SText(arguments[i++], qq);
+		        });
+		        for (var $, j = i; j < arguments.length; j++){
+		            $ = arguments[j];
+		            text += ' '+SText($, qq);
+		        }
+		    }else if (qq != '"'){
+		        text = text.replace(/\\"/g, '"').replace(/'/g, '\\\'');
+		    }
+		    return text;
+		};
+		module.exports.format = format;
+		function re(str){
+		    if (str instanceof RegExp){
+		        str = str.toString().replace(/^\/|\/[igmuy]?$/g, '');
+		    }else if (Array.isArray(str)){
+		        for (var i = 0; i < str.length; i++){
+		            str[i] = str[i].replace(/([^\w\s\|])/g, '\\$1');
+		            str[i] = str[i].replace(/\n/g, '\\n');
+		            str[i] = str[i].replace(/\t/g, '\\t');
+		        }
+		        str = str.join('|');
+		    }else {
+		        str = str.replace(/([^\w\s\|])/g, '\\$1');
+		        str = str.replace(/\n/g, '\\n');
+		        str = str.replace(/\t/g, '\\t');
+		    }
+		    if (!/[^\|]/.test(str)){
+		        str = str.replace(/\|/g, '\\|');
+		    }
+		    return str;
+		};
+		module.exports.re = re;
+		function copy(text, num){
+		    var tmp = [];
+		    num = Math.max(num || 0, 0);
+		    while (num-- > 0){
+		        tmp.push(text);
+		    }
+		    return tmp.join('');
+		};
+		module.exports.copy = copy;
+		function trim(text){
+		    text = text.replace(/^\s+/, '');
+		    text = text.replace(/(\\*)?\s+$/, function($, $1){
+		        if ($1 && $1.length%2){
+		            return $.substr(0, $1.length+1);
+		        }
+		        return $1 || '';
+		    });
+		    return text;
+		};
+		module.exports.trim = trim;
+		function trimPP(text){
+		    return text.replace(/^`+|^'+|^"+|"+$|'+$|`+$/g, '');
+		};
+		module.exports.trimPP = trimPP;
+		function cleanESC(text){
+		    text = text.replace(/\\(n)\b/g, '\n');
+		    text = text.replace(/\\(t)\b/g, '\t');
+		    return text.replace(/\\(\W)/g, '$1');
+		};
+		module.exports.cleanESC = cleanESC;
+		function limit(text, len){
+		    if (text.length <= len){
+		        return text;
+		    }
+		    return text.substr(0, len)+'..';
+		};
+		module.exports.limit = limit;
+		//
+		function split(text, separator, _trim, _cesc, _pair){
+		    var slices, a, _pair_re, m, b, p, ab, ref;
+		    if (!sep_cache[separator]){
+		        sep_cache[separator] = new RegExp('(\\\\*)('+(separator ? re(separator) : ' ')+')');
+		    }
+		    separator = sep_cache[separator];
+		    slices = [];
+		    a = 0;
+		    if (_pair){
+		        _pair_re = new RegExp('\\'+Object.keys(_pair).join('|\\'), 'g');
+		    }else {
+		        _pair = pair;
+		        _pair_re = pair_re;
+		    }
+		    while (text){
+		        if (m = text.substr(a).match(separator)){
+		            if (m[1].length%2 != 0){
+		                a += m.index+m[0].length;
+		                continue;
+		            }
+		            b = a+m.index+m[1].length;
+		            // _pair_re.lastIndex = a;
+		            if (p = matchCheckESC(text, _pair_re, a)){
+		                ab = indexPair(text, p[0], _pair[p[0]], p.index, true);
+		                if (ab && b > ab[0]){
+		                    a = ab[1]+1;
+		                    continue;
+		                }
+		            }
+		            slices.push(text.slice(0, b));
+		            if (_trim === false){
+		                slices.push(m[2]);
+		            }
+		            text = text.slice(b+m[2].length);
+		            a = 0;
+		        }else {
+		            slices.push(text);
+		            break;
+		        }
+		    }
+		    ref = [];
+		    for (var text, i = 0; i < slices.length; i++){
+		        text = slices[i];
+		        if (_trim) text = trim(text);
+		        if (_cesc && text) text = cleanESC(text);
+		        if (_trim && _trim !== 'params'){
+		            text && ref.push(text);
+		        }else {
+		            ref.push(text);
+		        }
+		    }
+		    return ref;
+		};
+		module.exports.split = split;
+		function indexOf(text, target, pos){
+		    var p, n;
+		    while (true){
+		        p = text.indexOf(target, pos);
+		        if (p <= 0){
+		            return p;
+		        }
+		        n = 0;
+		        while (text[p-n-1] == '\\'){
+		            n += 1;
+		        }
+		        if (n%2){
+		            pos = p+1;
+		            continue;
+		        }
+		        return p;
+		    }
+		};
+		module.exports.indexOf = indexOf;
+		function indexPair(text, left, right, pos, _esc){
+		    var a, b, _a;
+		    if (right == null) right = left;
+		    pos = pos || 0;
+		    _esc = _esc || (left == "'" || left == '"');
+		    a = _esc ? indexOf(text, left, pos) : text.indexOf(left, pos);
+		    if (a == -1){
+		        return;
+		    }
+		    b = _esc ? indexOf(text, right, a+1) : text.indexOf(right, a+1);
+		    if (b == -1){
+		        return;
+		    }
+		    if (left == right){
+		        return [a, b];
+		    }
+		    _a = a;
+		    while (true){
+		        _a = _esc ? indexOf(text, left, _a+1) : text.indexOf(left, _a+1);
+		        if (_a > a && _a < b){
+		            b = _esc ? indexOf(text, right, b+1) : text.indexOf(right, b+1);
+		            if (b == -1){
+		                return;
+		            }
+		            continue;
+		        }
+		        break;
+		    }
+		    return [a, b];
+		};
+		module.exports.indexPair = indexPair;
+		function slicePair(text, left, right, pos, _esc){
+		    var ab;
+		    if (right == null) right = left;
+		    ab = indexPair(text, left, right, pos, _esc);
+		    if (ab){
+		        return text.slice(ab[0]+left.length, ab[1]);
+		    }
+		};
+		module.exports.slicePair = slicePair;
+		function indexLine(text, pos){
+		    var lines, shift, num, last, linetext;
+		    lines = text.split('\n');
+		    shift = -1;
+		    num = 0;
+		    last = lines.length-1;
+		    for (var line, i = 0; i < lines.length; i++){
+		        line = lines[i];
+		        if (i < last){
+		            line += '\n';
+		        }
+		        num += 1;
+		        shift += line.length;
+		        if (pos <= shift){
+		            linetext = line;
+		            break;
+		        }
+		    }
+		    if (linetext){
+		        return [linetext, num, linetext.length-1-(shift-pos)];
+		    }
+		};
+		module.exports.indexLine = indexLine;
+		function indexRe(text, re, pos, _pair){
+		    var index, len, m, p, ab;
+		    if (_pair == null) _pair = /"|'|`/g;
+		    if (!re.global){
+		        re = new RegExp(this.re(re), (re.ignoreCase ? 'i' : '')+(re.multiline ? 'm' : '')+'g');
+		    }
+		    index = (pos || 0)-1;
+		    len = text.length;
+		    while (++index < len){
+		        re.lastIndex = index;
+		        if (m = re.exec(text)){
+		            if (_pair){
+		                _pair.lastIndex = index;
+		                p = _pair.exec(text);
+		                if (p && p.index < m.index){
+		                    if (ab = indexPair(text, p[0], pair[p[0]], p.index)){
+		                        index = ab[1]+1;
+		                        continue;
+		                    }
+		                }
+		            }
+		            return m.index;
+		        }else {
+		            return -1;
+		        }
+		    }
+		};
+		module.exports.indexRe = indexRe;
+		function clip(text, _tabsize){
+		    var lines, min, indent;
+		    text = spaceTab(text.replace(/^(\s*?\n)+|\s*$/g, ''), _tabsize);
+		    lines = text.split('\n');
+		    min = -1;
+		    for (var line, i = 0; i < lines.length; i++){
+		        line = lines[i];
+		        indent = line.match(/^\s*/)[0].length;
+		        if (min == -1 || indent < min){
+		            min = indent;
+		        }
+		    }
+		    if (min > 0){
+		        text = text.replace((new RegExp('^\ {'+min+'}', 'mg')), '');
+		    }
+		    return text;
+		};
+		module.exports.clip = clip;
+		function width(text, _tabsize){
+		    var lines, w, len;
+		    lines = spaceTab(text, _tabsize).split('\n');
+		    w = 0;
+		    for (var i = 0; i < lines.length; i++){
+		        if ((len = lines[i].length) > w){
+		            w = len;
+		        }
+		    }
+		    return w;
+		};
+		module.exports.width = width;
+		function spaceTab(text, _tabsize){
+		    if (_tabsize == null) _tabsize = tabsize;
+		    return text.replace(/\t/g, _tabsize);
+		};
+		module.exports.spaceTab = spaceTab;
+		// 
+		function parse(text){
+		    try {
+		        return eval(text);
+		    }catch (e) {
+		        return '"'+text+'"';
+		    };
+		    return true;
+		};
+		module.exports.parse = parse;
+		function toUnicode(text){
+		    var texts, u;
+		    texts = [];
+		    for (var i = 0; i < text.length; i++){
+		        u = text.charCodeAt(i);
+		        texts.push(u <= 0 ? text[i] : "\\u"+('0000'+u.toString(16)).slice(-4));
+		    }
+		    return texts.join('');
+		};
+		module.exports.toUnicode = toUnicode;
+		// 
+		function isPath(text){
+		    // var winpath = /^[a-zA-Z];[\\/]((?! )(?![^\\/]*\s+[\\/])[\w -]+[\\/])*(?! )(?![^.]+\s+\.)[\w -]+$/; 
+		    // var lnxPath = /^([\/] [\w-]+)*$/; 
+		    return /^([^\*\s]|\\[ \t])*(\/([^\*\s]|\\[ \t])+)+$/.test(text);
+		};
+		module.exports.isPath = isPath;
+		function readFile(file, encoding, linenum){
+		    var fs, text;
+		    if (typeof encoding == 'number'){
+		        linenum = encoding, encoding = 'utf-8';
+		    }
+		    fs = require('fs');
+		    if (fs.existsSync(file) && fs.statSync(file).isFile()){
+		        text = fs.readFileSync(file, encoding || 'utf-8');
+		        if (linenum){
+		            text = readLine(text, linenum);
+		        }
+		        return text;
+		    }
+		};
+		module.exports.readFile = readFile;
+		// throw 'SText read the file is not exist';
+		function writeFile(content, file, encoding){
+		    var fs, path, dir;
+		    fs = require('fs');
+		    path = require('path');
+		    dir = path.dirname(file);
+		    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()){
+		        mkdir(dir, 0755);
+		    }
+		    return fs.writeFileSync(file, content, encoding || 'utf8');
+		};
+		module.exports.writeFile = writeFile;
+		function readLine(text, something){
+		    var lines;
+		    if (typeof something == 'number'){
+		        lines = text.split('\n');
+		        return lines[something-1];
+		    }
+		    if (typeof something == 'string'){
+		        if (index == text.indexOf(something)){
+		            if (index >= 0){
+		                return indexLine(text, text.indexOf(something))[0];
+		            }
+		        }
+		    }
+		};
+		module.exports.readLine = readLine;
+		function mkdir(to, mode){
+		    var fs, path, base_dir;
+		    fs = require('fs');
+		    path = require('path');
+		    if (!fs.existsSync(to)){
+		        base_dir = path.dirname(to);
+		        if (!fs.existsSync(base_dir)){
+		            mkdir(base_dir, mode);
+		        }
+		        return fs.mkdirSync(to, mode || 0755);
+		    }
+		};
+		function matchCheckESC(text, re, last){
+		    var m, n;
+		    if (last || last === 0){
+		        re.lastIndex = last;
+		    }
+		    while (m = re.exec(text)){
+		        if (text[m.index-1] == '\\'){
+		            n = 1;
+		            while (text[m.index-n-1] == '\\'){
+		                n++;
+		            }
+		            if (n%2){
+		                continue;
+		            }
+		        }
+		        return m;
+		    }
+		};;
+	});
+	return module.exports;
+})('../utils/stext/index.js', '../utils/stext', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		// javascript object parser
+		var SText, ArrPro;
+		module.exports = jsop;
+		SText = require("../stext");
+		ArrPro = Array.prototype;
+		function jsop(str){
+		    var list, json, i, key, val;
+		    if (/^\[.*?\]$/.test(str)){
+		        list = SText.split(str.slice(1, -1), /;|,/, true);
+		        for (var i=0; i < list.length; i++){
+		            if (/(\d+)(\.\d*)?|false|true|null|undefined/.test(list[i])){
+		                list[i] = eval('('+list[i]+')');
+		            }
+		        }
+		        return list;
+		    }
+		    if (/^\{.*?\}$/.test(str)){
+		        str = str.slice(1, -1);
+		    }
+		    list = SText.split(str, /;|,/, true);
+		    json = {};
+		    for (var _i=0, item; _i < list.length; _i++){
+		        item = list[_i];
+		        i = item.indexOf(':');
+		        if (i > 0){
+		            key = item.substr(0, i).trim();
+		            val = item.substr(i+1).trim();
+		            if (/^\[.*?\]$|^\{.*?\}$/.test(val)){
+		                val = jsop(val);
+		            }
+		        }else {
+		            key = item;
+		            val = true;
+		        }
+		        json[key] = val;
+		    }
+		    return json;
+		}
+		function data(){
+		    var json;
+		    json = {"constructor": undefined,
+		        "isPrototypeOf": undefined,
+		        "toString": undefined,
+		        "toLocaleString": undefined,
+		        "valueOf": undefined};
+		    return json;
+		};
+		function keys(obj){
+		    return Object.keys(obj);
+		};
+		function toArray(obj, start, end){
+		    var temp;
+		    if (obj.length == null){
+		        temp = [];
+		        for (var key in obj){
+		            if (!obj.hasOwnProperty(key)) continue;
+		            temp.push(obj[key]);
+		        }
+		        obj = temp;
+		    }
+		    return ArrPro.slice.call(obj, start, end);
+		};
+		function concat(obj){
+		    arguments[0] = copy(obj) || {};
+		    return extend.apply(this, arguments);
+		};
+		function extend(obj){
+		    for (var i=1, arg; i < arguments.length; i++){
+		        arg = arguments[i];
+		        if (arg){
+		            for (var k in arg){
+		                if (!arg.hasOwnProperty(k)) continue;
+		                obj[k] = arg[k];
+		            }
+		        }
+		    }
+		    return obj;
+		};
+		function copy(obj, deep){
+		    if (deep == null) deep = 1;
+		    var clone;
+		    if (typeof obj == 'object'){
+		        if (Array.isArray(obj)){
+		            clone = [];
+		        }else {
+		            clone = {};
+		            if (clone.prototype != obj.prototype){
+		                clone.prototype = obj.prototype;
+		                clone.constructor = obj.constructor;
+		            }
+		        }
+		        for (var key in obj){
+		            if (!obj.hasOwnProperty(key)) continue;
+		            clone[key] = deep ? copy(obj[key], deep-1) : obj[key];
+		        }
+		        return clone;
+		    }else {
+		        return obj;
+		    }
+		};
+		function reverse(obj){
+		    var r;
+		    r = {};
+		    for (var key=0, val; key < obj.length; key++){
+		        val = obj[key];
+		        if (!r[val]) r[val] = [];
+		        r[val].push(key);
+		    }
+		    return r;
+		};
+		function newClass(cls, argus){
+		    var obj;
+		    obj = Object.create(cls.prototype);
+		    if (argus.length){
+		        cls.apply(obj, argus);
+		    }
+		    return obj;
+		};
+		function eq(obj1, obj2){
+		    if (obj1 == obj2){
+		        return true;
+		    }
+		    if (!(typeof obj1 == 'object')){
+		        return false;
+		    }
+		    if (obj1.constructor != obj2.constructor){
+		        return false;
+		    }
+		    for (var k in obj1){
+		        if (!obj1.hasOwnProperty(k)) continue;
+		        if (eq(obj1[k], obj2[k]) == false){
+		            return false;
+		        }
+		    }
+		    return true;
+		};
+		function isJson(obj){
+		    return !obj.constructor || obj.constructor.prototype.hasOwnProperty("isPrototypeOf");
+		};
+		function isEmpty(obj){
+		    for (var k in obj){
+		        if (!obj.hasOwnProperty(k)) continue;
+		        return false;
+		    }
+		    return true;
+		};
+		function isClass(obj, class_name){
+		    var name;
+		    if (obj && obj.constructor){
+		        if (class_name && typeof class_name != 'string'){
+		            return obj.constructor == class_name;
+		        }
+		        if (obj.constructor.toString){
+		            if (name = funcName(obj.constructor)){
+		                return class_name ? class_name == name : name;
+		            }
+		        }
+		    }
+		    return undefined;
+		};
+		function funcName(fn){
+		    var m;
+		    if (fn && (m = fn.toString().match(/function\s*(\w+)/))){
+		        return m[1];
+		    }
+		};
+		module.exports.data = data;
+		module.exports.keys = keys;
+		module.exports.toArray = toArray;
+		module.exports.concat = concat;
+		module.exports.extend = extend;
+		module.exports.copy = copy;
+		module.exports.reverse = reverse;
+		module.exports.newClass = newClass;
+		module.exports.eq = eq;
+		module.exports.isJson = isJson;
+		module.exports.isEmpty = isEmpty;
+		module.exports.isClass = isClass;
+		module.exports.funcName = funcName;;
+	});
+	return module.exports;
+})('../utils/jsop/index.js', '../utils/jsop', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var SText;
+		SText = require("../stext");
+		var print = (function(){
+		    function print(){
+		        if (this.constructor != print){
+		            if (print.stdout.apply(this, arguments)){
+		                print_write('\n');
+		            }
+		        }
+		    }
+		    /*
+		            black='\033[30m' red='\033[31m' green='\033[32m' orange='\033[33m'
+		            blue='\033[34m' purple='\033[35m' cyan='\033[36m' lightgrey='\033[37m'
+		             darkgrey='\033[90m' lightred='\033[91m' lightgreen='\033[92m' yellow='\033[93m'
+		            lightcyan='\033[94m' pink='\033[95m' lightblue='\033[96m'
+		        */
+		    /*
+		            clear terminal '\033c'
+		         */
+		    var color_map,
+		        color_patt,
+		        color_code,
+		        set_patt,
+		        print_ers,
+		        print_history,
+		        print_content,
+		        print_scope,
+		        print_state,
+		        stdout_write,
+		        print_write,
+		        stdout_width,
+		        print_maxwidth,
+		        print_indent;
+		    color_map = {"r": '\033[91m',
+		        "b": '\033[96m',
+		        "g": '\033[92m',
+		        "c": '\033[36m',
+		        "d": '\033[90m',
+		        "w": '\033[37m'};
+		    color_patt = new RegExp("(\#?)<("+Object.keys(color_map).join('|')+"):");
+		    color_code = new RegExp('\033\\[\\d+m', 'g');
+		    set_patt = new RegExp("(^|\\b|\#|\\s)<(\\$|cp|ac|ar|al|bd):");
+		    print_ers = [];
+		    print_history = [];
+		    print_content = [];
+		    print_scope = {};
+		    print_state = false;
+		    stdout_write = process.stdout.write;
+		    print_write = function(){
+		        var text;
+		        text = Array.prototype.join.call(arguments, ' ');
+		        print_content.push(text);
+		        stdout_write.call(process.stdout, text);
+		    };
+		    // process.stdout.write  = print_write;
+		    stdout_width = process.stdout.columns || 0;
+		    print_maxwidth = 120;
+		    print_indent = '';
+		    print.isTerminal = !!stdout_width;
+		    print.indent = function(){
+		        print_indent += '\t';
+		        return this;
+		    };
+		    print.back = function(){
+		        print_indent = print_indent.slice(0, -1);
+		        return this;
+		    };
+		    print.debuger = function(){
+		        print('[Print Debuger]\n<stack>');
+		    };
+		    print.bd = function(){
+		        var text;
+		        text = print.toText.apply(this, arguments);
+		        print_write(formatBorder(text, null, countWidth(text)));
+		        print_write('\n');
+		    };
+		    print.stdout = function(){
+		        var text;
+		        if (text = print.toText.apply(this, arguments)){
+		            if (print_state){
+		                print.refresh();
+		            }
+		            if (/<\$:\w+:>/.test(text) && print_history.indexOf(text) != -1){
+		                return false;
+		            }
+		            print_history.push(text);
+		            text = text.replace(/<\$:(\w+):>/g, function($, $1){return print_scope[$1] || $});
+		            if (print_indent){
+		                text = text.replace(/^/mg, print_indent);
+		            }
+		            print_write(text);
+		        }
+		        return true;
+		    };
+		    print.clear = function(){
+		        var content, move;
+		        if (print.isTerminal){
+		            content = print_content.join('');
+		            move = Math.max(content.split('\n').length-1, 0);
+		            print_write('\033['+move+'A'+'\033[K');
+		            print_content = [];
+		        }else {
+		            print('<**>');
+		        }
+		    };
+		    print.refresh = function(){
+		        var text;
+		        if (arguments.length){
+		            changeVariable.apply(this, arguments);
+		        }
+		        print_state = false;
+		        if (print_history.length){
+		            if (arguments.length){
+		                print_history.push(print.toText.apply(this, arguments));
+		            }
+		            text = print_history.join('');
+		            text = text.replace(/<\$:(\w+):>/g, function($, $1){return print_scope[$1] || $});
+		            print.clear();
+		            print_write(text);
+		        }
+		    };
+		    print.toText = function(){
+		        var texts, type, text;
+		        texts = [];
+		        for (var _i=0, arg; _i < arguments.length; _i++){
+		            arg = arguments[_i];
+		            if (!arg){
+		                texts.push(arg+'');
+		                continue;
+		            }
+		            type = arg.className || className(arg);
+		            if (type == 'String' || type == 'Number' || type == 'Boolean'){
+		                texts.push(arg);
+		                continue;
+		            }
+		            if (print_ers.hasOwnProperty(type)){
+		                texts.push(print_ers[type].call(this, arg)+'');
+		                continue;
+		            }
+		            texts.push(formatObject(arg));
+		        }
+		        text = texts.join(' ');
+		        return /<[\w\W]*>/.test(text) ? print.format(text) : text;
+		    };
+		    print.stacks = function(err){
+		        var list, t, fn, fnname, stacks, ref;
+		        err = err || new Error();
+		        list = [];
+		        if (typeof err == 'function'){
+		            t = 15;
+		            fn = err;
+		            while (fn && t--){
+		                fnname = funcName(fn, true);
+		                if (list.indexOf(fnname) != -1){
+		                    break;
+		                }
+		                list.push(fnname || '???');
+		                fn = fn.caller;
+		            }
+		            return list;
+		        }
+		        stacks = err.stack.split('\n');
+		        for (var i=1; i < stacks.length; i++){
+		            if (ref = stackInfo(stacks[i])){
+		                list.push(ref);
+		            }
+		        }
+		        list = list.filter(function($){return !!$});
+		        list.className = 'Stacks';
+		        return list;
+		    };
+		    print.format = function(text, width){
+		        if (width == null) width = 60;
+		        text = formatDebug(text);
+		        text = formatColor(text);
+		        text = formatSet(text, Math.max(width, countWidth(text)));
+		        text = formatFill(text, Math.max(width, countWidth(text)));
+		        return text;
+		    };
+		    print.fragment = function(text, code, line, col, file){
+		        if (arguments.length == 1 && typeof text == 'object'){
+		            file = text.fileName || text.file;
+		            col = text.columnNumber || text.column || text.col;
+		            line = text.lineNumber || text.line || text.number;
+		            code = text.code || text.text;
+		            text = null;
+		        }
+		        if (arguments.length == 4){
+		            file = col;
+		        }
+		        if (!text){
+		            text = SText.readFile(file);
+		        }
+		        if (/\n/.test(text)){
+		            if (arguments.length == 4){
+		                var _ref;
+		                _ref = SText.indexLine(text, line), text = _ref[0], line = _ref[1], col = _ref[2];
+		            }else if (!line && code){
+		                var _ref;
+		                _ref = SText.indexLine(text, text.indexOf(code)), text = _ref[0], line = _ref[1], col = _ref[2];
+		            }else {
+		                text = text.split('\n')[line-1];
+		            }
+		        }
+		        if (!code && col){
+		            code = SText.split(text.substr(col-1), /[\;\)\]\}\,]/)[0];
+		        }
+		        return formatFragment(text, code, line, col, file);
+		    };
+		    print.register = function(name, printer){
+		        if (printer){
+		            print_ers[name] = printer;
+		        }
+		    };
+		    function formatObject(obj, _cache){
+		        if (_cache == null) _cache = [obj];
+		        var texts, is_arr, text;
+		        texts = [];
+		        is_arr = Array.isArray(obj);
+		        for (var key in obj){
+		            if (!obj.hasOwnProperty(key)) continue;
+		            var value = obj[key];
+		            if (typeof value == 'object' && value){
+		                if (_cache.indexOf(value) == -1){
+		                    _cache.push(value);
+		                    value = formatObject(value, _cache);
+		                }else {
+		                    value = '[circular]';
+		                }
+		            }else if (typeof value == 'string'){
+		                value = '"'+SText(value, '"')+'"';
+		            }
+		            if (is_arr){
+		                texts.push(value);
+		            }else {
+		                texts.push('"'+key+'" : '+value);
+		            }
+		        }
+		        if (texts.length){
+		            if (texts.length < 2){
+		                text = texts.join(' ');
+		            }else {
+		                text = '\n'+texts.join('\n').replace(/^/mg, '\t')+'\n';
+		            }
+		        }else {
+		            text = '';
+		        }
+		        if (is_arr){
+		            return '['+text+']';
+		        }
+		        return '{'+text+'}';
+		    }
+		    function formatDebug(text){
+		        var m, stacks, the, line_text;
+		        if (m = text.match(/<(debug|code|fragment|stack)>/)){
+		            if (!stacks) stacks = print.stacks();
+		            the = stacks[0];
+		            switch (m[1]){
+		                case 'debug':
+		                    text = text.replace(/<debug>/g, the.filePoint);
+		                    break;
+		                case 'code':
+		                    text = text.replace(/<code>/g, the.code+'<> at '+the.filePoint);
+		                    break;
+		                case 'fragment':
+		                    line_text = SText.readFile(the.fileName, the.lineNumber);
+		                    text = text.replace(/<fragment>/g, formatFragment(line_text, null, the.lineNumber, the.columnNumber, the.fileName));
+		                    break;
+		                case 'stack':
+		                    text = text.replace(/<stack>/g, printStacks(stacks));
+		                    break;
+		            }
+		        }
+		        return text;
+		    }
+		    function formatFragment(text, code, line, col, file){
+		        if (text == null) text = '';
+		        if (code == null) code = '';
+		        if (line == null) line = 0;
+		        if (col == null) col = 0;
+		        var str;
+		        text = text.replace(/\n+$/g, '');
+		        str = '  '+line+' | '+text+'\\n\n';
+		        str += str.substr(0, str.length-3-text.length+col).replace(/[^\s]/g, ' ');
+		        str += '<r:'+SText.copy('^', code.length || 1)+':>\n';
+		        if (file){
+		            str = file+':'+line+':'+col+'\n'+str;
+		        }
+		        return str;
+		    }
+		    function formatFill(text, _width){
+		        var ls, ws, ds, ms, ts, ss, W, texts, sw;
+		        ls = text.split('\n');
+		        ws = [];
+		        ds = [];
+		        for (var _i=0, l; _i < ls.length; _i++){
+		            l = ls[_i];
+		            ms = [];
+		            ts = [];
+		            ss = SText.split(l, /<(\~|[^\\w\\s]{2}|\d+)?>/, false);
+		            for (var i=0; i < ss.length; i++){
+		                if (i%2){
+		                    ms.push(ss[i]);
+		                }else {
+		                    if (!ws[ts.length] || ss[i].length > ws[ts.length]){
+		                        ws[ts.length] = ss[i].length;
+		                    }
+		                    ts.push(ss[i]);
+		                }
+		            }
+		            ds.push([ts, ms]);
+		        }
+		        W = Math.max(_width, ds.length == 1 || /<~>/.test(text) ? stdout_width-5 : 0);
+		        for (var i=0; i < ws.length; i++){
+		            W -= ws[i] || 0;
+		        }
+		        if (W < 0){
+		            W = 0;
+		        }
+		        texts = [];
+		        for (var _i=0, d; _i < ds.length; _i++){
+		            d = ds[_i];
+		            ts = d[0];
+		            ms = d[1];
+		            sw = Math.floor(W/ms.length);
+		            for (var i=0; i < ts.length; i++){
+		                texts.push(ts[i]);
+		                if (ms[i]){
+		                    if (/<(\d+)>/.test(ms[i])){
+		                        texts.push(SText.copy(' ', (parseInt(RegExp.$1) || 0)-ts[i].length));
+		                    }else {
+		                        texts.push(SText.copy(ms[i].length == 4 ? ms[i][1] : ' ', ws[i]-ts[i].length+sw));
+		                    }
+		                }
+		            }
+		            texts.push('\n');
+		        }
+		        texts.pop();
+		        return texts.join('');
+		    }
+		    function formatColor(text){
+		        var texts, tmp;
+		        texts = [];
+		        while (tmp = formatMatch(text, color_patt)){
+		            if (tmp[0]){
+		                texts.push(tmp[0]);
+		            }
+		            tmp[2] = print.format(formatColor(tmp[2]));
+		            if (print.isTerminal && color_map.hasOwnProperty(tmp[1])){
+		                tmp[2] = color_map[tmp[1]]+tmp[2]+'\033[0m';
+		            }
+		            texts.push(tmp[2]);
+		            text = tmp[3];
+		        }
+		        if (text){
+		            texts.push(text);
+		        }
+		        text = texts.join('');
+		        return text;
+		    }
+		    function formatSet(text, _width){
+		        var texts, tmp, temp;
+		        texts = [];
+		        while (tmp = formatMatch(text, set_patt)){
+		            if (tmp[0]){
+		                texts.push(tmp[0]);
+		            }
+		            switch (tmp[1]){
+		                case 'bd':
+		                    texts.push(formatBorder(tmp[2], tmp[1], _width));
+		                    break;
+		                case 'ac':case 'al':case 'ar':
+		                    texts.push(formatAlgin(tmp[2], tmp[1], _width));
+		                    break;
+		                case 'cp':
+		                    temp = tmp[2].split(' ');
+		                    texts.push(SText.copy(temp[0], parseInt(temp[1])));
+		                    break;
+		                case '$':
+		                    temp = tmp[2].split(' ');
+		                    changeVariable(temp[0], temp.slice(1).join(' '));
+		                    texts.push('<$:'+temp[0]+':>');
+		                    break;
+		            }
+		            text = tmp[3];
+		        }
+		        if (text){
+		            texts.push(text);
+		        }
+		        text = texts.join('');
+		        return text;
+		    }
+		    function formatAlgin(text, type, _width){
+		        var lines, f;
+		        lines = formatSet(text, _width).split('\n');
+		        for (var i=0, line; i < lines.length; i++){
+		            line = lines[i];
+		            switch (type){
+		                case 'ac':
+		                    f = Math.floor((_width-line.length)/2);
+		                    break;
+		                case 'al':
+		                    f = -1;
+		                    break;
+		                case 'ar':
+		                    f = _width-line.length;
+		                    break;
+		            }
+		            if (f > 0){
+		                lines[i] = SText.copy(' ', f)+line;
+		            }else if (f < 0){
+		                lines[i] = line.replace(/^\s+/g, '');
+		            }
+		        }
+		        return lines.join('\n');
+		    }
+		    function formatBorder(text, type, _width){
+		        var width, lines;
+		        text = formatSet(text, _width);
+		        text = SText.spaceTab(text);
+		        width = Math.max(_width-4, countWidth(text));
+		        lines = text.split('\n');
+		        for (var i=0, line; i < lines.length; i++){
+		            line = lines[i];
+		            lines[i] = '| '+line+SText.copy(' ', width-countWidth(line))+' |';
+		        }
+		        return SText.copy('-', width+4)+'\n'+lines.join('\n')+'\n'+SText.copy('-', width+4);
+		    }
+		    function formatMatch(text, re){
+		        var m, _a, a, ab, b, s1, s2, s3;
+		        if (m = text.match(re)){
+		            _a = m[1] == '#' ? m.index : m.index+m[1].length;
+		            a = m.index;
+		            ab = SText.indexPair(text, m[0], ':>', a);
+		            if (!ab || ab[0] != a || ab[0]+1 == ab[1]){
+		                return;
+		            }
+		            b = ab[1];
+		            s1 = text.substr(0, _a);
+		            s2 = text.slice(a+m[0].length, b);
+		            s3 = text.substr(b+2);
+		            return [s1, m[2], s2, s3];
+		        }
+		    }
+		    function changeVariable(name, value){
+		        var data, _not_refresh;
+		        if (typeof name == 'object'){
+		            data = name, _not_refresh = value;
+		            for (name in data){
+		                if (!data.hasOwnProperty(name)) continue;
+		                var value = data[name];
+		                print_scope[name] = value;
+		            }
+		        }else {
+		            print_scope[name] = value;
+		        }
+		        print_state = true;
+		    }
+		    function countWidth(text){
+		        return SText.width(clearColor(text));
+		    }
+		    function clearColor(text){
+		        return text.replace(color_code, '');
+		    }
+		    function className(obj){
+		        if (obj && obj.constructor && obj.constructor.toString){
+		            return funcName(obj.constructor);
+		        }
+		    }
+		    function funcName(fn, tostr){
+		        var m;
+		        if (fn){
+		            if (m = fn.toString().match(/function\s*(\w+)/)){
+		                return m[1];
+		            }
+		            if (tostr){
+		                if (m = fn.toString().match(/function\s*\(.*(?:\):|\)\{)/)){
+		                    return m[0].slice(0, -1);
+		                }
+		            }
+		        }
+		    }
+		    function stackInfo(str){
+		        var m, f, info;
+		        if (m = str.match(/at (.*?) \((.*?)\)$/)){
+		            if (/print\./.test(m[1])){
+		                return;
+		            }
+		            f = m[2].split(':');
+		            if (__filename == f[0]){
+		                return;
+		            }
+		            info = {"target": m[1],
+		                "fileName": f[0],
+		                "lineNumber": parseInt(f[1]),
+		                "columnNumber": parseInt(f[2]),
+		                get filePoint(){
+		                    return this.fileName+':'+this.lineNumber+':'+this.columnNumber;
+		                },
+		                get code(){
+		                    var code;
+		                    if (!this._code){
+		                        if (code = SText.readFile(this.fileName, this.lineNumber)){
+		                            this._code = SText.split(code.substr(this.columnNumber-1), /[\;\)\]\}\,]/)[0];
+		                        }else {
+		                            this._code = ' ';
+		                        }
+		                    }
+		                    return this.target+' > "'+SText(SText.limit(this._code, 20))+'"';
+		                }};
+		            return info;
+		        }
+		    }
+		    function printStacks(stacks){
+		        var texts;
+		        texts = [];
+		        for (var _i=0, stack; _i < stacks.length; _i++){
+		            stack = stacks[_i];
+		            if (typeof stack == 'string'){
+		                texts.push(stack);
+		            }else {
+		                texts.push(" • "+(stack.target)+" <~> File \""+(stack.fileName)+"\", line "+(stack.lineNumber));
+		            }
+		        }
+		        return texts.join('\n');
+		    }
+		    print.register('Stacks', printStacks);
+		    return print;
+		})();
+		module.exports = print;
+		if (require.main == module){
+		    print(process.argv.slice(process.argv.indexOf(__filename)+1).join(' '));
+		};
+	});
+	return module.exports;
+})('../utils/print/index.js', '../utils/print', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Fs, Path, dirName, fileName, baseName, extName, join;
+		Fs = require("fs");
+		Path = require("path");
+		exports.dirName = (dirName = Path.dirname);
+		exports.fileName = (fileName = Path.filename);
+		exports.baseName = (baseName = Path.basename);
+		exports.extName = (extName = Path.extname);
+		exports.join = (join = Path.join);
+		function name(to){
+		    return Path.parse(to).name;
+		};
+		module.exports.name = name;
+		function relative(from, to){
+		    if (from){
+		        to = Path.relative(from, to);
+		        if (!/^[\/\.]/.test(to)){
+		            to = './'+to;
+		        }
+		    }
+		    return to;
+		};
+		module.exports.relative = relative;
+		function resolve(from, to, check_dir){
+		    if (!to){
+		        to = from, from = null;
+		    }else if (to === true){
+		        check_dir = to, to = from, from = null;
+		    }
+		    to = to.replace(/^`+|^'+|^"+|"+$|'+$|`+$/g, '').trim();
+		    if (!/^(\~|\/|\.)/.test(to)){
+		        to = './'+to;
+		    }
+		    from = from ? Path.resolve(from, to) : Path.resolve(to);
+		    if (check_dir && /\/$/.test(to)){
+		        from += '/';
+		    }
+		    return from;
+		};
+		module.exports.resolve = resolve;
+		function mkdir(to, mode){
+		    var base_dir;
+		    if (!Fs.existsSync(to)){
+		        base_dir = Path.dirname(to);
+		        if (!Fs.existsSync(base_dir)){
+		            mkdir(base_dir, mode);
+		        }
+		        return Fs.mkdirSync(to, mode || 0755);
+		    }
+		};
+		module.exports.mkdir = mkdir;
+		function isExist(to){
+		    return Fs.existsSync(to);
+		};
+		module.exports.isExist = isExist;
+		function isFile(to){
+		    return Fs.existsSync(to) && Fs.statSync(to).isFile();
+		};
+		module.exports.isFile = isFile;
+		function isDir(to){
+		    return Fs.existsSync(to) && Fs.statSync(to).isDirectory();
+		};
+		module.exports.isDir = isDir;
+		function scanDir(to, filter, deep, reverse){
+		    var res;
+		    res = scanPath(to, filter, deep, reverse);
+		    return getherDirs(res.dirs);
+		};
+		module.exports.scanDir = scanDir;
+		function scanFile(to, filter, deep, reverse){
+		    var res;
+		    res = scanPath(to, [null, filter], deep, reverse);
+		    return getherFiles(res);
+		};
+		module.exports.scanFile = scanFile;
+		function scanPath(to, filter, deep, reverse){
+		    var res, dir_filter, file_filter, dir_list;
+		    res = {"files": [], "dirs": {}};
+		    if (typeof filter == 'number'){
+		        reverse = deep, deep = filter, filter = null;
+		    }
+		    if (isArray(filter)){
+		        dir_filter = filter[0];
+		        file_filter = filter[1];
+		    }else {
+		        dir_filter = filter;
+		        file_filter = filter;
+		    }
+		    dir_filter = wildcard(dir_filter, true);
+		    file_filter = wildcard(file_filter, true);
+		    if (isFile(to)){
+		        res.files.push(to);
+		        return res;
+		    }
+		    if (!isDir(to)){
+		        return res;
+		    }
+		    dir_list = Fs.readdirSync(to);
+		    for (var tmp, i = 0; i < dir_list.length; i++){
+		        tmp = dir_list[i];
+		        tmp = Path.join(to, tmp);
+		        if (Fs.statSync(tmp).isDirectory()){
+		            if (testFilter(dir_filter, tmp, reverse)){
+		                continue;
+		            }
+		            if (deep){
+		                res.dirs[tmp] = scanPath(tmp, filter, deep-1, reverse);
+		            }else {
+		                res.dirs[tmp] = 0;
+		            }
+		        }else {
+		            if (testFilter(file_filter, tmp, reverse)){
+		                continue;
+		            }
+		            res.files.push(tmp);
+		        }
+		    }
+		    return res;
+		};
+		module.exports.scanPath = scanPath;
+		function checkFiles(to, from, def_file){
+		    var res, files, dirs, file;
+		    if (Array.isArray(from)){
+		        def_file = from, from = null;
+		    }
+		    res = checkPath(to, from);
+		    files = res.files;
+		    if (res.error){
+		        files.error = res.error;
+		    }else if (def_file && !files.length && res.dirs.length){
+		        dirs = res.dirs;
+		        for (var dir, i = 0; i < dirs.length; i++){
+		            dir = dirs[i];
+		            for (var name, j = 0; j < def_file.length; j++){
+		                name = def_file[j];
+		                file = Path.join(dir, name);
+		                if (isFile(file)){
+		                    files.push(file);
+		                }
+		            }
+		        }
+		    }else {
+		        for (var file, i = files.length - 1; i >= 0; i--){
+		            file = files[i];
+		            if (/\/\..+$/.test(file)){
+		                files.splice(i, 1);
+		            }
+		        }
+		    }
+		    return files;
+		};
+		module.exports.checkFiles = checkFiles;
+		function checkDirs(to, from){
+		    var res, dirs;
+		    res = checkPath(to, from);
+		    dirs = res.dirs;
+		    if (res.error){
+		        dirs.error = res.error;
+		    }
+		    return dirs;
+		};
+		module.exports.checkDirs = checkDirs;
+		function checkPath(to, from){
+		    var res, names, len, dirs, files, wc, tmp, scan;
+		    to = resolve(from, to, true);
+		    res = {"files": [], "dirs": []};
+		    if (isDir(to)){
+		        res.dirs.push(to);
+		        return res;
+		    }
+		    if (isFile(to)){
+		        res.files.push(to);
+		        return res;
+		    }
+		    names = to.split('/');
+		    len = names.length-1;
+		    dirs = [''];
+		    files = [];
+		    for (var name, i = 0; i < names.length; i++){
+		        name = names[i];
+		        if (!name && i != 0){
+		            break;
+		        }
+		        wc = wildcard(name);
+		        tmp = [];
+		        for (var dir, j = 0; j < dirs.length; j++){
+		            dir = dirs[j];
+		            if (wc){
+		                scan = scanPath(dir, wc);
+		                tmp.push.apply(tmp, Object.keys(scan.dirs));
+		                if (i == len){
+		                    files = scan.files;
+		                }
+		                continue;
+		            }else {
+		                if (isDir(dir+name+'/')){
+		                    tmp.push(dir+name+'/');
+		                }
+		                if (i == len && isFile(dir+name)){
+		                    files.push(dir+name);
+		                }
+		            }
+		        }
+		        dirs = tmp;
+		        if (!dirs.length && !files.length){
+		            res.error = {};
+		            res.error.path = names.slice(0, i+1).join('/');
+		            res.error.msg = 'Dir "'+res.error.path+'" is not exist!';
+		            break;
+		        }
+		    }
+		    res.dirs = dirs;
+		    res.files = files;
+		    return res;
+		};
+		module.exports.checkPath = checkPath;
+		function wildcard(str, force){
+		    if (!str || str instanceof RegExp){
+		        return str;
+		    }
+		    if (force || /([^\\]|^)[\*\?]/.test(str)){
+		        str = str.replace(/\./g, '\\.');
+		        str = str.replace(/([^\\]|^)\?/g, '$1.');
+		        str = str.replace(/([^\\]|^)\*/g, '$1.*?');
+		        try {
+		            return new RegExp('^'+str+'$');
+		        } catch (_e){};
+		    }
+		};
+		function testFile(to, names){
+		    if (names && names.length){
+		        for (var name, i = 0; i < names.length; i++){
+		            name = names[i];
+		            name = Path.join(to, name);
+		            if (isFile(name)){
+		                return name;
+		            }
+		        }
+		    }else if (isFile(to)){
+		        return to;
+		    }
+		};
+		function testFilter(filter, path, reverse){
+		    if (filter && (reverse ? filter.test(path) : !filter.test(path))){
+		        return true;
+		    }
+		    return false;
+		};
+		function getherDirs(dirs){
+		    var list;
+		    list = [];
+		    for (var dir in dirs){
+		        if (!dirs.hasOwnProperty(dir)) continue;
+		        list.push(dir);
+		        list.push.apply(list, getherDirs(dirs[dir].dirs));
+		    }
+		    return list;
+		};
+		function getherFiles(res){
+		    var list;
+		    list = res.files.slice();
+		    if (res.dirs){
+		        for (var dir in res.dirs){
+		            if (!res.dirs.hasOwnProperty(dir)) continue;
+		            var data = res.dirs[dir];
+		            list.push.apply(list, getherFiles(data));
+		        }
+		    }
+		    return list;
+		};;
+	});
+	return module.exports;
+})('../utils/fp/index.js', '../utils/fp', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Argv = (function(){
+		    var _conf_re, _desc, _config;
+		    _conf_re = /^\s*(\-\w)?(?:, *)?(\-\-[\w\-]+)?\ +(\<[^\>]+\>|\[[^\]]+\]|"[^"]+"|'[^']+'|\w+?\b)?\s*(.*)$/mg;
+		    _desc = {};
+		    _config = {};
+		    function Argv(argv, desc){
+		        this.length = 0;
+		        if (argv || desc){
+		            this.parse(argv, desc);
+		        }
+		    }
+		    Argv.prototype.parse = function (argv, desc){
+		        var last_name, type, value;
+		        if (desc){
+		            Argv.desc(desc);
+		        }
+		        if (argv){
+		            last_name = '';
+		            for (var i=0, name; i < argv.length; i++){
+		                name = argv[i];
+		                if (i === 0){
+		                    if (/^node$|bin.*?node$/.test(name)){
+		                        i += 1;
+		                        continue;
+		                    }
+		                    if (name[0] != '-'){
+		                        continue;
+		                    }
+		                }
+		                if (name[0] == '-'){
+		                    last_name = '';
+		                    name = checkName(this, name);
+		                    type = _config[name];
+		                    if (type == 'boolean'){
+		                        this[name] = true;
+		                        continue;
+		                    }
+		                    value = argv[i+1];
+		                    if (!value || value[0] == '-'){
+		                        if (type == 'important'){
+		                            throw '[Important argv]\n\n  '+_desc[name];
+		                        }
+		                        value = true;
+		                    }else {
+		                        i += 1;
+		                    }
+		                    this[name] = value;
+		                    last_name = name;
+		                }else if (last_name){
+		                    if (!Array.isArray(this[last_name])){
+		                        this[last_name] = [this[last_name]];
+		                    }
+		                    this[last_name].push(name);
+		                }else if (!this['--file']){
+		                    this['--file'] = name;
+		                    last_name = '--file';
+		                }else {
+		                    this[this.length++] = name;
+		                }
+		            }
+		        }
+		        return this;
+		    }
+		    Argv.prototype.pipe = function (callback, timeout){
+		        Argv.readPipe(callback, timeout);
+		        return this;
+		    }
+		    Argv.prototype.set = function (desc){
+		        Argv.desc(desc);
+		        return this;
+		    }
+		    Argv.prototype.add = function (short, long, desc, type){
+		        Argv.add(short, long, desc, type);
+		        return this;
+		    }
+		    Argv.prototype.help = function (com){
+		        if (com == null) com = 'help';
+		        return print.toText(_desc[com]);
+		    }
+		    Argv.desc = function(desc, temp){
+		        if (temp == null) temp = _conf_re;
+		        var opt, m, short, long, type;
+		        if (typeof desc == 'string'){
+		            opt = [];
+		            temp.lastIndex = 0;
+		            while (m = temp.exec(desc)){
+		                opt.push([m[1], m[2], m[3], m[4]]);
+		            }
+		            _desc.help = desc;
+		        }else if (Array.isArray(desc)){
+		            opt = desc;
+		        }
+		        if (opt && opt.length){
+		            for (var i=0, item; i < opt.length; i++){
+		                item = opt[i];
+		                short = item[0], long = item[1], type = item[2], desc = item[3];
+		                if (short || long){
+		                    switch (type && type[0]){
+		                        case '[':
+		                            type = 'default';
+		                            break;
+		                        case '<':
+		                            type = 'important';
+		                            break;
+		                        case '"':case "'":
+		                            type = type.slict(1, -1);
+		                            break;
+		                        default:
+		                            if (type){
+		                                if (!desc){
+		                                    desc = type, type = null;
+		                                }else if (type == 'false'){
+		                                    type = false;
+		                                }else if (type == 'true'){
+		                                    type = true;
+		                                }
+		                            }else {
+		                                type = 'boolean';
+		                            }
+		                            break;
+		                    }
+		                    Argv.add(short, long, desc, type);
+		                }
+		            }
+		        }
+		    };
+		    Argv.add = function(short, long, desc, type){
+		        if (short && short.substr(0, 2) == '--'){
+		            desc = long, long = short, short = null;
+		        }
+		        if (!long){
+		            long = short, short = null;
+		        }
+		        if (desc){
+		            desc = short+', '+long+' '+type+'      '+desc;
+		            if (short) _desc[short] = desc;
+		            _desc[long] = desc;
+		        }
+		        if (type){
+		            if (short) _config[short] = type;
+		            _config[long] = type;
+		        }
+		        if (short && long && short != long){
+		            Argv.prototype.__defineGetter__(short, function(){
+		                return this[long];
+		            });
+		            Argv.prototype.__defineSetter__(short, function(v){
+		                return this[long] = v;
+		            });
+		        }
+		        if (type != null && type != 'default' && type != 'important' && type != 'boolean' && type != 'number'){
+		            Argv.prototype[long] = type;
+		        }
+		    };
+		    Argv.readPipe = function(callback, timeout){
+		        if (timeout == null) timeout = 100;
+		        var timing;
+		        process.stdin.setEncoding('utf8');
+		        process.stdin.on('readable', function(){
+		            var chunk;
+		            chunk = process.stdin.read();
+		            process.stdin.destroy();
+		            process.stdin.resume();
+		            clearTimeout(timing);
+		            callback(chunk);
+		        });
+		        timing = setTimeout(function(){
+		            process.stdin.destroy();
+		            process.stdin.resume();
+		            callback(null);
+		        }, timeout);
+		    };
+		    Argv.create = function(argv, desc){
+		        return new Argv(argv, desc);
+		    };
+		    function checkName(self, name){
+		        var i, temp, type;
+		        if (name[1] != '-' && name.length > 2){
+		            for (i = 1; i < name.length-1; i++){
+		                temp = '-'+name[i];
+		                type = _config[temp];
+		                if (type == 'important'){
+		                    throw '[Important argv]\n\n  '+_desc[temp];
+		                }
+		                self[temp] = true;
+		            }
+		            name = '-'+name[name.length-1];
+		        }
+		        return name;
+		    }
+		    return Argv;
+		})();
+		module.exports = Argv;;
+	});
+	return module.exports;
+})('../utils/argv/index.js', '../utils/argv', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		print.register('Token', tokenPrinter)
+		print.register('Source', sourcePrinter)
+		print.register('Location', locationPrinter)
+		print.register('Pattern', patternPrinter)
+		print.register('Syntax', syntaxPrinter)
+		print.register('Scope', scopePrinter)
+		print.register('Card', cardPrinter)
+		print.register('Asset', assetPrinter)
+		print.register('GrammarStack', grammarStackPrinter)
+		function locationPrinter(loc){
+			var text, pos, code, file;
+			text = loc.source, pos = loc.start, code = text.slice(loc.start, loc.end+1), file = loc.fileName;
+			return printer('Location', print.fragment(text, code, pos, file));
+		}
+		function tokenPrinter(token){
+			return "(<g:"+(token.type.slice(0,3))+":> '"+(SText(token.text))+"')";
+		}
+		function sourcePrinter(src){
+			var texts;
+			texts = [];
+			for (var token, i = 0; i < src.length; i++){
+				token = src[i];
+				if (!token){
+					continue;
+				}
+				if (token.isToken){
+					texts.push((i && token.is('HEAD') ? '\n' : '')+tokenPrinter(token));
+				}
+			}
+			return printer('Source', texts.join(' '));
+		}
+		function assetPrinter(asset, __level){
+			var texts, conf, text;
+			if (__level == null) __level = 0;
+			texts = [asset.type];
+			conf = asset.config;
+			for (var key in conf){
+				if (!conf.hasOwnProperty(key)) continue;
+				if (conf[key]){
+					texts.push(key+':"'+conf[key]+'"');
+				}
+			}
+			switch (asset.type){
+				case '*':case 'Code Test':case 'Node Test':
+					texts[0] += ': "'+asset.content+'"';
+					break;
+				case 'Codes Test':
+					texts[0] += ': ["'+asset.content.join('" "')+'"]';
+					break;
+				case 'Method Test':
+					texts[0] += ': '+asset.content+'('+asset.param.join(', ')+')';
+					break;
+				case 'Sub':
+					texts.push('\n'+patternPrinter(asset.content, __level+1).replace(/^/mg, SText.tabsize)+'\n');
+					break;
+				case 'Pair Test':
+					texts[0] += ': "'+asset.content[0]+'" ... "'+asset.content[1]+'"';
+					break;
+			}
+			text = '['+texts.join(' ')+']';
+			return text;
+		}
+		function patternPrinter(patt, __level){
+			var texts, text;
+			if (__level == null) __level = 0;
+			switch (isClass(patt)){
+				case 'Asset':
+					return assetPrinter(patt, __level);
+				case 'Pattern':
+					texts = [];
+					for (var i = 0; i < patt.length; i++){
+						texts.push(patternPrinter(patt[i], __level+1));
+					}
+					if (isClass(patt[0]) == 'Pattern'){
+						text = texts.join('\n[r{or}]----\n');
+					}else {
+						text = texts.join('\n').replace(/^/mg, '|  ');
+					}
+					break;
+			}
+			if (__level === 0){
+				text = printer('Grammar Pattern', '"<'+patt.string+'>"'+'\n'+text);
+			}
+			return text;
+		}
+		function syntaxPrinter(node, __level, __indent){
+			var indent, texts, text;
+			if (__level == null) __level = 0;
+			if (__indent == null) __indent = 0;
+			indent = '';
+			texts = [];
+			if (/root|block/i.test(node.type) && node.length){
+				indent = '\n'+SText.copy(SText.tabsize, __indent+1);
+			}
+			for (var item, i = 0; i < node.length; i++){
+				item = node[i];
+				if (!item) continue;
+				if (node[i].isToken){
+					texts.push("'"+SText(node[i].text)+"'");
+				}else {
+					texts.push(indent+syntaxPrinter(node[i], __level+1, indent ? __indent+1 : __indent));
+				}
+			}
+			text = "[(<g:"+(node.type)+":>) "+texts.join(', ')+(indent ? '\n'+SText.copy(SText.tabsize, __indent) : '')+']';
+			if (__level === 0){
+				return printer('Syntax Tree', text);
+			}
+			return text;
+		}
+		function scopePrinter(scope, __level){
+			var texts, undefineds, ref, c, m, text;
+			if (__level == null) __level = 0;
+			texts = [];
+			texts.push(scope.type+(scope.name ? ' "'+scope.name+'"' : ''));
+			undefineds = Object.keys(scope.undefines);
+			if (undefineds.length){
+				texts.push('  undefineds : "'+undefineds.join('", "')+'"');
+			}
+			for (var ref = ['variables', 'protos', 'statics'], type, i = 0; i < ref.length; i++){
+				type = ref[i];
+				if (c = scope[type]){
+					m = {};
+					for (var k in c){
+						if (!c.hasOwnProperty(k)) continue;
+						var v = c[k];
+						if (v){
+							!m[v[0]] && (m[v[0]] = []);
+							m[v[0]].push(k);
+						}
+					}
+					if (!Jsop.isEmpty(m)){
+						texts.push('  '+type+' :');
+					}
+					for (var k in m){
+						if (!m.hasOwnProperty(k)) continue;
+						var v = m[k];
+						texts.push('      "'+k+'" : "'+v.join('", "')+'"');
+					}
+				}
+			}
+			if (scope.subs){
+				texts.push('<-->');
+				for (var i = 0; i < scope.subs.length; i++){
+					texts.push('  sub : '+(scopePrinter(scope.subs[i], __level+1)).replace(/^/mg, '        ').trim());
+				}
+			}
+			text = '[ '+texts.join('\n')+'\n]';
+			if (__level === 0){
+				return printer('Scope Object', text);
+			}
+			return text;
+		}
+		function cardPrinter(data, __level, __circular){
+			var texts, isblock, text;
+			if (__level == null) __level = 0;
+			if (__circular == null) __circular = [];
+			__circular.push(data);
+			texts = [];
+			for (var item, i = 0; i < data.length; i++){
+				item = data[i];
+				if (item.isToken){
+					texts.push('"'+SText(item.text)+'"');
+				}else if (typeof item == 'string'){
+					texts.push(SText(item));
+				}else {
+					if (__circular.indexOf(item) != -1){
+						return '[Circular]';
+					}
+					texts.push(cardPrinter(item, __level+1, __circular));
+				}
+			}
+			isblock = /root|block/i.test(data.type);
+			text = '[('+data.type.replace(/(Expr|Stam|Decl|Patt)$/g, '')+')'+(data.type == 'Root' ? '\n' : '');
+			text += texts.join(isblock ? '\n' : '');
+			text += ']';
+			if (/block/i.test(data.type)){
+				text = text.replace(/^/mg, '\t');
+			}
+			if (__level === 0){
+				return printer('Script Card', text);
+			}
+			return text;
+		}
+		function grammarStackPrinter(stack, __level){
+			var texts, text;
+			if (__level == null) __level = 0;
+			texts = [];
+			if (stack.name){
+				texts.push(stack.name);
+			}
+			for (var item, i = 0; i < stack.subs.length; i++){
+				item = stack.subs[i];
+				if (typeof item == 'string'){
+					texts.push(item);
+				}else {
+					texts.push(grammarStackPrinter(item, __level+1));
+				}
+			}
+			if (texts.length > 2){
+				text = ('*'+texts.join('\n    > ')).replace(/^(?!\*)/mg, '  ');
+			}else {
+				text = texts.join(' - ');
+			}
+			if (__level == 0){
+				return printer('Grammar stack', text);
+			}
+			return text;
+		}
+		function printer(title, text){
+			text = "| * "+title+" Printer\n"+(text.replace(/^/mg, '  *  '))+"\n| * End\n";
+			return text;
+		};
+	});
+	return module.exports;
+})('./helper/printer.js', './helper', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Code
+		Code = require("./code.js")
+		Error.create = function(){
+			var args, msg, name, err, stacks, code;
+			args = Jsop.toArray(arguments);
+			msg = '';
+			name = 'Parse error';
+			if (args[args.length-1] instanceof Error){
+				err = args.pop();
+				stacks = print.stacks(err);
+				msg = err.message;
+			}else {
+				err = new Error();
+				stacks = print.stacks(err);
+				stacks.shift();
+			}
+			if (typeof args[0] == 'string'){
+				msg = args.shift();
+			}else if (typeof args[0] == 'number'){
+				code = args.shift();
+				msg = Code[code] || 'Undefined error code "'+code+'"';
+				name = (Code[Math.floor(code/100)*100] || name)+' ('+code+')';
+			}
+			err.message = '['+name+']\n\n'+format(msg, args, stacks).replace(/^/mg, ' • ');
+			err.stacks = stacks;
+			err.__defineGetter__('stack', toStack);
+			return err;
+		}
+		Error.code = Code
+		function format(text, args, stacks){
+			var i;
+			for (var item, i = 0; i < args.length; i++){
+				item = args[i];
+				switch (isClass(item)){
+					case 'Number':
+						text = replace(text, '%d', item);
+						break;
+					case 'String':
+						text = replace(text, '%s', item);
+						break;
+					case 'Standard':
+						text = replace(text, '%j', formatStandard(item));
+						break;
+					case 'Syntax':case 'Token':case 'Source':case 'Location':
+						text = replace(text, '%j', formatLocation(item));
+						break;
+					case 'Object':
+					default:
+						text = replace(text, '%j', SText(item));
+						break;
+				}
+			}
+			if (text.indexOf('%e')){
+				i = 0;
+				text = text.replace(/%e/g, function(){return '<> at "'+stacks[i].fileName+':'+stacks[i].lineNumber+':'+stacks[i++].columnNumber+'"'});
+			}
+			return print.format(text);
+		}
+		function formatStandard(std){
+			var cache, texts, p;
+			cache = std.cache;
+			texts = [
+				'-> '+cache.version+'.'+cache.standard+'<>"'+cache.condition+'" : "'+(cache.pattern || '???')+'"'];
+			p = cache.__parent;
+			while (p){
+				if (p.standard){
+					texts.push(p.version+'.'+p.standard+'<>"'+p.condition+'" : "'+p.pattern+'"');
+				}
+				p = p.__parent;
+			}
+			texts.reverse();
+			for (var i = 0; i < texts.length; i++){
+				texts[i] = SText.copy('  ', i)+texts[i];
+			}
+			return texts.join('\n');
+		}
+		function formatLocation(obj){
+			switch (isClass(obj)){
+				case 'Syntax':
+					return formatLocation(obj.tokens(0));
+				case 'Source':
+					return formatLocation(obj.current);
+				case 'Token':
+					return formatLocation(obj.location);
+				case 'Location':
+					return print.fragment(obj.source, obj.code, obj.lineNumber, obj.columnNumber, obj.fileName);
+			}
+			return 'undefined';
+		}
+		function replace(text, substr, target){
+			if (text.indexOf(substr) != -1){
+				return text.replace(substr, target);
+			}
+			return text+'\n\n'+target;
+		}
+		function toStack(){
+			if (toStack.caller){
+				return this.message;
+			}
+			console.log(this.message+'\n');
+			console.log(print.toText(this.stacks));
+			Tea.exit(99);
+		};
+	});
+	return module.exports;
+})('./helper/error.js', './helper', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		module.exports = function(msg, loc){
+			if (loc){
+				msg += ' <60> '+loc.fileName+':'+loc.lineNumber;
+			}
+			print(msg.replace(/^/mg, '  '));
+		};
+	});
+	return module.exports;
+})('./helper/log.js', './helper', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Node = (function(){
+			var array;
+			array = Array.prototype;
+			function Node(){};
+			Node.prototype.__defineGetter__("index", function(){
+				return !this.parent ? -1 : array.indexOf.call(this.parent, this);
+			});
+			Node.prototype.__defineGetter__("root", function(){
+				var p, circular;
+				p = this;
+				circular = [];
+				while (p.parent){
+					if (circular.indexOf(p.parent) != -1){
+						throw Error.create(3, p, new Error());
+					}
+					p = p.parent;
+					circular.push(p);
+				}
+				return p;
+			});
+			Node.prototype.find = function (type){
+				var list, _list;
+				list = [];
+				for (var node, i = 0; i < this.length; i++){
+					node = this[i];
+					if (node.type == type){
+						list.push(node);
+					}else if (node.isSyntax){
+						if (_list = node.find(type)){
+							list.push.apply(list, _list);
+						}
+					}
+				}
+				if (list.length){
+					return list;
+				}
+			};
+			Node.prototype.query = function (type){
+				var p;
+				p = this.parent;
+				while (p && !p.is.apply(p, arguments)){
+					if (p.is('Block')){
+						return;
+					}
+					p = p.parent;
+				}
+				return p;
+			};
+			Node.prototype.tokens = function (index){
+				if (this.isToken){
+					return index ? null : (index == 0 ? this : [this]);
+				}
+				var tokens = [];
+				for (var i = 0; i < this.length; i++){
+					if (!this[i]){
+						continue;
+					}
+					if (this[i].isToken){
+						tokens.push(this[i]);
+					}else {
+						tokens.push.apply(tokens, this[i].tokens());
+					}
+					if (index === 0){
+						return tokens[0];
+					}
+				}
+				if (typeof index == 'number'){
+					return tokens[index < 0 ? tokens.length+index : index];
+				}
+				return tokens;
+			};
+			Node.prototype.each = function (fn, __that, __indexs){
+				var that, ref;
+				if (__indexs == null) __indexs = [];
+				that = __that || this;
+				if (this.isToken){
+					fn.call(that, this, __indexs.concat(0));
+				}else {
+					for (var node, i = 0; i < this.length; i++){
+						node = this[i];
+						if (node){
+							ref = fn.call(that, node, __indexs.concat(i));
+							if (ref === 0){
+								continue;
+							}
+							if (ref === false){
+								return __that ? false : this;
+							}
+							if (node.isSyntax && node.each(fn, that, __indexs.concat(i)) === false){
+								return __that ? false : this;
+							}
+						}
+					}
+				}
+				return this;
+			};
+			Node.prototype.is = function (){
+				var types;
+				types = this.types || [this.type];
+				for (var item, i = 0; i < arguments.length; i++){
+					item = arguments[i];
+					if (item == 'HEAD' && this.indent >= 0){
+						return item;
+					}else if (types.indexOf(item) != -1){
+						return item;
+					}else if (Node.isType(types[0], item)){
+						return item;
+					}
+				}
+				return false;
+			};
+			Node.map = {};
+			Node.define = function(types, names){
+				var node_map;
+				node_map = Node.map;
+				for (var name, i = 0; i < names.length; i++){
+					name = names[i];
+					if (node_map.hasOwnProperty(name)){
+						Node.define(types, node_map[name]);
+					}
+					for (var type, j = 0; j < types.length; j++){
+						type = types[j];
+						!node_map[type] && (node_map[type] = []);
+						if (node_map[type].indexOf(name) == -1) node_map[type].push(name);
+					}
+				}
+			};
+			Node.isType = function(name, type){
+				var node_map;
+				node_map = Node.map;
+				if (!type){
+					if (node_map['Expression'].indexOf(name) != -1){
+						return 'Expression';
+					}
+					if (node_map['Declaration'].indexOf(name) != -1){
+						return 'Declaration';
+					}
+					if (node_map['Statement'].indexOf(name) != -1){
+						return 'Statement';
+					}
+					return false;
+				}
+				return name == type || node_map[type] && node_map[type].indexOf(name) != -1;
+			};
+			Node.prototype.isNode = true;
+			return Node;
+		})()
+		module.exports = Node;
+	});
+	return module.exports;
+})('./core/node.js', './core', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Location = (function(){
+			var file_cache = [], source_cache = [];
+			function Location(file, source, code, start, end, line, column){
+				if (!source && file){
+					source = SText.readFile(file);
+				}
+				this.__file_id = CacheFile(file);
+				this.__source_id = CacheSource(source);
+				this.code = code || '';
+				this.lineNumber = line != null ? line : null;
+				this.columnNumber = column != null ? column : null;
+				this.start = start != null ? start : 0;
+				this.end = end || start+this.code.length-1;
+				if (line == null){
+					CountLineNumber(this, start);
+				}
+			};
+			Location.prototype.__defineGetter__("fileName", function(){
+				return file_cache[this.__file_id] || '';
+			});
+			Location.prototype.__defineGetter__("source", function(){
+				var data = source_cache[this.__source_id];
+				return data && data.source || '';
+			});
+			Location.prototype.__defineGetter__("line", function(){
+				var data = source_cache[this.__source_id];
+				return data && data[this.lineNumber-1][3] || '';
+			});
+			Location.prototype.fission = function (code, start, end){
+				return new Location(this.__file_id, this.__source_id, code, start, end);
+			};
+			function CountLineNumber(loc, start){
+				var data;
+				if (data = source_cache[loc.__source_id]){
+					for (var line_data, i = 0; i < data.length; i++){
+						line_data = data[i];
+						if (start >= line_data[1] && start <= line_data[2]){
+							loc.lineNumber = line_data[0];
+							loc.columnNumber = start-line_data[1];
+							break;
+						}
+					}
+				}
+				return loc;
+			};
+			function CacheFile(file){
+				if (typeof file == 'number'){
+					return file;
+				}
+				if (file){
+					var index = file_cache.indexOf(file);
+					if (index == -1){
+						index = file_cache.push(file)-1;
+					}
+					return index;
+				}
+				return null;
+			};
+			function CacheSource(source){
+				if (typeof source == 'number'){
+					return source;
+				}
+				if (source){
+					var index = -1;
+					for (var i = 0; i < source_cache.length; i++){
+						if (source_cache[i].text == source){
+							index = i;
+							break;
+						}
+					}
+					if (index == -1){
+						var lines = source.split('\n'), shift = 0, data = [];
+						for (var line, i = 0; i < lines.length; i++){
+							line = lines[i];
+							data.push([i+1, shift, (shift += line.length+1)-1, line+'\n']);
+						}
+						data.source = source;
+						index = source_cache.push(data)-1;
+					}
+					return index;
+				}
+				return null;
+			};
+			return Location;
+		})()
+		module.exports = Location;
+	});
+	return module.exports;
+})('./core/location.js', './core', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Pattern = (function(){
+			var Asset, Syntax, cache;
+			Asset = require("./asset.js");
+			Syntax = require("../syntax.js");
+			cache = Jsop.data();
+			function Pattern(str){
+				var or_list, asset_list, patt;
+				this.length = 0;
+				this.minLimit = 0;
+				if (str){
+					this.string = str;
+					or_list = splitPattern(str);
+					if (or_list.length == 1){
+						this.type = 'Pattern';
+						asset_list = or_list[0];
+						for (var i = 0; i < asset_list.length; i++){
+							this.add(compileAsset(asset_list[i]));
+						}
+					}else {
+						this.type = 'Or';
+						for (var asset_list, j = 0; j < or_list.length; j++){
+							asset_list = or_list[j];
+							patt = new Pattern();
+							patt.string = asset_list.join(' ');
+							for (var i = 0; i < asset_list.length; i++){
+								patt.add(compileAsset(asset_list[i]));
+							}
+							this.add(patt);
+						}
+					}
+				}
+			};
+			Pattern.prototype.add = function (){
+				for (var asset, i = 0; i < arguments.length; i++){
+					asset = arguments[i];
+					this[this.length++] = asset;
+					if (asset.isPattern){
+						if (asset.minLimit){
+							this.minLimit = 1;
+						}
+					}else {
+						this.minLimit += !asset.config.mode || asset.config.mode[0] == '+' ? 1 : 0;
+					}
+				}
+				return this;
+			};
+			Pattern.prototype.parse = function (grm, src, params){
+				var handle, _params, res;
+				handle = grm.handle;
+				_params = handle.params;
+				handle.params = params;
+				if (handle.debug){
+					print('['+handle.name+' syntax debug]');
+					print.indent();
+				}
+				res = checkPattern(this, src, grm, true);
+				if (handle.debug){
+					print.back();
+					print('['+handle.name+' syntax debug end]\n');
+				}
+				handle.params = _params;
+				if (handle.error){
+					return {"error": handle.error};
+				}
+				return res;
+			};
+			Pattern.prototype.isPattern = true;
+			Pattern.compile = function(str){
+				if (!cache[str]){
+					return cache[str] = new Pattern(str);
+				}
+				return cache[str];
+			};
+			Pattern.parse = function(grm, patt, src, params){
+				if (typeof patt == 'string'){
+					patt = Pattern.compile(patt);
+				}
+				return patt.parse(grm, src, params);
+			};
+			function splitPattern(str){
+				var or_list;
+				str = str.replace(/\s+(→)/g, '$1');
+				str = str.replace(/(^| |,)(\[|\(|\{|\]|\)|\})(∅|→|\\n\n|:\d+|\+\?|\*\?|\+|\*|\!|\?)( |$)/g, '$1\\$2$3$4');
+				or_list = SText.split(str, '|');
+				for (var item, i = 0; i < or_list.length; i++){
+					item = or_list[i];
+					or_list[i] = SText.split(item, ' ', true);
+				}
+				return or_list;
+			};
+			function compileAsset(str){
+				var asset;
+				asset = Asset.compile(str);
+				if (asset.type == 'Sub'){
+					if (!asset.content.isPattern){
+						asset.content = Pattern.compile(asset.content);
+					}
+				}
+				return asset;
+			};
+			// parse pattern
+			function checkPattern(patt, src, grm, __root){
+				var start_index, res;
+				start_index = src.index;
+				if (patt.type == 'Or'){
+					for (var i = 0; i < patt.length; i++){
+						src.index = start_index;
+						if (res = parsePattern(patt[i], src, grm, __root)){
+							break;
+						}
+						if (grm.handle.error){
+							return false;
+						}
+					}
+				}else {
+					res = parsePattern(patt, src, grm, __root);
+				}
+				if (res){
+					if (res.isEmpty){
+						return res;
+					}
+					return checkPack(patt, grm, res, null, __root);
+				}
+				src.index = start_index;
+				return false;
+			};
+			function parsePattern(patt, src, grm, __root){
+				var start_index, valid_index, res_list, total_ig, test_up, handle, step_index, ref, config;
+				start_index = valid_index = src.index;
+				res_list = [];
+				res_list.matched = 0;
+				total_ig = 0;
+				test_up = false;
+				handle = grm.handle;
+				if (__root) handle.cache = res_list;
+				for (var asset, i = 0; i < patt.length; i++){
+					asset = patt[i];
+					test_up = false;
+					step_index = src.index;
+					ref = parseAsset(asset, src, grm);
+					if (handle.error) return false;
+					config = asset.config;
+					if (ref){
+						if (config.mode == '!'){
+							return grm.error(config.error, src.current);
+						}
+						res_list.matched++;
+						if (config.test || ref.isTest){
+							test_up = true;
+							checkPack(asset, grm, ref, res_list);
+							src.index = step_index;
+							continue;
+						}
+						if (config.mode == '*' || config.mode == '+'){
+							ref = matchMore(asset, src, grm, ref, config.smallest ? patt[i+1] : null);
+						}
+						if (ref === true){
+							checkPack(asset, grm, ref, res_list);
+							valid_index = src.index;
+							total_ig++;
+							continue;
+						}
+						valid_index = src.index;
+						if (!ref.isEmpty){
+							grm.next(src, !config.lf);
+						}
+						if (config.ig){
+							checkPack(asset, grm, ref, res_list);
+							total_ig++;
+							continue;
+						}
+						ref = checkPack(asset, grm, ref, res_list);
+						if (ref.isToken || ref.isSyntax){
+							res_list.push(ref);
+						}else if (ref.length){
+							res_list.push.apply(res_list, ref);
+						}
+					}else {
+						if (config.mode == '?' || config.mode == '*' || config.mode == '!'){
+							src.index = step_index;
+							if (config.pack == 'check empty'){
+								res_list.push(new Syntax(config.name));
+							}
+							continue;
+						}
+						if (asset.type == 'Sub' && asset.content.minLimit == 0){
+							src.index = step_index;
+							continue;
+						}
+						return grm.error(config.error, src[step_index-1]);
+					}
+				}
+				src.index = valid_index;
+				if (res_list.matched){
+					if (res_list.length == 1 && patt.length == 1){
+						res_list = res_list[0];
+					}
+					if (res_list.length === 0 && start_index === src.index && total_ig === 0){
+						res_list.isEmpty = true;
+						if (patt.length == 1 && test_up){
+							res_list.isTest = true;
+						}
+					}
+					return res_list;
+					src.index = start_index;
+				}
+			};
+			function parseAsset(asset, src, grm){
+				var start_index, handle, ref;
+				start_index = src.index;
+				handle = grm.handle;
+				if (start_index >= src.length){
+					return false;
+				}
+				if (asset.type == 'Sub'){
+					if (handle.debug){
+						print.indent();
+					}
+					ref = checkPattern(asset.content, src, grm);
+					if (handle.debug){
+						print.back();
+					}
+				}else {
+					ref = asset.parse(src, grm);
+				}
+				if (handle.debug){
+					print('[Asset] =', !!ref, asset, [ref ? src.join(start_index, src.index) : src[start_index].text]);
+				}
+				if (ref && !grm.handle.error){
+					if (ref === true || ref.isSyntax || ref.isToken || ref.length || ref.matched){
+						return ref;
+					}
+					return true;
+				}
+				src.index = start_index;
+				return false;
+			};
+			function matchMore(asset, src, grm, res, next_asset){
+				var step_index, res_list;
+				step_index = src.index;
+				res_list = res.isToken || res.isSyntax ? [res] : res;
+				while (res = matchNext(asset, src, grm, next_asset)){
+					if (step_index == src.index){
+						return res_list;
+					}
+					step_index = src.index;
+					if (res_list === true){
+						continue;
+					}
+					if (res.isToken || res.isSyntax){
+						res_list.push(res);
+					}else if (res.length){
+						res_list.push.apply(res_list, res);
+					}
+				}
+				src.index = step_index;
+				return res_list;
+			};
+			function matchNext(asset, src, grm, next_asset){
+				var start_index, next, res;
+				start_index = src.index;
+				if (next_asset){
+					grm.handle.try = true;
+					grm.next(src, !asset.config.lf);
+					next = parseAsset(next_asset, src, grm);
+					grm.handle.try = false;
+				}
+				src.index = start_index;
+				if (!next){
+					grm.next(src, !asset.config.lf);
+					if (res = parseAsset(asset, src, grm)){
+						return res;
+					}
+				}
+				src.index = start_index;
+				return false;
+			};
+			function checkPack(asset, grm, res, res_list, __root){
+				var handle, config, name, res_cache;
+				handle = grm.handle;
+				if (!(config = asset.config)){
+					if (handle.packName && handle.pattern == asset){
+						config = {"name": handle.packName, "pack": handle.packMode};
+					}
+				}
+				if (!config || !(name = config.name)){
+					return res;
+				}
+				switch (config.pack){
+					case 'rename pattern':
+						handle.packMode = 'rename response';
+						handle.packName = name;
+						break;
+					case 'pattern name':
+						handle.packMode = 'response name';
+						handle.packName = name;
+						break;
+					case 'check response':
+						if (res && !res.isSyntax && res.length > 1){
+							return new Syntax(name, res);
+						}
+						break;
+					case 'packing matched':
+						res_cache = handle.cache;
+						if (res_cache.length){
+							if (res_list && res_cache != res_list){
+								res_cache[0] = new Syntax(name, res_cache, res_list, res);
+								res_list.length = 0;
+							}else {
+								res_cache[0] = new Syntax(name, res_cache, res);
+							}
+							res_cache.length = 1;
+						}
+						return true;
+					case 'response name':
+						return new Syntax(name, res);
+					case 'rename response':
+						if (!res.isSyntax && res.length == 1){
+							res = res[0];
+						}
+						if (res.isSyntax){
+							res.type = name;
+						}else {
+							return new Syntax(name, res);
+						}
+						break;
+				}
+				return res;
+			};
+			return Pattern;
+		})()
+		module.exports = Pattern;
+	});
+	return module.exports;
+})('./core/grammar/pattern.js', './core/grammar', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Grammar = (function(){
+			function Grammar(prepor){
+				this.prepor = prepor;
+				this.handle = {};
+			};
+			var Syntax = require("../syntax.js");
+			var Pattern = require("./pattern.js");
+			Grammar.prototype.next = function (src, ig_lf){
+				src.next(ig_lf, true);
+				if (this.parser('COMMENT', src, null, false, true)){
+					this.next(src, ig_lf);
+				}
+				return src;
+			};
+			Grammar.prototype.parser = function (name, src, params, __try, __inherit_handle){
+				var parser, _handle, ref;
+				if (arguments.length == 1){
+					return Grammar.hasOwnProperty(name);
+				}
+				if (!(Grammar.hasOwnProperty(name))){
+					if (__try) return;
+					throw Error.create(4001, name, new Error());
+				}
+				parser = Grammar[name];
+				_handle = this.handle;
+				if (!__inherit_handle){
+					this.handle = {"name": name, "debug": parser.debug, "up": _handle, "start": src.index};
+				}
+				if (parser.fn){
+					ref = parser.fn.call(this, src, params);
+				}else {
+					this.handle.pattern = parser.pattern;
+					ref = this.pattern(parser.pattern, src, params);
+				}
+				if (this.handle.error){
+					return errorResponse(this.handle.error, src, this);
+				}
+				if (ref){
+					ref = packResponse(ref, parser.name, parser.mode, this.handle);
+					if (_handle != this.handle){
+						!_handle.subs && (_handle.subs = []);
+						_handle.subs.push(this.handle);
+					}
+				}
+				this.handle.end = src.index;
+				this.handle = _handle;
+				return ref;
+			};
+			Grammar.prototype.pattern = function (patt, src, params, packname){
+				var _handle, ref;
+				if (!patt.isPattern){
+					patt = Pattern.compile(patt);
+					if (!src){
+						return patt;
+					}
+				}
+				if (packname){
+					_handle = this.handle;
+					this.handle = {"name": packname, "pattern": patt, "up": _handle};
+				}
+				if (ref = patt.parse(this, src, params)){
+					if (ref.error){
+						return errorResponse(ref.error, src, this);
+					}
+				}
+				if (packname){
+					ref = packResponse(ref, packname, null, this.handle);
+					if (_handle != this.handle){
+						!_handle.subs && (_handle.subs = []);
+						_handle.subs.push(this.handle);
+					}
+					this.handle = _handle;
+				}
+				return ref;
+			};
+			Grammar.prototype.stack = function (){
+				var ref;
+				if (this.handle.subs){
+					ref = getSubsStack(this.handle);
+				}else {
+					ref = getUpStack(this.handle);
+				}
+				ref.className = 'GrammarStack';
+				return ref;
+			};
+			Grammar.prototype.error = function (msg, target){
+				if (this.handle.try){
+					return;
+				}
+				if (msg){
+					this.handle.error = {"message": msg, "target": target};
+				}
+			};
+			function packResponse(res, name, mode, handle){
+				switch (mode){
+					case 'not check':
+						return res;
+					case 'ret node':
+						if (!res.isSyntax || (res.type != name && !handle.packName)){
+							return new Syntax(name, res);
+						}
+						break;
+					default:
+						if (res.isToken || res.isSyntax){
+							return res;
+						}
+						if (res.length == 1){
+							return res[0];
+						}
+						if (res.length > 1){
+							return new Syntax(name, res);
+						}
+						break;
+				}
+				return res;
+			};
+			function getSubsStack(handle){
+				var stack;
+				if (!handle.subs){
+					return handle.name;
+				}
+				stack = {"name": handle.name, "subs": []};
+				if (handle.error){
+					stack.name = '∆'+stack.name;
+				}
+				if (handle.packName){
+					stack.name += '('+handle.packName+')';
+				}
+				for (var sub, i = 0; i < handle.subs.length; i++){
+					sub = handle.subs[i];
+					stack.subs.push(getSubsStack(sub));
+				}
+				return stack;
+			};
+			function getUpStack(handle, __sub){
+				var stack;
+				stack = {"name": handle.name, "subs": []};
+				if (handle.error){
+					stack.name = '∆'+stack.name;
+				}
+				if (__sub){
+					stack.subs.push(__sub);
+				}
+				if (handle.up){
+					return getUpStack(handle.up, stack);
+				}
+				return stack;
+			};
+			function errorResponse(err, src, grm){
+				if (err.message === '∆'){
+					err.message = 1100;
+				}
+				if (err.message == 1100 || err.message == 1101){
+					if (Error.code && Error.code[err.target.types[1]]){
+						err.message = Error.code[err.target.types[1]];
+					}else {
+						print(grm.stack());
+					}
+				}
+				throw Error.create(err.message, err.target, new Error());
+			};
+			return Grammar;
+		})()
+		module.exports = Grammar;
+	});
+	return module.exports;
+})('./core/grammar/grammar.js', './core/grammar', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Standard = (function(){
+			var base;
+			function Standard(version, prepor){
+				this.prepor = prepor;
+				if (typeof version == 'Object'){
+					this.standard = version;
+					this.version = '';
+				}else {
+					this.standard = Standard[version];
+					this.version = version;
+				}
+				this.handle = {};
+			};
+			var Card = require("../card.js");
+			var Pattern = require("./pattern.js");
+			var Scope = require("../scope.js");
+			base = {};
+			Standard.prototype.read = function (node, loop, __read){
+				var ref, _handle;
+				if (!node || (!node.isSyntax && !node.isToken)){
+					return node;
+				}
+				// cache block
+				if (!loop && !__read && node.type == 'BlockNode'){
+					if (ref = cacheBlockNode(this, node)){
+						return ref;
+					}
+				}
+				_handle = this.handle;
+				if (_handle.target != node){
+					this.handle = {"target": node, "up": _handle, "variables": {}};
+				}
+				if (!loop){
+					if (Scope.test(node)){
+						node.scope.check(node);
+					}
+					if (ref = checkStandard(this, node.type, node)){
+						if (ref.isSyntax){
+							ref = this.read(ref, ref == node);
+						}
+					}
+				}
+				if (ref == null && node.isSyntax){
+					ref = new Card(node.type);
+					for (var item, i = 0; i < node.length; i++){
+						item = node[i];
+						if (item){
+							ref.add(this.read(item));
+						}
+					}
+				}
+				checkBlockNode(this, node, ref, loop);
+				this.handle = _handle;
+				return ref != null ? ref : node;
+			};
+			Standard.prototype.parser = function (name, node, params, __try){
+				if (this.standard[name] || base[name]){
+					return checkStandard(this, name, node, params);
+				}else if (!__try){
+					throw Error.create(5003, name, node, new Error());
+				}
+			};
+			Standard.prototype.pattern = function (patt, node, type){
+				var card;
+				if (/#|@/.test(patt)){
+					card = Pattern.parse(this, patt, node);
+					if (type){
+						card.type = type;
+					}
+					return card;
+				}
+				if (type){
+					return new Card(type, patt);
+				}
+				return patt;
+			};
+			Standard.es5 = base;
+			function cacheBlockNode(std, node){
+				var scope, parent, card;
+				scope = node.scope;
+				if (scope.type == 'Function' || scope.type == 'Class'){
+					parent = scope.parent;
+					card = new Card('Cache');
+					parent.cachePush('blocks', [card, node, std.handle]);
+					return card;
+				}
+			};
+			function checkBlockNode(std, node){
+				// if ref:
+				// 	if ref.type == 'Root' || ref.type == 'Block':
+				// 		block = ref;
+				// 	else if ref[1] && ref[1].type == 'Block':
+				// 		block = ref[1];		
+				// 	if block:
+				// 		console.log('?????????', ref.type, loop)
+				var scope, blocks, card;
+				scope = node.scope;
+				if (scope.target != node){
+					return;
+				}
+				if (blocks = scope.cache.blocks){
+					if (blocks.length){
+						for (var data, i = 0; i < blocks.length; i++){
+							data = blocks[i];
+							card = data[0];
+							node = data[1];
+							std.handle = data[2];
+							card.add(std.read(node, false, true));
+							checkBlockNode(std, node.scope.target);
+						}
+						blocks.length = 0;
+					}
+				}
+			};
+			function checkStandard(std, name, node, params){
+				var ref, sub_std;
+				ref = null;
+				setHandle(std.handle, 'standard', name);
+				if (std.prepor && std.prepor.standards[name]){
+					ref = std.prepor.standards[name].parse(std, node);
+				}
+				// 	std_conds = std.prepor.get(name, 'statement', 'expression'):
+				// 	if std_conds.read:
+				// 		ref = std_conds.read(std, node);
+				// ref = checkPattern(std, ref, node, params);
+				if (!ref){
+					if (sub_std = std.standard[name]){
+						setHandle(std.handle, 'version', std.version);
+						ref = checkCondition(std, sub_std, node, params);
+					}
+					if (ref === undefined && std.standard != base){
+						if (sub_std = base[name]){
+							setHandle(std.handle, 'version', 'base');
+							ref = checkCondition(std, sub_std, node, params);
+						}
+					}
+				}
+				if (ref === undefined){
+					if (!sub_std){
+						return node;
+					}
+				}
+				return ref;
+			};
+			function checkCondition(std, sub_std, node, params){
+				var list, ref;
+				if (sub_std.isStandard === 'list'){
+					list = [];
+					for (var i = 0; i < sub_std.length; i++){
+						if (ref = checkCondition(std, sub_std[i], node, params)){
+							list.push(ref);
+						}
+					}
+					return list.length ? list : "";
+				}
+				for (var cond in sub_std){
+					if (!sub_std.hasOwnProperty(cond)) continue;
+					if (['isStandard', 'default'].indexOf(cond)>=0){
+						continue;
+					}
+					setHandle(std.handle, 'condition', cond);
+					setHandle(std.handle, 'pattern', sub_std[cond]);
+					if (parseCondition(std, cond, node)){
+						if ((ref = checkPattern(std, sub_std[cond], node, params)) == undefined){
+							continue;
+						}
+						break;
+					}
+				}
+				if (ref == undefined){
+					if (sub_std['default']){
+						ref = checkPattern(std, sub_std['default'], node, params);
+					}
+				}
+				return ref;
+			};
+			function checkPattern(std, patt, node, params){
+				if (patt && patt.error){
+					throw Error.create(patt.error, node, new Error());
+				}
+				if (patt && patt.isStandard){
+					return checkCondition(std, patt, node, params);
+				}
+				if (patt && typeof patt == 'function'){
+					patt = patt.call(std, node, params);
+				}
+				if (patt && typeof patt == 'string'){
+					patt = Pattern.parse(std, patt, node);
+				}
+				return patt;
+			};
+			function parseCondition(std, text, node){
+				return Pattern.parse(std, Pattern.compile(text, 'Logic'), node);
+			};
+			function setHandle(handle, name, value){
+				if (!/standard|version|condition|pattern/.test(name)){
+					handle.variables[name] = value;
+				}else {
+					handle[name] = value;
+					switch (name){
+						case 'standard':
+							handle.version = null;
+						case 'version':
+							handle.condition = null;
+						case 'condition':
+							handle.pattern = null;
+							break;
+					}
+				}
+				return value;
+			};
+			return Standard;
+		})()
+		module.exports = Standard;
+	});
+	return module.exports;
+})('./core/standard/standard.js', './core/standard', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Prepor = (function(){
+			var Macro, Sugar, Grammar, Template;
+			Macro = require("./macro.js");
+			Sugar = require("./sugar.js");
+			Grammar = require("../../core/grammar");
+			Template = require("../template.js");
+			function Prepor(){
+				this.standards = {};
+				this.expression = {};
+				this.statement = {};
+				this.macro = {};
+				this.map = {};
+			};
+			Prepor.prototype.extend = function (){
+				for (var porc, i = 0; i < arguments.length; i++){
+					porc = arguments[i];
+					if (!porc){
+						continue;
+					}
+					for (var type in porc){
+						if (!porc.hasOwnProperty(type)) continue;
+						var data = porc[type];
+						for (var name in data){
+							if (!data.hasOwnProperty(name)) continue;
+							var value = data[name];
+							this[type][name] = value;
+						}
+					}
+				}
+			};
+			Prepor.prototype.add = function (type, name, args, body, location){
+				switch (type){
+					case 'expr':
+						this.map[name] = 'expression';
+						this.standards[name] = this.expression[name] = new Sugar(name, args, body, location);
+						break;
+					case 'stam':
+						this.map[name] = 'statement';
+						this.standards[name] = this.statement[name] = new Sugar(name, args, body, location);
+						break;
+					case 'macro':
+						this.map[name] = 'macro';
+						this.macro[name] = new Macro(name, args, body, location, this);
+						break;
+				}
+			};
+			Prepor.prototype.undef = function (){
+				for (var name, i = 0; i < arguments.length; i++){
+					name = arguments[i];
+					name = name.trim();
+					delete this.map[name];
+					delete this.macro[name];
+				}
+			};
+			Prepor.prototype.check = function (name, type, src){
+				var mark, _type, tar;
+				mark = name.match(/^(#*)/)[1];
+				if (mark){
+					name = name.substr(mark.length);
+				}
+				if (_type = this.map[name]){
+					if (type && _type != type){
+						return false;
+					}
+					tar = this[_type][name];
+					if (_type == 'macro' && src){
+						return checkMarco(this, tar, src, mark);
+					}
+					return tar;
+				}
+			};
+			function checkMarco(prepor, macro, src, mark){
+				var a, params, value, b;
+				a = src.index;
+				if (macro.args){
+					if (!(params = checkParams(prepor, src.next()))){
+						return false;
+					}
+					value = macro.parse(params);
+				}else {
+					value = macro.parse();
+				}
+				b = src.index;
+				src.delete(a, b);
+				if (value){
+					value = SText.clip(value);
+					if (mark == '#'){
+						value = '"'+value.replace(/(^|[^\\])"/g, '$1\\"')+'"';
+					}
+					src.insert(a+1, value);
+				}
+				return true;
+			};
+			function checkParams(prepor, src, type){
+				var a, node, b, text, params;
+				a = src.index;
+				node = Grammar.parser(type || 'Params', src, null, prepor);
+				if (node && node.type == 'ParamsExpr'){
+					b = src.index;
+					text = src.join(a, b).trim();
+					if (text[0] == '(' && SText.indexPair(text, '(', ')', 0)[1] == text.length-1){
+						text = text.slice(1, -1);
+					}
+					params = SText.split(text, ',', true);
+					return params;
+				}
+			};
+			Prepor.prototype.isPrepor = true;
+			return Prepor;
+		})()
+		module.exports = Prepor;
+	});
+	return module.exports;
+})('./preprocess/prepor/index.js', './preprocess/prepor', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var modules
+		modules = [
+			require("./const.js"),
+			require("./define.js"),
+			require("./control.js"),
+			require("./include.js")]
+		for (var modu, i = 0; i < modules.length; i++){
+			modu = modules[i];
+			for (var key in modu){
+				if (!modu.hasOwnProperty(key)) continue;
+				exports[key] = modu[key];
+			}
+		};
+	});
+	return module.exports;
+})('./preprocess/gatherer/index.js', './preprocess/gatherer', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Card, Syntax, Token, Grammar, Standard, readFile, writeFile
+		Card = require("../core/card.js")
+		Syntax = require("../core/syntax.js")
+		Token = require("../core/token.js")
+		Grammar = require("../core/grammar")
+		Standard = require("../core/standard")
+		readFile = SText.readFile
+		writeFile = SText.writeFile
+		function create(text, args){
+			var temps, a, ab, b, script;
+			temps = [];
+			if (text.indexOf('#script') != -1){
+				while ((a = text.indexOf('#script')) != -1){
+					if (ab = SText.indexPair(text, '#script', '#end', a)){
+						b = ab[1];
+					}else {
+						b = text.length;
+					}
+					if (a){
+						temps.push(text.substr(0, a));
+					}
+					if (script = createScript(text.slice(a+7, b), args)){
+						temps.push(script);
+					}
+					text = text.substr(b+4);
+				}
+				if (text){
+					temps.push(text);
+				}
+			}else {
+				temps = [text];
+			}
+			return temps;
+		}
+		module.exports.create = create
+		function createScript(script, args, prepor){
+			var temp;
+			if (args == null) args = [];
+			script = Tea.compile(script, prepor);
+			temp = "(function("+(args.join(','))+"){var __output__  = '', echo = write;function write(){for(var i=0; i<arguments.length; i++)__output__ += arguments[i];}"+script+";return __output__;})";
+			return eval(temp);
+		}
+		module.exports.createScript = createScript
+		function runScript(script, scope, prepor){
+			var args, params, fn;
+			args = [];
+			params = [];
+			if (scope){
+				for (var key in scope){
+					if (!scope.hasOwnProperty(key)) continue;
+					var value = scope[key];
+					args.push(key);
+					params.push(value);
+				}
+			}
+			fn = createScript(script, args, prepor);
+			return fn.apply(null, params);
+		}
+		module.exports.runScript = runScript
+		function concatModule(main, list){
+			var dirname, root;
+			dirname = main.dirName;
+			root = new Card('Root');
+			if (main.CAST[0].type == 'COMMENT' && /\#\!/.test(main.CAST[0].text)){
+				root.add(main.CAST[0]);
+			}
+			root.add(createModuleTmp());
+			for (var ctx, i = 0; i < list.length; i++){
+				ctx = list[i];
+				root.add(createModuleCard(Fp.relative(dirname, ctx.fileName), ctx.CAST, false));
+			}
+			root.add(createModuleCard(Fp.relative(dirname, main.fileName), main.CAST, true));
+			return root;
+		}
+		module.exports.concatModule = concatModule
+		function createModuleTmp(){
+			var tmp;
+			tmp = "var Module = (function(){_cache = {};_main  = new Module();function Module(filename, dirname){this.id = filename;this.filename = filename;this.dirname = dirname;this.exports = {};this.loaded = false;this.children = [];this.parent = null;};Module.prototype.require = function(file){var id = resolve(this.dirname, file);var mod = _cache[id];if (!mod && !/\.js/.test(id)){if(mod = _cache[id+'.js'])id = id+'.js';}if (!mod){if(mod = _cache[id+'/index.js'])id = id+'/index.js';}if (mod){this.children.push(id);return mod.loaded ? mod.exports : mod.load(this);}this.children.push(file);return module.require(file);};Module.prototype.load = function(parent){this.loaded = true;if(parent) this.parent = parent;this.creater();module.constructor._cache[this.id] = this;return this.exports;};Module.prototype.register = function(creater){var id = this.id;if (!_cache[id]){_cache[id] = this;this.creater = creater;}};Module.makeRequire = function(module){function require(path){return module.require(path);};require.main = _main;require.resolve = function(path){return resolve(module.dirname, path)};require.extensions = null;require.cache = null;return require;};Module.main = function(filename, dirname){_main.id = '.';_main.filename = filename;_main.dirname = dirname;_main.parent  = module.parent;return _main;};function resolve(from, to){if(/^(\\~|\\/)/.test(to)) return to;if (from && from != '.') to = from + '/' + to;var m = null;while( m = to.match(/\\/[^\\/]+?\\/\\.\\.\\/|\\/\\.\\//) ){to = to.substr(0, m.index) + to.substr(m.index+m[0].length-1);}return to;};return Module;})()";
+			return new Card('Module', tmp);
+		}
+		function createModuleCard(file, block, main){
+			var mod;
+			file = file.replace(/\.tea$/, '.js');
+			if (block[0].type == 'COMMENT' && /\#\!/.test(block[0].text)){
+				block.delete(0);
+			}
+			if (block.type == 'Root'){
+				block.type = 'Block';
+			}else {
+				block = new Card('Block', block);
+			}
+			block = new Card('Block', block);
+			mod = new Card('Module');
+			mod.add(main ? "module.exports = " : "", "(function(_filename, _dirname, main){var module  = "+(main ? 'Module.main(_filename, _dirname)' : 'new Module(_filename, _dirname)')+";var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){", block, "	});", main ? "\n	return module.load();" : "\n	return module.exports;", "\n})", "('"+file+"', '"+(Fp.dirName(file))+"', "+main+")");
+			return mod;
+		};
+	});
+	return module.exports;
+})('./preprocess/template.js', './preprocess', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		module.exports = {
+			"EOT": "\4",
+			"LF": "\n",
+			"BLANK": "\r  \t  \f  \ ",
+			"CONST": "true  false  null  undefined  Infinity  NaN",
+			"KEYWORD": "this  instanceof  in  extends  null  undefined  Infinity  true  false  if  while  with  catch  for  switch  case  default  else  try  do  finally  new  typeof  delete  void  return  break  continue  throw  var  function  let  enum  const  import  export  debugger  super  yield  class",
+			"IDENTIFIER": "$  prototype  property  extends  import  export  get  set  static  require  class  this  as  of  and  or  not  is",
+			"SYMBOL": ",  ;  .  :  ?  \\  \\\\  [  ]  {  }  (  )  //  /*  */  #!  #  =  +=  -=  *=  /=  %=  &=  >>=  <<=  >>>=  >  <  >=  <=  !=  !==  ==  ===  ++  --  !  ~  +  -  *  /  %  &  |  ^  >>  <<  >>>  &&  ||  **  ::  |=  ?=  =?  =|  @  ->  <-  >>  <<  >>>  <<<  =>  <=  ..  ...  `  '  \"  \"\"\"  '''  \"\"\"\"  ''''",
+			"QUOTE": "`  '  \"  \"\"\"  '''  \"\"\"\"  ''''",
+			"COMM": "//  /*  */  #!",
+			"BLOCKBREAK": ";  \n",
+			"PREFIX POSTFIX": "++  --",
+			"UNARY": "new  typeof  yield  void  not  delete  !  ~  -  +  ++  --",
+			"SPREAD": "...",
+			"PREC0": "*  /  %  **  \\\\",
+			"PREC1": "+  -",
+			"PREC2": ">>  <<  >>>",
+			"PREC3": ">  <  >=  <=  instanceof  in  of  as  @",
+			"PREC4": "!=  !==  ==  ===  is  not is",
+			"PREC5": "^  ~  &  |",
+			"PREC6": "and  or  &&  ||",
+			"ASSIGN": "=  +=  -=  *=  /=  %=  &=  |=  >>=  <<=  >>>=  ?=  =?  |=  =|",
+			"TERNARY": "?",
+			"LINK": ".  ::  ..",
+			"OPEN": "{  (  [",
+			"CLOSE": "}  ]  )",
+			"BLOCK": ":  {",
+			"BITWISE": "PREC2  PREC5",
+			"COMPUTE": "PREC0  PREC1  BITWISE",
+			"COMPARE": "PREC3  PREC4",
+			"LOGIC": "PREC6",
+			"BINARY": "COMPUTE  COMPARE  LOGIC  ASSIGN",
+			"JOINT": "UNARY  TERNARY  ASSIGN  BINARY  LINK  [  (  ,  ->  <-  =>  <=",
+			"END": "LF  EOT  BLOCKBREAK"};
+	});
+	return module.exports;
+})('./settings/token.js', './settings', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		module.exports = {
+			"COMMENT": require("./comment.js"),
+			"Root": require("./root.js"),
+			"Block": require("./block.js"),
+			"StamBlock": "Block | Statement@:BlockStam",
+			"Statement": "LabelStam | (\t\\{ → [JsonAssignExpr JsonExpr Block] | \\[ → ArrayAssignExpr | #SUGAR(statement) | [Declaration Keyword MethodDecl LinkStam Comma] )\\n (CLOSE → | &==[Expression] [SeleteLeft SeleteRight]@@SeleteStam | SeleteLeft@@SeleteStam | END∅∆1101)",
+			"Expression": "[ function → FunctionExpr, class → Class, Ternary ] (&==[Access] (Params@@CallExpr | (=@@AssignExpr | ASSIGN@@AssignPatt) AssignRight∆1107))?",
+			"Object": "CONST | [ \\@ → AtExpr, \\[ → ArrayExpr, \\( → CompelExpr, \\{ → JsonExpr, super → SuperExpr, require → RequireExpr ] | VariableExpr | #SUGAR(expression)",
+			"CONST": "REGEXP | STRING | TAG",
+			"REGEXP": "[\\/ \\/=] → #CONCAT( \\/=\\\\|\\/...*\\/\\\\|\\/ [g i m y]*, , REGEXP CONST)",
+			"STRING": "QUOTE → #CONCAT( , , STRING CONST)",
+			"TAG": "#+ [IDENTIFIER KEYWORD]",
+			"Access": "Object (MemberExpr@~AccessExpr)*",
+			"Value": "[@ this]?@@ThisExpr → Object (MemberExpr@~AccessExpr | ParamsExpr@~CallExpr)* SlicePatt?@~SliceExpr",
+			"MemberExpr": "[ . → . [IDENTIFIER KEYWORD]∆1108, \\[ → \\\\[ CommaExpr \\\\], :: → :: [IDENTIFIER KEYWORD]?]",
+			"AtExpr": "@ [IDENTIFIER KEYWORD]?",
+			"SuperExpr": "super (MemberExpr*)@:SuperMember Params?",
+			"SlicePatt": "[∅ ]∅ | [∅ (Compute? : Compute?) ]∆1109∅",
+			"JsonExpr": "\\{∅ ( \\}∅ | JsonItem (,?∅ JsonItem)* ,*∅ \\}∆1123∅)",
+			"JsonItem": "set→ SetterDecl | get→ GetterDecl | IDENTIFIER→ [+1, \\(]→ MethodDecl | ([NameExpr NUMBER STRING] : Expression)@:AssignExpr",
+			"ArrayExpr": "[∅ ]∅ | [∅ Expression (,?∅ Expression)* ,*∅ ]∆1124∅",
+			"VariableExpr": "IDENTIFIER",
+			"NameExpr": "IDENTIFIER | KEYWORD {id}!∆1006",
+			"Declaration": "[ var → VarStam, let → LetStam, const → ConstStam, function → FunctionDecl, class → Class, import → ImportStam, export → ExportDecl, static → StaticDecl, get → GetterDecl, set → SetterDecl, prototype → ProtoDecl, property → PropertyDecl, constructor → ConstructorDecl]",
+			"Keyword": "[ return → ReturnStam, break → BreakStam, continue → ContinueStam, throw → ThrowStam, debugger → DebuggerStam, if → IfStam, while → WhileStam, do → DoWhileStam, with → WithStam, try → TryStam, switch → SwitchStam, for → ForStam, yield → YieldStam]",
+			"YieldStam": "yield Expression",
+			"ImportStam": "import!∆1",
+			"Unary": "not Expression@@NotExpr | PREFIX Value@@PrefixExpr | new Value@@NewExpr | UNARY #Unary@@UnaryExpr | Value POSTFIX?@@PostfixExpr",
+			"ComputeLv0": "Unary (PREC0 Unary@~ComputeExpr)*",
+			"ComputeLv1": "ComputeLv0 (PREC1 ComputeLv0@~ComputeExpr)*",
+			"ComputeLv2": "ComputeLv1 (PREC2 ComputeLv1@~ComputeExpr)*",
+			"CompareLv3": "ComputeLv2 (PREC3 ComputeLv2@~CompareExpr)*",
+			"Compare": "CompareLv3 (PREC4 CompareLv3@~CompareExpr)*",
+			"Compute": "Compare (PREC5 Compare@~ComputeExpr)*",
+			"Operate": "Compute (PREC6 [Keyword Assign Compute]@~LogicExpr)*",
+			"Binary": "Assign | Operate",
+			"Ternary": "Operate (\\?@@TernaryExpr [Declaration Keyword Expression] (: [Declaration Keyword Expression])?)?",
+			"Rest": "...?∅@@RestExpr IDENTIFIER",
+			"AssignRight": "[ArrowExpr Expression]",
+			"ArrayAssignExpr": "[∅ (Rest (,∅ Rest)*)@:ArrayPatt ]∅ = AssignRight",
+			"JsonAssignExpr": "{∅ ((IDENTIFIER (\\: IDENTIFIER)?)@?AssignExpr (,∅ (IDENTIFIER (\\: IDENTIFIER)?)@?AssignExpr)*)@:JsonPatt }∅ = AssignRight",
+			"Assign": "[ \\[ → ArrayAssignExpr, \\{ → JsonAssignExpr, Access (=@@AssignExpr | ASSIGN@@AssignPatt) AssignRight∆1107 ]",
+			"ArgusItem": "[ ... → Rest, \\[ → ArrayAssignExpr, \\{ → JsonAssignExpr, VariableExpr (= AssignRight)?@@AssignExpr ]",
+			"Argus": "ArgusItem (,∅ ArgusItem)*",
+			"ArgusStam": "ArgusItem (,∅ ArgusItem)*",
+			"ArgusExpr": "\\(∅ ( \\)∅ | ArgusItem (,∅ ArgusItem)* \\)∅)",
+			"ParamsGroup": "(AssignRight (, [\\, \\)]→)*) (,∅ AssignRight (, [\\, \\)]→)*)*",
+			"ParamsExpr": "\\(∅ ( \\)∅ | ,* ParamsGroup \\)∆1104∅)",
+			"Params": "ParamsExpr | [--1, BLANK]→ [--2, !END]→ ParamsGroup@:ParamsExpr",
+			"CommaExpr": "Expression (,∅ Expression∆1125)*",
+			"Comma": "Expression (,∅ Expression∆1125)*@@CommaExpr",
+			"CompelExpr": "(∅ CommaExpr∆1126 )∅",
+			"LabelStam": "IDENTIFIER : Statement",
+			"SeleteLeft": "(<- | if\\n) Comma∆1127",
+			"SeleteRight": "[&& || and or ->] Statement∆1127",
+			"LinkStam": "Access (..∅ (Access Params?)@:LinkPatt)+",
+			"ArrowExpr": "(ArgusExpr | IDENTIFIER@:ArgusExpr) =>∅ ({→ [JsonExpr Block] | ReturnStam | ThrowStam | Expression)",
+			"VarStam": "var∅ ArgusStam∆1007",
+			"LetStam": "let∅ ArgusStam∆1009",
+			"ConstStam": "const∅ ArgusStam∆1010",
+			"ReturnStam": "return\\n CommaExpr?",
+			"BreakStam": "break\\n IDENTIFIER?",
+			"ContinueStam": "continue\\n IDENTIFIER?",
+			"ThrowStam": "throw\\n CommaExpr?",
+			"RequireExpr": "require Params",
+			"DebuggerStam": "debugger",
+			"FunctionExpr": "function \\*?@@GeneratorExpr #NameExpr(id)?@@FunctionDecl ArgusExpr Block",
+			"FunctionDecl": "function \\*?@@GeneratorDecl #NameExpr(id)∆1024 ArgusExpr Block",
+			"MethodDecl": "NameExpr ArgusExpr [{ :]→ Block∆1106",
+			"Class": "class@@ClassExpr (extends! → #NameExpr(id)?@@ClassDecl) (extends Params∆1021)?@:ExtendsExpr Block",
+			"GetterDecl": "get∅ NameExpr ArgusExpr?@!ArgusExpr Block",
+			"SetterDecl": "set∅ NameExpr ArgusExpr Block",
+			"StaticDecl": "static∅ [MethodDecl ArgusStam]",
+			"ProtoDecl": "prototype∅ [MethodDecl ArgusStam]",
+			"PropertyDecl": "property∅ [MethodDecl ArgusStam]",
+			"ConstructorDecl": "constructor@:NameExpr ArgusExpr [{ :]→ Block∆1106",
+			"ExportDecl": "export∅ (default [MethodDecl Declaration Expression] | [MethodDecl Declaration ArgusStam])∆1011",
+			"If": "if ConditionExpr StamBlock∆1012@@IfPatt",
+			"Else": "else@@ElsePatt (if∅ ConditionExpr@@ElseIfPatt | ConditionExpr [{ :]→@@ElseIfPatt)? StamBlock∆1019",
+			"Try": "try StamBlock∆1016@@TryPatt",
+			"Catch": "catch ConditionExpr StamBlock@@CatchPatt",
+			"Finally": "finally StamBlock@@FinallyPatt",
+			"WhileStam": "while ConditionExpr StamBlock∆1013",
+			"WithStam": "with ConditionExpr StamBlock∆1014",
+			"SwitchStam": "switch ConditionExpr (\\:∅ #Case(indent)* | {∅ #Case* }∆1110∅)@:BlockNode∆1017",
+			"Case": "(case@@CaseStam CommaExpr | default@@DefaultStam) \\:∆1020∅ ({indent} #Block(indent, case, default) | {indent}! #Block(brace, case, default))?",
+			"ConditionExpr": "Comma &==[CompelExpr]?@@=ConditionExpr",
+			"ForStam": "for ForCondition∆1022 StamBlock∆1106",
+			"ForCondition": require("./for.js"),
+			"IfStam": "If (#INDENT Else)*",
+			"TryStam": "Try (#INDENT Catch)? (#INDENT Finally)?",
+			"DoWhileStam": "do StamBlock∆1015 (#INDENT while ConditionExpr)?"};
+	});
+	return module.exports;
+})('./settings/syntax/index.js', './settings/syntax', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		module.exports = {
+			"Object": 'CONST  IDENTIFIER  NUMBER  STRING  REGEXP  COMMENT  JsonExpr  ArrayExpr',
+			"Variable": 'VariableExpr',
+			"Access": 'Variable  AccessExpr  SuperExpr  ThisExpr  SliceExpr',
+			"Unary": 'UnaryExpr  PrefixExpr  PostfixExpr  NotExpr  NewExpr',
+			"Value": 'Object  Access  Unary  RequireExpr  CompelExpr  CallExpr',
+			"Operate": 'CompareExpr  ComputeExpr  LogicExpr',
+			"Assign": "AssignExpr  ArrayAssignExpr  JsonAssignExpr",
+			"Binary": 'Value  Operate  Assign',
+			"Ternary": 'TernaryExpr',
+			"Comma": 'CommaExpr ArgusExpr ArgusStam ParamsExpr JsonExpr ArrayExpr JsonPatt ArrayExpr',
+			"Expression": 'Binary  Ternary  FunctionExpr  ClassExpr  CommaExpr',
+			"IfStam": 'IfPatt  ElseIfPatt  ElsePatt',
+			"TryStam": 'TryPatt  CatchPatt  FinallyPatt',
+			"Control": 'IfStam  WhileStam  DoWhileStam  WithStam  ForStam  SwitchStam  CaseStam  DefaultStam  TryStam',
+			"Statement": 'Control  VarStam  LetStam  ConstStam  ClassDecl  ReturnStam  BreakStam  ContinueStam  DebuggerStam  ThrowStam  LabelStam  LinkStam  SeleteStam',
+			"Declaration": 'FunctionDecl  MethodDecl  GetterDecl  SetterDecl  StaticDecl  ProtoDecl  PropertyDecl  ConstructorDecl  ExportDecl',
+			"Block": 'BlockStam  BlockNode',
+			"NodeBlock": 'Block  Root',
+			"Function": 'FunctionExpr  FunctionDecl  GetterDecl  SetterDecl  MethodDecl  PackageExpr  ArrowExpr  ConstructorDecl',
+			"Let": 'IfPatt  ElseIfPatt  ElsePatt  WhileStam  DoWhileStam  WithStam  ForStam  SwitchStam',
+			"Class": 'ClassExpr  ClassDecl',
+			"Scope": 'Json  Let  Class  Function  Root'};
+	});
+	return module.exports;
+})('./settings/node.js', './settings', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Variable = 'VariableExpr ArrayPatt JsonPatt RestExpr'
+		var Assign = 'AssignExpr[0] AssignPatt[0] ArrayAssignExpr[0] JsonAssignExpr[0]'
+		module.exports = [
+			"ClassDecl                                      -> NameExpr -> class",
+			"FunctionDecl ConstructorDecl                   -> NameExpr -> function",
+			"Class      <- GetterDecl SetterDecl MethodDecl -> NameExpr -> proto",
+			"Root                             -> MethodDecl -> NameExpr -> function",
+			"ExportDecl -> GetterDecl SetterDecl MethodDecl -> NameExpr -> function",
+			"!JsonExpr StaticDecl              -> MethodDecl -> NameExpr -> static",
+			"ProtoDecl PropertyDecl           -> MethodDecl -> NameExpr -> proto",
+			"                            MethodDecl -> NameExpr -> function",
+			"ProtoDecl PropertyDecl ->< "+Assign+" -> "+Variable+" -> proto",
+			"!JsonExpr StaticDecl    ->< "+Assign+" -> "+Variable+" -> static",
+			"VarStam ConstStam VarPatt    ->< "+Assign+" -> "+Variable+" -> defined",
+			"LetStam LetPatt               ->< "+Assign+" -> "+Variable+" -> let",
+			"ExportDecl             ->< "+Assign+" -> "+Variable+" -> undefined",
+			"                           "+Assign+" -> "+Variable+" -> undefined",
+			"                           BlockNode -> VariableExpr -> unknow",
+			"                                        VariableExpr -> unknow",
+			"ArgusExpr ->< "+Assign+" -> "+Variable+" -> argument"];
+	});
+	return module.exports;
+})('./settings/scope.js', './settings', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		/*
+		#内部变量
+		    @ref @i                          生成一个随机的标识符名称
+		    @name @[name]					 等于 node.scope.valid.name
+		    @super @[super]                  等于 node.scope.query( 'Class' ).super
+		    @[Clase] @[Function] @[Root]     等于 node.scope.query( ... )
+		
+		#存取表达式
+		    @                                带表传入的对象
+		    @[@]                             带表传入的对象的父节点
+		    @[0.1]
+		 */
+		module.exports = {
+			"Root Block BlockStam": require("./block.js"),
+			"BlockNode": "{#Block}",
+			"RequireExpr": require("./require.js"),
+			"TestPatt": {"--test": "@"},
+			"REGEXP": require("./regexp.js"),
+			"STRING": require("./string.js"),
+			"ArrayExpr": "[#COMMA]",
+			"JsonExpr": "{#COMMA}",
+			"CommaExpr": "#COMMA",
+			"CompelExpr": "(#COMMA)",
+			"VarStam ConstStam LetStam": "var #COMMA(@0)",
+			"DebuggerStam": "@0",
+			"LabelStam": "@0 @1 @2",
+			"ArgusExpr": require("./argus.js"),
+			"PrefixExpr PostfixExpr": '@0@1',
+			"FunctionDecl": "@0 @1@2@3",
+			"FunctionExpr": "@0@1@2",
+			"GeneratorDecl": {"default": {"error": 1121}},
+			"GeneratorExpr": {"default": {"error": 1121}},
+			"ParamsExpr": "(#COMMA( `, --> null` ))",
+			"VariableExpr": "#ALIAS",
+			"NewExpr": "@0 @1",
+			"NotExpr": {"@1 == [Object Access]": '!@1', "default": '!(@1)'},
+			"UnaryExpr": {"@0 === [+]": "Math.abs(@1)", "@0 == SYMBOL": "@0@1", "default": "@0 @1"},
+			"ArrayAssignExpr": {"#CHECK(@0)": require("./arrayassign.js")},
+			"JsonAssignExpr": {"#CHECK(@0)": require("./jsonassign.js")},
+			"AssignPatt": {
+				"@1 === [?=]": "@[0] == null && (@[0] = @[2])",
+				"@1 === [=?]": "#VALUE(@[2], ref) != null && (@[0] = @ref)",
+				"@1 === [|=]": "!@[0] && (@[0] = @[2])",
+				"@1 === [=|]": "#VALUE(@[2], ref) && (@[0] = @ref)",
+				"default": "@0 @1 @2"},
+			"AssignExpr": {
+				"@0 == SliceExpr": {
+					"@[0.1.2]": "[].splice.apply(@[0.0], [@[0.1.0], @[0.1.2]].concat(@2))",
+					"@[0.1.1]": {
+						"@[0.1.1] === :": "[].splice.apply(@[0.0], [@[0.1.0], 0].concat(@2))",
+						"default": "[].splice.apply(@[0.0], [0, @[0.1.1]].concat(@2))"},
+					"default": "@[0.0][@[0.0].length + 1] = @2"},
+				"@[@] == JsonExpr": "#STR(@0): @2",
+				"default": "@0 @1 @2"},
+			"SliceExpr": {
+				"@[1.2]": "@0.slice(@[1.0], @[1.2])",
+				"@[1.1]": {"@[1.1] === :": "@0.slice(@[1.0])", "default": "@0.slice(0, @[1.1])"},
+				"default": "@0.slice()"},
+			"ComputeExpr": {
+				"@1 === **": "Math.pow(@0, @2)",
+				"@1 === \\\\\\\\": "Math.floor(@0, @2)",
+				"default": "@0@1@2"},
+			"CompareExpr": {
+				"@0 == CompareExpr": "@0 && @[0.2] @1 @2",
+				"@1 === [as @]": {"@2 == STRING": "typeof @0 == @2", "default": "@0 instanceof @2"},
+				"@1 === in": {"@2 == ArrayExpr": "@2.indexOf(@0)>=0", "default": "@2.hasOwnProperty(@0)"},
+				"@1 === of": {"@2 == ArrayExpr": "@2.indexOf(@0)>=0", "default": "[].indexOf.call(@0, @2)>=0"},
+				"@1 === is": "@0 === @2",
+				"@1 === not\\ is": "@0 !== @2",
+				"default": "@0 @1 @2"},
+			"LogicExpr": {
+				"@m = @1": {"@1 == or && @m = \\|\\|": undefined, "@1 == and && @m = \\&\\&": undefined},
+				"@2 == Expression": "@0 @m #VALUE(@2)",
+				"@m == \\|\\|": "if (!#VALUE(@0)) @2",
+				"default": 'if (@0) @2'},
+			"TernaryExpr": {
+				"@3": {
+					"@2 == Expression && @4 == Expression": "#VALUE(@0) @1 #VALUE(@2) @3 #VALUE(@4)",
+					"default": "if (@0) @2; else @4"},
+				"@2 == Expression": "#VALUE(@0, ref) != null ? @ref : @2",
+				"default": "if (@0) @2"},
+			"SeleteStam": {
+				"@1 === [if <-]": "if (@2) @0",
+				"@1 === [or \\|\\|]": "if (!#VALUE(@0)) @2",
+				"default": "if (@0) @2"},
+			"ExportDecl": {
+				"@0 === default": {
+					"@1 == [FunctionDecl MethodDecl] && #HEAD(module.exports = @[1.name])": '@1',
+					"@1 == [ClassDecl]": '#LIST(`@[1]`, `module.exports = @[1.name]`)',
+					"@1 == [Value Binary Ternary]": 'module.exports = #VALUE(@1)',
+					"@[1.0] == ArgusStam": "#LIST(`@[1]`, `module.exports = @[1.0.-1.0]`)",
+					"default": "#LIST(`@[1]`, `module.exports = @[1.-1.0]`)"},
+				"@0 == [GetterDecl SetterDecl]": '@0',
+				"@0 == [FunctionDecl MethodDecl ClassDecl]": '#LIST(`@[0]`, `module.exports.@[0.name] = @[0.name]`)',
+				"@0 == VarStam": "#LIST(`@[0]`, #EACH( @[0.0], `module.exports.@[0] = #VALUE(@[0])` ))",
+				"@0 == ArgusStam": "#EACH(@0, `exports.@[0] = #VALUE(@)` )",
+				"default": {"error": 1103}},
+			"MemberExpr": {
+				"@0 === [": {"@[1.-1] === UnaryExpr &&  @[1.-1.0] === [-]": "@0@[@.0].length@1@2"},
+				"@0 === ::": {"@1": ".prototype.@1", "default": ".prototype"},
+				"default": "@"},
+			"LinkStam": {"@[@] === AssignExpr": "(#COMMA( 1 ))", "default": "#COMMA( 1 )"},
+			"LinkPatt": {"@0 == CompelExpr": "(@[@.0].#COMMA(@0))", "default": "@[@.0].@"},
+			"ArrowExpr": {
+				"@1 == Expression": "function@0{return @1}",
+				"@1 == BlockNode": "function@0@1",
+				"default": "function@0{@1}"},
+			"ReturnStam BreakStam ContinueStam ThrowStam": '@0 @1',
+			"ConditionExpr": "(@0)",
+			"IfPatt WhileStam WithStam": "@0 @1@2",
+			"ElseIfPatt": "@0 if @1@2",
+			"ElsePatt": "@0 @1",
+			"DoWhileStam": {"@2": "@0 @1 @2 @3", "default": "@0 {#Block(@1, break)} while(true)"},
+			"TryStam": {"@1": "@", "default": "@ catch (_e){}"},
+			'CatchPatt': "@0 @1 @2",
+			"TryPatt FinallyPatt": "@0 @1",
+			"SwitchStam": "@0 @1@2",
+			"CaseStam": {
+				"@[2.-1] == [ReturnStam BreakStam] ||\n         @[2.-1] == ContinueStam && #DEL(@[2.-1])": '#EACH(@1, `case @:`)#Block(@2)',
+				"default": "#EACH(@1, `case @:`)#Block(@2, break)"},
+			"DefaultStam": {
+				"@[1.-1] == [ReturnStam BreakStam] ||\n         @[1.-1] == ContinueStam && #DEL(@[1.-1])": '@0:#Block(@1)',
+				"default": "@0:#Block(@1, break)"},
+			"ForStam": "@0 (@1)@2",
+			"ForCondition": require("./for.js"),
+			"ClassExpr ClassDecl": require("./class.js"),
+			"AtExpr": require("./at.js"),
+			"SuperExpr": {
+				"!@super": {"error": 1115},
+				"@1 == SuperMember": {"@2 == ParamsExpr": "@super@1.call(this, #COMMA(@2))", "default": "@super@1"},
+				"@1 == ParamsExpr": "@super.@[name].call(this, #COMMA(@1))",
+				"default": "@super.@[name]"},
+			"MethodDecl": {
+				"@[@] == JsonExpr": "\"@0\": function@1@2",
+				"@[scope.parent.type] === Class": "@[scope.parent.name].prototype.@0 = function @1@2",
+				"default": "function @0@1@2"},
+			"SetterDecl": {
+				"@[@] == JsonExpr": 'set @0@1@2',
+				"@[@] == ExportDecl": "module.exports.__defineSetter__(\"@0\", function@1@2)",
+				"@[scope.parent.type] == Class": "@[Class.name].prototype.__defineSetter__(\"@0\", function@1@2)",
+				"default": {"error": 1114}},
+			"GetterDecl": {
+				"@[@] == JsonExpr": "get @0@1@2",
+				"@[@] == ExportDecl": "module.exports.__defineGetter__(\"@0\", function@1@2)",
+				"@[scope.parent.type] == Class": "@[Class.name].prototype.__defineGetter__(\"@0\", function@1@2)",
+				"default": {"error": 1113}},
+			"StaticDecl": {
+				"@[scope.valid.type] == Class": {
+					"@0 == MethodDecl": "@[Class.name].@[0.0] = function@[0.1]@[0.2]",
+					"@0 == ArgusStam": "#COMMA( `@[Class.name].@` )"},
+				"default": {"error": 1112}},
+			"ProtoDecl": {
+				"@[scope.valid.type] == Class": {
+					"@0 == MethodDecl": "@[Class.name].prototype.@[0.0] = function@[0.1]@[0.2]",
+					"@0 == ArgusStam": "#COMMA( `@[Class.name].prototype.@` )"},
+				"default": {"error": 1116}},
+			"PropertyDecl": {
+				"@[scope.valid.type] == Class": {
+					"@0 == MethodDecl": "#INSERT( @0, propertys, `this.@[0] = function@[1]@[2]`, Class )",
+					"@0 == ArgusStam": "#INSERT( propertys, `#COMMA( `this.@` )`, Class )"},
+				"default": {"error": 1117}},
+			"ConstructorDecl": {
+				"@[scope.parent.type] === Class": "#INSERT( constructors, @, Class )",
+				"default": "function @0@1@2"}};
+	});
+	return module.exports;
+})('./settings/standards/es5/index.js', './settings/standards/es5', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		module.exports = {
+			"0": 'Tea core not init',
+			"1": 'not supported',
+			"2": "max loop",
+			"3": "Node Object parent is circular",
+			"1000": "Syntax Error",
+			"1001": 'nonsupport, so sorry',
+			"1002": 'The %s declaration statement need at class inward',
+			"1003": 'Identifier "%s" is an const declaration, cant modify',
+			"1004": 'Source index pair cant file "%s" token',
+			"1005": 'class expression need a name',
+			"1006": 'keyword cant do name',
+			"1007": 'Var declaration syntax error',
+			"1009": 'Let declaration syntax error',
+			"1010": 'Const declaration syntax error',
+			"1011": 'Export declaration syntax error',
+			"1012": 'If statement syntax error',
+			"1013": 'While statement syntax error',
+			"1014": 'With statement syntax error',
+			"1015": 'Do while statement syntax error',
+			"1016": 'Try while statement syntax error',
+			"1017": 'Switch while statement syntax error',
+			"1018": 'For statement syntax error',
+			"1019": 'Else statement syntax error',
+			"1020": 'Case or default statement syntax error',
+			"1021": 'extends statement syntax error',
+			"1022": 'Condition expression of for statement syntax error',
+			"1023": 'Condition expression miss right ")" token',
+			"1024": 'Function declaration nedd a name',
+			"1100": 'Unexpected statement',
+			"1101": 'Unexpected statement end',
+			"1102": '%s statement syntax error',
+			"1103": 'Export statement params type error',
+			"1104": 'Params expression miss right ")" token',
+			"1105": 'Wrong token "%s" for block statement',
+			"1106": 'Invalid block of statement',
+			"1107": 'Invalid right-hand side in Assign expression',
+			"1108": 'Unexpected Access expression',
+			"1109": 'Invalid right token "]" in Access expression',
+			"1110": 'Invalid right token "}" in Block statement',
+			"1111": 'Unexpected token "%s"',
+			"1112": 'Static methods error',
+			"1113": 'Getter methods error',
+			"1114": 'Setter methods error',
+			"1115": 'Super statement error',
+			"1116": 'Prototype methods error',
+			"1117": 'Property methods error',
+			"1118": 'Unexpected token',
+			"1119": '"#!" symbole must side in the first line of the source',
+			"1120": 'Illegal string template expression',
+			"1121": 'ES5 standard dont supported',
+			"1122": '',
+			"1123": 'Json expression miss right "}" token!',
+			"1124": 'Array expression miss right "]" token!',
+			"1125": 'Unexpected comma token',
+			"1126": 'Unexpected compel expression',
+			"1127": 'Invalid right-hand side in selete expression',
+			"2000": 'Pre-Process error',
+			"2001": 'Include Processor Cannot find file "%s"',
+			"2002": 'Unexpected tag of control pre-process',
+			"2003": 'Replace loop in macro "%s"',
+			"2004": "#script runing error: %s",
+			"4000": 'Grammar Module Error',
+			"4001": 'Unexpected syntax parser "%s"',
+			"4002": 'Unexpected parser "%s" in "%s" syntax pattern object',
+			"5000": 'Standard Module Error',
+			"5001": 'Substandard parse node name "%s"',
+			"5002": 'Standard Module not has "%s" method',
+			"5003": 'Undefined Standard parser "%s"',
+			"5004": 'Standard Card object cant add a "%s" type object \n\n<stack>',
+			"5005": 'Undefined Standard cache name "%s"',
+			"5006": 'Invalid standard logic pattern "%s"',
+			"5007": 'Undefined standard "%s"',
+			"ASSIGN": "Invalid left-hand side in assignment"};
+	});
+	return module.exports;
+})('./helper/code.js', './helper', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Asset = (function(){
+			var Method, Token, cache, conf_pack, conf_set, logic_symbol, conf_re;
+			Method = require("./method.js");
+			Token = require("../token.js");
+			cache = Jsop.data();
+			conf_pack = {
+				"@@=": "rename pattern",
+				"@@": "pattern name",
+				"@=": "rename response",
+				"@?": "check response",
+				"@~": "packing matched",
+				"@:": "response name",
+				"@!": "check empty"};
+			conf_set = {
+				"\\n": "lf",
+				"∆": "error",
+				"∅": "ig",
+				"→": "test",
+				"+?": "smallest mode",
+				"*?": "smallest mode",
+				"+": "mode",
+				"*": "mode",
+				"?": "mode",
+				"!": "mode"};
+			logic_symbol = /^&(==|===|!=|!==)\[(.*?)\]$/;
+			conf_re = new RegExp('(?:('+SText.re(Object.keys(conf_set))+'|∆(\\d*))|'+'('+SText.re(Object.keys(conf_pack))+')([A-Za-z]{3,}))$');
+			function Asset(str){
+				this.config = {"mode": ''};
+				this.type = null;
+				this.content = null;
+				this.param = null;
+				this.string = str;
+				if (str){
+					str = checkConfig(this, str);
+					if (str == '*'){
+						this.type = '*';
+						this.content = str;
+					}else {
+						checkPairAsset(this, str) || checkMethodAsset(this, str) || checkLogicAsset(this, str) || checkSubAsset(this, str) || checkNodeAsset(this, str) || checkCodeAsset(this, str);
+					}
+				}
+			};
+			Asset.prototype.parse = function (src, grm){
+				switch (this.type){
+					case '*':
+						return src.current;
+					case 'Codes Test':case 'Code Test':
+						return parseCodeAsset.call(this, src, grm);
+					case 'Pair Test':
+						return parsePairAsset.call(this, src, grm);
+					case 'Method Test':
+						return parseMethodAsset.call(this, src, grm);
+					case 'Node Test':
+						return parseNodeAsset.call(this, src, grm);
+					case 'Logic':
+						return parseLogicAsset.call(this, src, grm);
+					case 'Sub':
+						return;
+				}
+			};
+			Asset.prototype.isAsset = true;
+			Asset.compile = function(str){
+				if (!cache[str]){
+					return cache[str] = new Asset(str);
+				}
+				return cache[str];
+			};
+			Asset.parse = function(asset, src, grm){
+				if (!asset.isAsset){
+					asset = Asset.compile(asset);
+				}
+				return asset.parse(src, grm);
+			};
+			// compile asset 
+			function checkConfig(self, str){
+				var config, m, name;
+				config = self.config;
+				while (m = str.match(conf_re)){
+					if (m.index == 0){
+						break;
+					}
+					if (m.index === 1 && str[0] === '\\'){
+						if (m[0].length > 1 && m[1] && !m[2]){
+							m.index += 1;
+							m[1] = m[1].substr(1);
+						}else {
+							break;
+						}
+					}
+					if (m[1]){
+						if (m[2]){
+							config.error = parseInt(m[2]);
+						}else {
+							name = conf_set[m[1]];
+							if (name == 'smallest mode'){
+								config.smallest = true;
+								config.mode = m[1][0];
+							}else {
+								config[name] = m[1];
+							}
+						}
+					}else if (m[3]){
+						config.pack = conf_pack[m[3]];
+						config.name = m[4];
+					}
+					str = str.substr(0, m.index);
+				}
+				return str;
+			};
+			function checkPairAsset(self, str){
+				var m;
+				if (m = str.match(/^([^\. \(]+?)\.\.\.([^\. ]+)$/)){
+					self.type = 'Pair Test';
+					self.content = [SText.cleanESC(m[1]), SText.cleanESC(m[2])];
+					return true;
+				}
+			};
+			function checkMethodAsset(self, str){
+				var m;
+				if (m = str.match(/^\[(.*?)\]$/)){
+					self.type = 'Method Test';
+					self.content = /→/.test(m[1]) ? 'ROUTE' : 'IS';
+					self.param = SText.split(m[1], ',', 'params', true);
+					return true;
+				}
+				if (m = str.match(/^#(\w+)(?:\((.*?)\))?$/)){
+					self.type = 'Method Test';
+					self.content = m[1];
+					self.param = m[2] ? SText.split(m[2], ',', 'params', true) : [];
+					return true;
+				}
+				if (m = str.match(/^\{(\w+)\}$/)){
+					self.type = 'Method Test';
+					self.content = 'ISPARAM';
+					self.param = [m[1]];
+					self.config.test = true;
+					return true;
+				}
+			};
+			function checkLogicAsset(self, str){
+				var m;
+				if (m = str.match(logic_symbol)){
+					self.type = 'Logic';
+					self.content = m[1];
+					self.param = SText.split(m[2], ',', 'trim', true);
+					self.config.test = true;
+					return true;
+				}
+			};
+			function checkSubAsset(self, str){
+				var m;
+				if (str[0] == '(' && str[str.length-1] == ')'){
+					str = str.slice(1, -1);
+					if (m = str.match(/^(\?\!|\?\=|\?\:)/)){
+						switch (m[1]){
+							case '?:':
+								self.config.ig = true;
+								break;
+							case '?!':
+								self.config.mode = '!';
+								break;
+							case '?=':
+								self.config.test = true;
+								break;
+						}
+						str = str.substr(m[0].length);
+					}
+					self.type = 'Sub';
+					self.content = str;
+					return true;
+				}
+			};
+			function checkNodeAsset(self, str){
+				if (/^[A-Z]\w+$/.test(str)){
+					self.type = 'Node Test';
+					self.content = str;
+					return true;
+				}
+			};
+			function checkCodeAsset(self, str){
+				var token_list;
+				str = SText.cleanESC(str);
+				if (/^\w+$|\W/.test(str)){
+					self.type = 'Code Test';
+					self.content = str;
+					return true;
+				}
+				token_list = Token.tokenize(str, 0, 'code list');
+				if (token_list.length == 1){
+					self.type = 'Code Test';
+					self.content = token_listp[0];
+				}else {
+					self.type = 'Codes Test';
+					self.content = token_list;
+				}
+				return true;
+			};
+			// parse asset
+			function parsePairAsset(src, grm){
+				var s1, s2, ref, ab, list;
+				ref = this.content, s1 = ref[0], s2 = ref[1];
+				if (ab = src.indexPair(s1, s2, src.index, true)){
+					if (ab[0] == src.index){
+						list = Jsop.toArray(src, ab[0], ab[1]+1);
+						src.index = ab[1];
+						return list;
+					}
+				}
+				return false;
+			};
+			function parseCodeAsset(src, grm){
+				var code_list, index, list, token;
+				if (this.type == 'Code Test'){
+					return this.content == src.current.text ? src.current : false;
+				}
+				code_list = this.content;
+				index = src.index-1;
+				list = [];
+				for (var code, i = 0; i < code_list.length; i++){
+					code = code_list[i];
+					token = src[++index];
+					if (!token || (code != token.text && (!token.is('BLANK') || !/^\s+$/.test(code)))){
+						return false;
+					}
+					list.push(token);
+				}
+				if (list.length){
+					src.index = index;
+					return list;
+				}
+				return false;
+			};
+			function parseLogicAsset(src, grm){
+				var type, last, params;
+				switch (type = this.content){
+					case "==":case "===":case "!=":case "!==":
+						last = grm.handle.cache;
+						while (isArray(last)){
+							last = last[last.length-1];
+						}
+						if (last && last.is){
+							params = this.param;
+							switch (type){
+								case "==":
+									return !!last.is.apply(last, params);
+								case "===":
+									return params.indexOf(last.type) != -1 || params.indexOf(last.text) != -1;
+								case "!=":
+									return !last.is.apply(last, params);
+								case "!==":
+									return params.indexOf(last.type) == -1;
+							}
+						}
+						break;
+				}
+				return false;
+			};
+			function parseNodeAsset(src, grm){
+				var name, token;
+				name = this.content;
+				token = src.current;
+				if (token.types.indexOf(name) != -1){
+					return token;
+				}
+				if (grm.parser(name)){
+					return grm.parser(name, src, this.param);
+				}
+				if (name == token.text){
+					return token;
+				}
+				return false;
+			};
+			function parseMethodAsset(src, grm){
+				var name;
+				name = this.content;
+				if (Method.hasOwnProperty(name)){
+					return Method[name].call(grm, src, this.param);
+				}
+				if (grm.parser(name)){
+					return grm.parser(name, src, this.param);
+				}
+				throw Error.create(4002, name, grm.handle.name, new Error());
+			};
+			return Asset;
+		})()
+		module.exports = Asset;
+	});
+	return module.exports;
+})('./core/grammar/asset.js', './core/grammar', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Pattern = (function(){
+			var cache, Asset, Card;
+			cache = Jsop.data();
+			Asset = require("./asset.js");
+			Card = require("../card.js");
+			function Pattern(text, type){
+				var m;
+				this.length = 0;
+				this.string = text;
+				if (type == 'Logic'){
+					this.type = type;
+					this.add(Asset.compile(text, 'Logic'));
+				}else {
+					while (m = Asset.test(text)){
+						if (m.index){
+							this.add(text.slice(0, m.index));
+						}
+						this.add(Asset.compile(m));
+						text = text.substr(m.index+m[0].length);
+					}
+					if (text){
+						this.add(text);
+					}
+				}
+			};
+			Pattern.prototype.add = function (){
+				for (var asset, i = 0; i < arguments.length; i++){
+					asset = arguments[i];
+					if (typeof asset == 'string'){
+						asset = SText.cleanESC(asset);
+					}
+					this[this.length++] = asset;
+				}
+				return this;
+			};
+			Pattern.prototype.parse = function (std, node){
+				if (this.type == 'Logic'){
+					return this[0].parse(node, std);
+				}else {
+					return parsePattern(this, node, std);
+				}
+			};
+			Pattern.prototype.isPattern = true;
+			Pattern.compile = function(text, type){
+				if (cache[text]){
+					return cache[text];
+				}
+				return cache[text] = new Pattern(text, type);
+			};
+			Pattern.parse = function(std, patt, node){
+				if (typeof patt == 'string'){
+					patt = Pattern.compile(patt);
+				}
+				return patt.parse(std, node);
+			};
+			function parsePattern(patt, node, std){
+				var card;
+				card = new Card(node.isNode ? node.type : 'Clip');
+				for (var ref, i = 0; i < patt.length; i++){
+					ref = patt[i];
+					if (ref.isAsset){
+						ref = checkAccAsset(ref, node, std);
+						if (!ref){
+							if (typeof card[card.length-1] == 'string'){
+								ref = card[card.length-1].replace(/\s*(\,|\.|\:\:)*\s*$/, '');
+								if (!ref){
+									Array.prototype.pop.call(card);
+								}else {
+									card[card.length-1] = ref;
+								}
+							}
+							continue;
+						}
+					}
+					if (ref){
+						if (ref === true){
+							continue;
+						}
+						card.add(ref);
+					}
+				}
+				if (!card.length){
+					return "";
+				}
+				if (patt.length == 1 && (patt[0].name == 'LIST' || patt[0].name == 'EACH')){
+					return Jsop.toArray(card);
+				}
+				if (card.length == 1){
+					if (card.type == card[0].type){
+						card = card[0];
+					}else if (patt.length == 1){
+						if (patt[0].type == 'Call'){
+							card = card[0];
+						}
+					}
+				}
+				return card;
+			};
+			function checkAccAsset(acc, node, std){
+				var ref;
+				if (ref = acc.parse(node, std)){
+					if (ref.isSyntax || ref.isToken){
+						if (std.handle.standard == node.type && ref == node){
+							ref = std.read(ref, true);
+						}else {
+							ref = std.read(ref);
+						}
+					}
+				}else if (ref === 0){
+					ref = '0';
+				}
+				return ref;
+			};
+			return Pattern;
+		})()
+		module.exports = Pattern;
+	});
+	return module.exports;
+})('./core/standard/pattern.js', './core/standard', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Macro = (function(){
+			var Template;
+			Template = require("../template.js");
+			function Macro(name, args, body, location, prepor){
+				if (args){
+					for (var i = args.length - 1; i >= 0; i--){
+						if (!(args[i] = args[i].trim())){
+							args.splice(i, 1);
+						}
+					}
+				}
+				this.name = name;
+				this.args = args;
+				this.bodys = Template.create(body.replace(/\\\n\s*/g, ''), args);
+				this.location = location;
+			};
+			Macro.prototype.parse = function (params){
+				var value;
+				if (!params && this.args){
+					return false;
+				}
+				value = '';
+				for (var item, i = 0; i < this.bodys.length; i++){
+					item = this.bodys[i];
+					if (typeof item == 'string'){
+						value += item;
+					}else {
+						value += item.apply(this, params);
+					}
+				}
+				if (this.args){
+					value = replaceParams(value, params, this);
+				}
+				return value;
+			};
+			Macro.prototype.error = function (){
+				throw Error.create(this.location, new Error());
+			};
+			function argsRe(macro){
+				var args;
+				if (!macro._args_re){
+					args = macro.args.join('\\b|\\b');
+					args = args ? '|\\b'+args+'\\b' : '';
+					macro._args_re = new RegExp('(\#{0,3}@?)(\#(\\d+)|\\bARGR\\.\\.\\.'+args+')');
+				}
+				return macro._args_re;
+			};
+			function replaceParams(content, params, macro){
+				var args, args_re, out, m, val, key, index;
+				args = macro.args;
+				args_re = argsRe(macro);
+				out = '';
+				while (m = content.match(args_re)){
+					if (!m[0]){
+						break;
+					}
+					val = '';
+					key = m[2];
+					index = m[3] || args.indexOf(key);
+					if (key == 'ARGR...'){
+						val = params.slice(index >= 0 ? index : args.length).join(', ');
+					}else if (params[index]){
+						val = params[index]+'';
+					}
+					switch (val && m[1]){
+						case '###':
+							val = '##'+'"'+val.replace(/(^|[^\\])"/g, '$1\\"')+'"';
+							break;
+						case '#':
+							val = '"'+val.replace(/(^|[^\\])"/g, '$1\\"')+'"';
+							break;
+						case '##@':
+							val = '##'+"'"+val.replace(/(^|[^\\])'/g, ""+1+"\\'")+"'";
+							break;
+						case '#@':
+							val = "'"+val.replace(/(^|[^\\])'/g, ""+1+"\\'")+"'";
+							break;
+						case '##':
+							val = '##'+val;
+							break;
+					}
+					out += content.slice(0, m.index)+val;
+					content = content.substr(m.index+m[0].length);
+				}
+				content = (out+content).replace(/"##"|'##'|##,|##/g, '');
+				return content;
+			};
+			return Macro;
+		})()
+		module.exports = Macro;
+	});
+	return module.exports;
+})('./preprocess/prepor/macro.js', './preprocess/prepor', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Sugar = (function(){
+			var Template, Grammar;
+			Template = require("../template.js");
+			Grammar = require("../../core/grammar");
+			function Sugar(name, pattern, body, location){
+				this.name = name;
+				this.pattern = pattern;
+				this.bodys = Template.create(body, ['std', 'node', 'scope']);
+				this.location = location;
+			};
+			Sugar.prototype.parse = function (parser, tar, params){
+				var index, node, scope, patt;
+				if (tar.isSource){
+					index = tar.index;
+					if (node = parser.pattern(this.pattern, tar, params, this.name)){
+						return node;
+					}
+					tar.index = index;
+				}else if (tar.isNode){
+					scope = tar.scope;
+					patt = '';
+					for (var item, i = 0; i < this.bodys.length; i++){
+						item = this.bodys[i];
+						if (typeof item == 'function'){
+							item = item.apply(this, [parser, tar, scope]);
+						}
+						if (typeof item == 'string'){
+							patt += item;
+						}else if (item){
+							return item;
+						}
+					}
+					patt = patt.trim();
+					return parser.pattern(patt, tar);
+				}
+			};
+			Sugar.prototype.error = function (){
+				throw Error.create(this.location, new Error());
+			};
+			return Sugar;
+		})()
+		module.exports = Sugar;
+	});
+	return module.exports;
+})('./preprocess/prepor/sugar.js', './preprocess/prepor', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var SYMBOL
+		exports['TAG'] = function(prepor, src, index){
+			var token;
+			token = src[index];
+			src.index = index;
+			if (this[token.text]){
+				return this[token.text](prepor, src, index);
+			}
+			prepor.check(token.text, 'macro', src);
+		}
+		exports['IDENTIFIER'] = function(prepor, src, index){
+			var token;
+			token = src[index];
+			src.index = index;
+			prepor.check(token.text, 'macro', src);
+		}
+		exports['SYMBOL'] = function(prepor, src, index){
+			var token, text, type;
+			token = src[index];
+			text = token.text;
+			if (SYMBOL[text]){
+				return SYMBOL[text].call(this, prepor, src, index);
+			}
+			type = token.types[1];
+			if (this[type]){
+				return this[type](prepor, src, index);
 			}
 		}
-	}
-	if (tea.argv['--test']){
-		var cmds = [], cmd, temp_file;
-		if (!tea.argv['--out']){
-			temp_file = tea.argv.file.replace(/\.(js|tea)$/g, '')+'.tmp.js';
-			ctx.echo(temp_file);
-			cmds.push('node', temp_file);
-		}else {
-			cmds.push('node', tea.argv.out);
-		}
-		if (typeof ctx.argv['--test'] == 'string'){
-			cmds = cmds.concat(tea.argv['--test'].split(' '));
-		}
-		print('** r{Test exec}: g{'+cmds.join(' '))+'}';
-		ChildProcess.exec(cmds.join(' '), {"maxBuffer": 50000*1024}, function(err, stdout, stderr){
-			var out = stdout+''+stderr;
-			console.log(out.replace(/^/mg, '  | '));
-			if (temp_file){
-				ChildProcess.execSync('rm -rf '+temp_file);
+		exports["COMM"] = function(prepor, src, index){
+			var token, ab;
+			token = src[index];
+			switch (token.text){
+				case '/*':
+					ab = src.indexPair('/*', '*/', index, true);
+					break;
+				case '#!':
+					if (index > 0){
+						throw Error.create(1119, src.current, new Error());
+					}
+				case '//':
+					ab = src.indexPair(token.text, '\n', src.index, true) || [index, src.length-1];
+					ab[1] = ab[1]-1;
+					break;
 			}
-			tea.exit();
-		});
-	}else {
-		if (!tea.argv['--out']){
-			console.log(ctx.rewriter.text);
+			if (ab && ab[0] == index){
+				token.text = src.join(ab[0], ab[1]);
+				token.types = ['COMMENT', 'CONST', 'COMM'];
+				token.location.code = token.text;
+				token.location.end = src[ab[1]].location.end;
+				src.delete(ab[0]+1, ab[1]);
+			}
 		}
-		tea.exit();
-	}
-}
+		exports["QUOTE"] = function(prepor, src, index){
+			var token, ab;
+			token = src[index];
+			ab = src.indexPair(token.text, token.text, index);
+			if (ab && ab[0] == index){
+				token.text = checkMarco(src.clone(ab[0], ab[1]), prepor);
+				token.types = ['STRING', 'CONST'];
+				token.location.code = token.text;
+				token.location.end = src[ab[1]].location.end;
+				src.delete(ab[0]+1, ab[1]);
+			}
+		}
+		// else:
+		// 	Err 1111, token;
+		SYMBOL = {}
+		SYMBOL['/'] = function(prepor, src, index){
+			var token, ab;
+			if (!testValue(src, src.prevIndex(index, true))){
+				token = src[index];
+				ab = src.indexPair(token.text, /\*\/|\//, index, true);
+				if (ab && ab[0] == index){
+					if (/^[gimy]+$/.test(src[ab[1]+1].text)){
+						ab[1] += 1;
+					}
+					token.text = checkMarco(src.clone(ab[0], ab[1]), prepor);
+					token.types = ['REGEXP', 'CONST'];
+					token.location.code = token.text;
+					token.location.end = src[ab[1]].location.end;
+					src.delete(ab[0]+1, ab[1]);
+				}
+			}
+		}
+		// else:
+		// 	Err 1111, token;
+		SYMBOL['/='] = SYMBOL['/']
+		function testValue(src, index){
+			var token;
+			if (token = src[index]){
+				if (token.is('CONST', 'CLOSE', 'POSTFIX')){
+					return true;
+				}
+				if (token.is('IDENTIFIER')){
+					if (!token.is('BINARY', 'UNARY')){
+						return true;
+					}
+				}else if (!token.is('KEYWORD')){
+					return false;
+				}
+				token = src[src.prevIndex(index, true)];
+				if (token && token.is('LINK')){
+					return true;
+				}
+			}
+			return false;
+		}
+		function checkMarco(src, prepor){
+			for (var token, i = 0; i < src.length; i++){
+				token = src[i];
+				if (token && token.type == 'IDENTIFIER'){
+					src.index = i;
+					prepor.check(token.text, 'macro', src);
+				}
+			}
+			return src.join();
+		};
+	});
+	return module.exports;
+})('./preprocess/gatherer/const.js', './preprocess/gatherer', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		exports['#define'] = function(prepor, src, index){
+			var token, a, name, args, b, body, ref;
+			token = src[index];
+			a = src.nextIndex(index);
+			if (src[a].is('IDENTIFIER', 'KEYWORD')){
+				name = src[a].text;
+				if (src[a+1].text == '('){
+					args = src.join(a+2, (a = src.indexOf(')', a))-1).split(',');
+				}
+				ref = checkDefineBody.call(this, src, src.nextIndex(a), prepor), a = ref[0], b = ref[1], body = ref[2];
+				prepor.add('macro', name, args, body, token.location);
+				src.delete(index, b);
+				// debug log
+				Tea.log('#define marco: '+name, token.location);
+			}
+		}
+		exports['#undef'] = function(prepor, src, index){
+			var token, b, names;
+			token = src[index];
+			b = src.indexOf('\n', index) || src.length-1;
+			names = src.join(index+1, b-1).trim().split(',');
+			prepor.undef.apply(prepor, names);
+			src.delete(index, b);
+			// debug log
+			Tea.log('#undef marco : '+names.join(','), token.location);
+		}
+		exports['#expr'] = exports['#stam'] = function(prepor, src, index){
+			var token, type, a, name, pattern, b, body, ref;
+			token = src[index];
+			type = token.text.substr(1);
+			a = src.nextIndex(index);
+			name = src[a].text;
+			a = src.nextIndex(a);
+			if (src[a].text == '<'){
+				pattern = src.join(a+1, (a = src.indexOf('>', a))-1);
+			}
+			ref = checkDefineBody.call(this, src, src.nextIndex(a), prepor), a = ref[0], b = ref[1], body = ref[2];
+			prepor.add(type, name, pattern, body, token.location);
+			src.delete(index, b);
+			// debug log
+			Tea.log('#define '+type+' : '+name, token.location);
+		}
+		exports['#argv'] = function(prepor, src, index){
+			var token, b, argv;
+			token = src[index];
+			b = src.indexOf('\n', index) || src.length-1;
+			argv = src.join(index+1, b).trim();
+			Argv.parse(argv.split(' '));
+			src.delete(index, b);
+			// debug log
+			Tea.log('#argv        : '+argv, token.location);
+		}
+		exports['#line'] = function(prepor, src, index){
+			var token;
+			token = src[index];
+			token.text = token.location.lineNumber+'';
+			token.types = ['NUMBER', 'CONST'];
+		}
+		function checkDefineBody(src, a, prepor){
+			var mark, b, body_src, text;
+			mark = src[a];
+			if (mark.text == '\n' && src[a+1].text == '{'){
+				mark = src[++a];
+			}
+			if (mark.text == '{'){
+				b = src.indexPair('{', '}', a, true)[1];
+				body_src = src.clone(a+1, b-1);
+				b = src.indexOf('\n', b) || src.length-1;
+			}else {
+				b = src.indexOf('\n', a) || src.length-1;
+				body_src = src.clone(a, b-1);
+			}
+			for (var token, i = 0; i < body_src.length; i++){
+				token = body_src[i];
+				if (!token || token.text == '#script'){
+					continue;
+				}
+				if (this[token.type]){
+					i = this[token.type](prepor, body_src, i) || i;
+				}
+			}
+			text = body_src.join();
+			return [a, b, text, body_src];
+		};
+	});
+	return module.exports;
+})('./preprocess/gatherer/define.js', './preprocess/gatherer', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Template
+		Template = require("../template.js")
+		exports['#if'] = exports['#ifdef'] = function(prepor, src, index){
+			var blocks, status, pos, tag, token, cond, trimIndent;
+			blocks = matchControlBlock(src, index);
+			status = false;
+			for (var item, i = 0; i < blocks.length; i++){
+				item = blocks[i];
+				pos = item[1];
+				tag = item[0];
+				token = src[pos[0]];
+				cond = src.join(pos[0]+1, pos[2]).trim();
+				status = tag == '#else' || evalCondition(tag, cond, prepor, src, pos[0]);
+				if (status){
+					if (/:\s*$/.test(cond)){
+						trimIndent = src.lineIndent(pos[2]+1)-src.lineIndent(pos[0]);
+						if (trimIndent){
+							src.trimIndent(pos[2]+1, pos[1]-1, trimIndent);
+						}
+					}
+					src.delete(pos[0], pos[2]);
+					src.delete(pos[1], blocks[blocks.length-1][1][3]);
+					// debug log
+					if (token){
+						Tea.log(tag+' '+cond+': true', token.location);
+					}
+					break;
+				}else {
+					src.delete(pos[0], pos[1]-1);
+					// debug log
+					if (token){
+						Tea.log(tag+' '+cond+': false', token.location);
+					}
+				}
+			}
+		}
+		exports['#script'] = function(prepor, src, index){
+			var token, a_b, block;
+			token = src[index];
+			a_b = matchBlock(src, index);
+			block = src.clone(a_b[2]+1, a_b[1]-1);
+			try {
+				var token, a_b, block, output;
+				output = Template.runScript(block, {"source": src, "index": index, "prepor": prepor}, prepor);
+				src.delete(a_b[0], a_b[3]);
+				if (output){
+					src.insert(index+1, output);
+				}
+				// debug log
+				Tea.log('#script runed: '+output.substr(0, 20)+'...', token.location);
+			}catch (e) {
+				var token, a_b, block, output;
+				throw Error.create(2004, e.message, token, new Error());
+			};
+		}
+		exports['#elif'] = exports['#elifdef'] = exports['#else'] = exports['#endif'] = function(prepor, src, index){
+			throw Error.create(2002, src[index], new Error());
+		}
+		function matchControlBlock(src, index, _ret_last){
+			var blocks, _index, a_b, next;
+			blocks = [];
+			_index = index;
+			while (true){
+				if (a_b = matchBlock(src, _index)){
+					blocks.push([src[a_b[0]].text, a_b]);
+					next = src[a_b[1]].text;
+					if (/#else|#elif|#elifdef/.test(next)){
+						_index = a_b[1];
+						continue;
+					}
+					if (next == '#end' || (next = '#endif')){
+						blocks.push(['#endif', [a_b[1], a_b[3], a_b[3], a_b[3]]]);
+					}
+				}
+				break;
+			}
+			if (_ret_last){
+				return blocks[blocks.length-1][1][3];
+			}
+			return blocks;
+		}
+		function matchBlock(src, index){
+			var a, l, _a, b, _b;
+			a = src.indexOf(/^(#if|#ifdef|#elif|#elifdef|#else|#script|#test)$/, index);
+			l = src.length-1;
+			if (a >= 0){
+				_a = src.indexOf('\n', a+1);
+				if (!_a){
+					return [a, l, l, l];
+				}
+				b = _a;
+				while (true){
+					b = b < l && src.indexOf(/^#\w+$/, b+1);
+					if (!b){
+						return [a, l, _a, l];
+					}
+					switch (src[b].text){
+						case '#if':case '#ifdef':
+							b = matchControlBlock(src, b, true);
+							if (!b){
+								return [a, l, _a, l];
+							}
+							break;
+						case '#script':case '#test':
+							b = matchBlock(src, b)[1];
+							break;
+						case '#else':case '#elif':case '#elifdef':case '#endif':
+							if (/^(#script|#test)$/.test(src[a].text)){
+								return [a, b-1, _a, b-1];
+							}
+						case '#end':
+							_b = src.indexOf('\n', b+1) || l;
+							return [a, b, _a, _b];
+					}
+				}
+			}
+		}
+		function evalCondition(tag, cond, prepor, src, index){
+			var is_def, token, the_file, root_file, exp;
+			cond = cond.replace(/\:\s*$|\;\s*$/g, '').trim();
+			if (!cond){
+				return false;
+			}
+			is_def = tag.indexOf('def') != -1;
+			token = src[index];
+			the_file = token.fileName;
+			root_file = Argv.file;
+			exp = cond.replace(/((-{0,2})[\$a-zA-Z_][\w]*)\b/g, function($0, $1, $2){
+				var res;
+				if ($2){
+					res = Argv[$1];
+				}else if (is_def){
+					return !!prepor.check($3);
+				}else {
+					switch ($1){
+						case '__main':
+							return root_file == the_file;
+						case '__root':
+							return '"'+root_file+'"';
+						case '__file':
+							return '"'+the_file+'"';
+						case '__version':
+							return '"'+Tea.version+'"';
+						default:
+							if (global.hasOwnProperty($1)){
+								res = global[$1];
+							}else if (Argv.hasOwnProperty($1)){
+								res = Argv[$1];
+							}else {
+								return $1;
+							}
+							break;
+					}
+				}
+				return typeof res == 'string' ? '"'+res.replace(/\"/g, '\\"')+'"' : res;
+			});
+			try {
+				var is_def, token, the_file, root_file, exp;
+				return exp && eval('!!('+exp+')') || tag == '#else';
+			}catch (e) {
+				var is_def, token, the_file, root_file, exp;
+				throw Error.create(e, new Error());
+			};
+		};
+	});
+	return module.exports;
+})('./preprocess/gatherer/control.js', './preprocess/gatherer', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		exports['#include'] = function(prepor, src, index){
+			var token, a, b, dir, files, ab, list;
+			token = src[index];
+			a = index;
+			b = src.nextIndex(a);
+			dir = Fp.dirName(src[a].fileName);
+			files = [];
+			while (src[b].is("QUOTE")){
+				ab = src.indexPair(src[b].text, src[b].text, b);
+				if (ab[0] = b){
+					files.push(src.join(ab[0], ab[1]));
+					b = src.nextIndex(ab[1], true);
+					if (src[b].text == ','){
+						b = src.nextIndex(b, true);
+						continue;
+					}else {
+						b = ab[1];
+					}
+				}
+				break;
+			}
+			src.delete(a, b);
+			for (var path, i = files.length - 1; i >= 0; i--){
+				path = files[i];
+				list = Fp.checkFiles(path, dir, ['index.tea', 'index.js']);
+				if (list.error){
+					throw Error.create(2001, list.error.path, src[index], new Error());
+				}
+				for (var file, j = list.length - 1; j >= 0; j--){
+					file = list[j];
+					src.insert(a, SText.readFile(file));
+					src.insert(a, token.clone('/* Include '+Fp.relative(dir, file)+' */', ['COMMENT']));
+					// debug log
+					Tea.log('#Include     : '+file, token.location);
+				}
+			}
+		};
+	});
+	return module.exports;
+})('./preprocess/gatherer/include.js', './preprocess/gatherer', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		module.exports = function(src, params){
+			var token, comm_token, ab, handle;
+			token = src.current;
+			if (token.type == 'COMMENT'){
+				comm_token = token;
+			}else {
+				switch (token.text){
+					case '/*':
+						ab = src.indexPair('/*', '*/', src.index, true);
+						break;
+					case '#!':
+						throw Error.create(1119, token, new Error());
+						break;
+					case '//':
+						ab = src.indexPair(token.text, '\n', src.index, true) || [src.index, src.length-1];
+						ab[1] = ab[1]-1;
+						break;
+					default:
+						return;
+				}
+				if (ab && ab[0] == src.index){
+					src.index = ab[1];
+					comm_token = token.clone(src.join(ab[0], ab[1]), ['COMMENT']);
+					comm_token.location.code = comm_token.text;
+					comm_token.location.end = src[ab[1]].location.end;
+				}else {
+					throw Error.create(1118, src.current, new Error());
+				}
+			}
+			if (comm_token){
+				handle = this.handle;
+				if (handle.name == 'Block' || handle.name == 'Root'){
+					!handle.comms && (handle.comms = []);
+					if (handle.comms.indexOf(comm_token) == -1){
+						handle.comms.push(comm_token);
+					}
+				}
+				return comm_token;
+			}
+		};
+	});
+	return module.exports;
+})('./settings/syntax/comment.js', './settings/syntax', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Syntax
+		Syntax = require("../../core/syntax.js")
+		module.exports = function(src, params){
+			var node;
+			this.parser('COMMENT', src, null, false, true);
+			if (src.current && src.current.is('BLANK', 'END', 'COMM', 'COMMENT')){
+				this.next(src, 1);
+			}
+			node = this.parser('Block', src, ['brace'], false, true) || new Syntax('Root');
+			node.type = 'Root';
+			return node;
+		};
+	});
+	return module.exports;
+})('./settings/syntax/root.js', './settings/syntax', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Syntax
+		Syntax = require("../../core/syntax.js")
+		module.exports = function(src, params){
+			switch (params && params[0]){
+				case 'brace':
+					params = params.slice(1);
+					params.push('}');
+					return checkBraceBlock.call(this, src, params);
+				case 'indent':
+					return checkIndentBlock.call(this, src, params.slice(1));
+				case 'line':
+					return checkLineBlock.call(this, src, params.slice(1));
+			}
+			switch (src.current.text){
+				case '{':
+					return checkBraceBlock.call(this, src, params);
+				case ':':
+					return checkIndentBlock.call(this, src, params) || new Syntax('BlockNode');
+				case ';':
+					throw Error.create(1111, src.current.text, src.current, new Error());
+					break;
+			}
+		}
+		function checkLineBlock(src, params){
+			var node, ends, back_index, ref;
+			node = new Syntax('BlockNode');
+			ends = ['\n', ';', '}', ']', ']', 'else', 'while', 'catch', 'finally'];
+			if (params && params.length){
+				ends.push.apply(ends, params);
+			}
+			back_index = src.index;
+			while (src.index < src.length){
+				if (src.current.text == ';'){
+					back_index = src.index;
+					this.next(src);
+					if (src.current.text == ','){
+						break;
+					}
+				}
+				if (src.current.type == 'EOT'){
+					back_index = src.index;
+					break;
+				}
+				if (ends.indexOf(src.current.text) != -1){
+					break;
+				}
+				if (ref = this.parser('Statement', src)){
+					node.add(ref);
+					back_index = src.index;
+					this.next(src);
+					continue;
+				}
+				break;
+			}
+			src.index = back_index;
+			if (node.length){
+				return node;
+			}
+		}
+		function checkIndentBlock(src, params){
+			var handle, back_index, step_index, the_indent, node, ends, ref;
+			handle = this.handle;
+			back_index = src.index;
+			step_index = src.current.text == ':' ? src.index : src.prevIndex(back_index, true);
+			the_indent = src.lineIndent(step_index);
+			node = new Syntax('BlockNode');
+			node.subType = 'IndentBlock';
+			node.theIndent = the_indent;
+			// 
+			if (src[step_index].text == ':'){
+				step_index = src.nextIndex(step_index);
+				if (!src[step_index].is('LF')){
+					src.index = step_index;
+					node = checkLineBlock.call(this, src, params);
+					if (src[src.nextIndex(src.index)].is('LF')){
+						step_index = back_index = src.index;
+					}else {
+						return node;
+					}
+				}
+			}
+			src.index = step_index;
+			this.next(src, 1);
+			step_index = src.index;
+			ends = ['}', ')', ']'];
+			if (params && params.length){
+				ends.push.apply(ends, params);
+			}
+			while (src.index < src.length){
+				if (src.current.type == 'EOT'){
+					return node;
+				}
+				step_index = src.index;
+				if (ends.indexOf(src.current.text) == -1){
+					if (src.lineIndent(step_index) > the_indent){
+						if (src.current.is('BLOCKBREAK', 'BLANK')){
+							back_index = src.index;
+							this.next(src, 1);
+							continue;
+						}
+						if (ref = this.parser('Statement', src)){
+							if (handle.comms && handle.comms.length){
+								node.add(handle.comms);
+								handle.comms.length = 0;
+							}
+							node.add(ref);
+							back_index = src.index;
+							this.next(src, 1);
+							continue;
+						}
+					}
+				}
+				break;
+			}
+			if (src[back_index].is('LF')){
+				back_index = back_index-1;
+			}
+			src.index = back_index;
+			if (node.length == 0 && src.current.text != ':'){
+				return;
+			}
+			return node;
+		}
+		function checkBraceBlock(src, ends){
+			var check_brace, node, step_index, handle, ref;
+			check_brace = false;
+			node = new Syntax('BlockNode');
+			if (src.current.text == '{'){
+				if (this.next(src, 1).current.text == '}')
+					return node;
+				check_brace = true;
+			}
+			step_index = src.index;
+			handle = this.handle;
+			while (src.index < src.length){
+				if (src.current.type == 'EOT'){
+					if (check_brace){
+						return this.error(1110);
+					}
+					break;
+				}
+				if (src.current.is('BLOCKBREAK', 'BLANK')){
+					step_index = src.index;
+					this.next(src, 1);
+					continue;
+				}
+				if (ends && ends.indexOf(src.current.text) != -1){
+					src.index = step_index;
+					break;
+				}
+				if (check_brace && src.current.text == '}'){
+					break;
+				}
+				if (ref = this.parser('Statement', src)){
+					if (handle.comms && handle.comms.length){
+						node.add(handle.comms);
+						handle.comms.length = 0;
+					}
+					node.add(ref);
+					step_index = src.index;
+					this.next(src, 1);
+					continue;
+				}
+				return this.error(1100, src.current);
+			}
+			if (!check_brace && node.length == 0){
+				return false;
+			}
+			return node;
+		};
+	});
+	return module.exports;
+})('./settings/syntax/block.js', './settings/syntax', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Syntax
+		Syntax = require("../../core/syntax.js")
+		var patt = "(; → | var∅ Argus@=VarPatt | let∅ Argus@=LetPatt | Argus@:InitPatt)\n            (;∅ (;→ | Comma) ;∆1022∅ Comma? | [in of -> => <- <= ...] Comma ) |\n            CommaExpr (... Comma)?"
+		module.exports = function(src, params){
+			var start_index, ref, exp1, exp2, exp3, temp;
+			start_index = src.index;
+			if (src.current.text == '('){
+				if (!src.get(src.nextIndex(src.indexPair('(', ')', start_index)[1], true)).is('JOINT')){
+					ref = matchCondition(this, this.next(src, 1));
+					if (this.next(src, 1).current.text != ')'){
+						throw Error.create(1023, src.current, new Error());
+					}
+				}
+			}
+			if (!ref){
+				ref = matchCondition(this, src);
+			}
+			exp1 = ref[0], exp2 = ref[1], exp3 = ref[2];
+			if (exp1 && !exp2 && !exp3){
+				temp = exp1;
+				do {
+					if (temp.is('CompareExpr') && temp[1] && temp[1].isToken && ['<=', 'in', 'of', '...'].indexOf(temp[1].text)>=0){
+						exp2 = temp[1];
+						exp3 = temp[2];
+						if (temp == exp1){
+							exp1 = temp[0];
+						}else {
+							temp[0].parent = temp.parent;
+							temp.parent[temp.parent.length-1] = temp[0];
+						}
+						break;
+					}
+				} while (temp = temp[temp.length-1])
+			}
+			return new Syntax('ForCondition', exp1, exp2, exp3);
+		}
+		function matchCondition(grammar, src){
+			var ref;
+			if (!(ref = grammar.pattern(patt, src))){
+				throw Error.create(1022, src.current, new Error());
+			}
+			return ref;
+		};
+	});
+	return module.exports;
+})('./settings/syntax/for.js', './settings/syntax', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Card
+		Card = require("../../../core/card.js")
+		module.exports = function(node, params){
+			var block, scope, cache, start, undefines;
+			if (!node){
+				return '';
+			}
+			block = this.read(node, true);
+			block.type = 'Block';
+			scope = node.scope;
+			cache = scope.cache;
+			start = 0;
+			while (block[start] && /COMMENT/.test(block[start].type)){
+				start += 1;
+			}
+			if (cache.head){
+				block.insert(start, cache.head);
+				cache.head = null;
+			}
+			if (!Argv['--safe']){
+				undefines = Jsop.toArray(scope.undefines);
+				if (undefines.length){
+					block.insert(start, this.pattern('#CARD(var)', undefines));
+				}
+			}
+			if (params && params.length){
+				for (var insert, i = 0; i < params.length; i++){
+					insert = params[i];
+					if (/@|#/.test(insert)){
+						block.add(this.pattern(insert, node));
+					}else {
+						block.add(insert);
+					}
+				}
+			}
+			if (cache.end){
+				block.add(cache.end);
+				cache.end = null;
+			}
+			if (node.type == 'BlockStam' && block.length > 1){
+				block = new Card('BlockNode', '{', block, '}');
+			}else if (node.type == 'Root'){
+				block.type = 'Root';
+			}
+			return block;
+		};
+	});
+	return module.exports;
+})('./settings/standards/es5/block.js', './settings/standards/es5', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Card
+		Card = require("../../../core/card.js")
+		module.exports = function(node, param){
+			var scope, file, dir, params, list, card;
+			scope = node.scope.root;
+			file = node[0].location.fileName;
+			dir = Fp.dirName(node[0].location.fileName);
+			params = parseRequireParams.call(this, node[1], dir, file);
+			list = [];
+			for (var data, i = 0; i < params.length; i++){
+				data = params[i];
+				if (data.file){
+					scope.cachePush('require', data.file);
+				}
+				card = new Card('RequireExpr', node[0], '(', data.card, ')');
+				list.push(card);
+			}
+			if (list.length == 1){
+				return list[0];
+			}
+			if (node.parent.is('BlockNode', 'Root')){
+				for (var i = 0; i < list.length; i++){
+					list[i] = new Card('VarExpr', 'var ', getName(list[i][2].text), ' = ', list[i]);
+				}
+			}else if (node.parent.is('JsonAssignExpr')){
+				for (var i = 0; i < list.length; i++){
+					list[i] = new Card('AssignExpr', getName(list[i][2].text), ' : ', list[i]);
+				}
+				return this.pattern('{#COMMA(@)}', list, 'JsonExpr');
+			}else {
+				return this.pattern('[#COMMA(@)]', list, 'ArrayExpr');
+			}
+			return list;
+		}
+		function parseRequireParams(node, dir, from){
+			var list, text, file, files;
+			list = [];
+			for (var item, i = 0; i < node.length; i++){
+				item = node[i];
+				if (item.is('STRING')){
+					text = item.text;
+					if (/\//.test(text)){
+						file = Fp.resolve(dir, text);
+						if (Fp.isFile(file)){
+							list.push(makeData(text, file, dir, item));
+							continue;
+						}
+						if (!/\.js$|\.tea$/.test(file)){
+							if (Fp.isFile(file+'.js')){
+								list.push(makeData(text, file+'.js', dir, item));
+								continue;
+							}
+							if (Fp.isFile(file+'.tea')){
+								list.push(makeData(text, file+'.tea', dir, item));
+								continue;
+							}
+						}
+						if (/\.js$/.test(file)){
+							if (Fp.isFile(file.replace(/\.js/, '.tea'))){
+								list.push(makeData(text, file.replace(/\.js/, '.tea'), dir, item));
+								continue;
+							}
+						}
+						if (/\.tea$/.test(file)){
+							if (Fp.isFile(file.replace(/\.tea/, '.js'))){
+								list.push(makeData(text, file.replace(/\.tea/, '.js'), dir, item));
+								continue;
+							}
+						}
+						files = Fp.checkFiles(text, dir, ['index.js', 'index.tea']);
+						if (!files.error){
+							for (var file, j = 0; j < files.length; j++){
+								file = files[j];
+								if (file == from){
+									continue;
+								}
+								list.push(makeData(text, file, dir, item));
+							}
+							continue;
+						}
+					}
+					list.push({"card": item, "file": ''});
+				}else {
+					list.push({"card": this.read(item), "file": ''});
+				}
+			}
+			return list;
+		}
+		function makeData(text, file, dir, token){
+			var filename;
+			filename = Fp.relative(dir, file);
+			if (/\/index\.(js|tea)$/.test(filename) && !/\/index\.(js|tea)$/.test(text)){
+				filename = Fp.dirName(filename);
+			}
+			filename = filename.replace(/\.tea$/, '.js');
+			return {"card": token.clone('"'+filename+'"'), "file": file};
+		}
+		function getName(text){
+			if (text){
+				text = text.replace(/^['"]+|['"]+$|\.[^\.\/\\]*$|/g, '');
+				var name = Fp.baseName(text);
+				if (name == 'index'){
+					name = Fp.baseName(Fp.dirName(text));
+				}
+				name = name.replace(/(?:^|[^a-zA-Z0-9\$]+)(\w)/g, function($0, $1){return $1.toUpperCase()});
+				return name;
+			}
+		};
+	});
+	return module.exports;
+})('./settings/standards/es5/require.js', './settings/standards/es5', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		module.exports = function(node, params){
+			node.text = node.text.replace(/\n\s*/g, '');
+			if (Tea.argv['--const']){
+				return "#CONST";
+			}
+		};
+	});
+	return module.exports;
+})('./settings/standards/es5/regexp.js', './settings/standards/es5', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Card
+		Card = require("../../../core/card.js")
+		module.exports = function(node, params){
+			var str, mark, strs, m, ab, temp;
+			str = node.text;
+			mark = str.match(/^('{4}|'{3}|'|"{4}|"{3}|"|`)/)[1];
+			str = str.slice(mark.length, -mark.length);
+			if (/\n/.test(str)){
+				str = SText.clip(str);
+			}
+			if (str && (mark[0] == '"' || mark == '`')){
+				strs = [];
+				while (m = str.match(/(^|[^\\])\$(\w+|\{)\b/)){
+					strs.push(formatString(mark, str.substr(0, m.index+m[1].length)));
+					if (m[2] == '{'){
+						ab = SText.indexPair(str, '{', '}', m.index);
+						if (ab){
+							temp = str.slice(ab[0]+1, ab[1]);
+							if (/[^\w\s\$\_]/.test(temp)){
+								strs.push('('+temp+')');
+							}else {
+								strs.push(temp);
+							}
+							str = str.substr(ab[1]+1);
+						}else {
+							throw Error.create(1120, node, new Error());
+						}
+					}else {
+						strs.push(m[2]);
+						str = str.substr(m.index+m[0].length);
+					}
+				}
+				if (str){
+					strs.push(formatString(mark, str));
+				}
+				str = strs.join('+');
+			}else {
+				str = formatString(mark, str);
+			}
+			return (new Card('String')).add(str);
+		}
+		function formatString(mark, str){
+			// 转义
+			if (mark == '`'){
+				str = str.replace(/\\`/g, '`');
+			}
+			if (mark == '`' || mark == '"""' || mark == "'''"){
+				str = SText(str, mark == "'''" ? "'" : '"');
+			}
+			// 转义引号
+			if (mark == '`' || mark == '"""' || mark == '""""'){
+				str = str.replace(/(^|[^\\])"/g, '$1\\"');
+			}else if (mark == "'''" || mark == "''''"){
+				str = str.replace(/(^|[^\\])'/g, ""+1+"\\'");
+			}
+			switch (mark){
+				case '""""':case "''''":case "`":
+					// 保留换行符
+					str = str.replace(/(^|[^\\])\n/g, '$1\\n');
+					str = str.replace(/(^|[^\\])\n/g, '$1\\n');
+					break;
+				case '"""':case "'''":
+					// 保留格式
+					str = str.replace(/([^\\]|^)(\\{2,4,6,8})?\\n/g, '$1$2\\n\\\n');
+					break;
+				case '"':case "'":
+					// 不保留换行符			
+					str = str.replace(/(^|[^\\])\n\s*/g, '$1');
+					break;
+			}
+			return mark[0] == "'" ? "'"+str+"'" : '"'+str+'"';
+		};
+	});
+	return module.exports;
+})('./settings/standards/es5/string.js', './settings/standards/es5', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Card
+		Card = require("../../../core/card.js")
+		module.exports = function(node, param){
+			var list;
+			list = [];
+			for (var i = 0; i < node.length; i++){
+				list.push(parseItem.call(this, node[i]), ',');
+			}
+			list.pop();
+			return new Card('ArgusExpr', '(', list, ')');
+		}
+		function parseItem(node, params){
+			var type, vars, index;
+			type = node.type;
+			vars = this.handle.variables;
+			if (type == 'RestExpr'){
+				index = node.index;
+				if (node.parent.length > index+1){
+					vars['i'] = node.parent.length-index-1;
+					this.pattern('#HEAD(`@[0] = [].slice.call(arguments, @[index], -@i)`)', node);
+				}else {
+					this.pattern('#HEAD(`@[0] = [].slice.call(arguments, @[index])`)', node);
+				}
+				return this.read(node, true);
+			}
+			if (type == 'AssignExpr'){
+				if (vars['i']){
+					this.pattern('#HEAD(`@[0] = arguments[arguments.length - @i]`)', node);
+					vars['i']--;
+				}
+				this.pattern('#HEAD(`if (@[0] == null) @`)', node);
+				return this.read(node[0]);
+			}
+			if (vars['i']){
+				this.pattern('@ = arguments[arguments.length - @i]`)', node);
+				vars['i']--;
+			}
+			return this.read(node);
+		};
+	});
+	return module.exports;
+})('./settings/standards/es5/argus.js', './settings/standards/es5', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Card
+		Card = require("../../../core/card.js")
+		module.exports = function(node, params){
+			var list, vars, right, left, parser, left_len;
+			list = [];
+			vars = this.handle.variables;
+			right = node[2];
+			left = node[0];
+			parser = parseItem;
+			if (!(right.is('ArrayExpr', 'Variable', 'AccessExpr'))){
+				list.push(this.pattern('@ref = @', right), ',');
+				right = vars.ref;
+			}else if (right.type == 'ArrayExpr'){
+				parser = parseArrayRight;
+			}
+			left_len = left.length;
+			for (var i = 0; i < left.length; i++){
+				list.push(parser.call(this, left[i], right, vars, left_len), ',');
+			}
+			list.pop();
+			if (node.parent.is('ArgusStam')){
+				return list;
+			}
+			return new Card('ArrayAssignExpr', list);
+		}
+		function parseItem(left, right, variables, left_len){
+			var index;
+			index = variables.index || 0;
+			variables.index = index+1;
+			if (left.type == 'RestExpr'){
+				if (left_len > index+1){
+					variables.slice = true;
+					return this.pattern('@[0] = [].slice.call(@[1], @[2], @[1].length - @[3])', [left, right, index, left_len-index-1], 'AssignExpr');
+				}else {
+					return this.pattern('@[0] = [].slice.call(@[1], @[2])', [left, right, index+''], 'AssignExpr');
+				}
+			}
+			if (variables.slice){
+				return this.pattern('@[0] = @[1][@[1].length - @[2]]', [left, right, left_len-index], 'AssignExpr');
+			}
+			return this.pattern('@[0] = @[1][@[2]]', [left, right, index+''], 'AssignExpr');
+		}
+		function parseArrayRight(left, right, variables, left_len){
+			var index;
+			index = variables.index || 0;
+			variables.index = index+1;
+			if (index >= right.length){
+				return this.read(left);
+			}
+			if (left.type == 'RestExpr'){
+				if (left_len > index+1){
+					variables.index = right.length-(left_len-index-1);
+					return this.pattern('@[0] = [#COMMA(@[1])]', [left, Jsop.toArray(right, index, variables.index)]);
+				}else {
+					return this.pattern('@[0] = [#COMMA(@[1])]', [left, Jsop.toArray(right, index)]);
+				}
+			}
+			return this.pattern('@[0] = @[1]', [left, right[index]]);
+		};
+	});
+	return module.exports;
+})('./settings/standards/es5/arrayassign.js', './settings/standards/es5', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Card
+		Card = require("../../../core/card.js")
+		module.exports = function(node, params){
+			var list, vars, right, left, left_len;
+			list = [];
+			vars = this.handle.variables;
+			right = node[2];
+			left = node[0];
+			if (!(right.is('Variable', 'AccessExpr'))){
+				list.push(this.pattern('@ref = @', right), ',');
+				right = vars.ref;
+			}
+			vars.right = right;
+			left_len = left.length;
+			for (var i = 0; i < left.length; i++){
+				list.push(parseItem.call(this, left[i], right, vars, left_len), ',');
+			}
+			list.pop();
+			return new Card('ArrayAssignExpr', list);
+		}
+		function parseItem(left, right, variables, left_len){
+			if (left.type == 'AssignExpr'){
+				return this.pattern('@2 = @right["@0"]', left);
+			}
+			return this.pattern('@ = @right["@"]', left);
+		};
+	});
+	return module.exports;
+})('./settings/standards/es5/jsonassign.js', './settings/standards/es5', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		module.exports = function(node, param){
+			if (!node[1]){
+				return rewriteForRange.call(this, node, param);
+			}
+			switch (node[1].isToken && node[1].text){
+				case 'of':case 'in':
+					return rewriteForIn.call(this, node, param);
+				case '->':case '=>':case '<=':case '<-':
+					return rewriteForEach.call(this, node, param);
+				case '...':
+					return rewriteForRange.call(this, node, param);
+				default:
+					if (node[0].is('VarPatt', 'LetPatt')){
+						return "var @0; @1; @2";
+					}
+					break;
+			}
+			return "@0; @1; @2";
+		}
+		function rewriteForIn(node, param){
+			var vars, state;
+			vars = this.handle.variables;
+			vars.i = node[0][0];
+			vars.temp = node[0][1];
+			if (!vars.temp && node[1].text == 'of'){
+				vars.temp = vars.i;
+				vars.i = this.pattern('#VAR(for_let, i)', node);
+			}else {
+				if (state = node.scope.state(vars.i.text)){
+					this.pattern('#VAR(for_let, i, @)', vars.i);
+				}else {
+					node.scope.define('let', vars.i);
+				}
+			}
+			if (vars.temp){
+				node.scope.define('let', vars.temp);
+			}
+			return "var @i in #VALUE(@[2], ref)"+"#HEAD( `if (!@ref.hasOwnProperty(@i)) continue`, Let )"+(vars.temp ? "#HEAD( `var @temp = @ref[@i]`, Let )" : "");
+		}
+		function rewriteForEach(node, param){
+			var vars, scope, mark, i, def, text, state, init, patt;
+			vars = this.handle.variables;
+			scope = node.scope;
+			mark = node[1].text;
+			if (node[0][1]){
+				i = node[0][0];
+				vars.temp = node[0][1];
+			}else if (mark == '<=' || mark == '=>'){
+				vars.temp = node[0][0];
+			}else {
+				i = node[0][0];
+			}
+			if (i){
+				if (i.type == 'AssignExpr'){
+					def = '@[0.0.2]';
+					i = i[0];
+				}
+				text = i.text;
+				state = scope.state(text);
+				if (!state || node[0].type != 'InitPatt'){
+					scope.define('for_let', i);
+					vars['i'] = text;
+				}else {
+					if (!def && state != 'for_let'){
+						def = text;
+					}
+					this.pattern('#VAR(for_let, i, @)', i);
+				}
+			}else {
+				this.pattern('#VAR(for_let, i)', node);
+			}
+			init = [];
+			if (node[2].is('Access')){
+				vars.ref = node[2];
+			}else {
+				init.push('@ref = #VALUE(@[2])');
+			}
+			if (vars.temp){
+				init.push('@temp');
+				scope.define('let', vars.temp);
+			}
+			if (mark == '=>' || mark == '->'){
+				init.push('@i = '+(def || '0'));
+				patt = 'var '+init.join(', ')+'; @i < @ref.length; @i++';
+			}else {
+				init.push('@i = '+(def || '@ref.length - 1'));
+				patt = 'var '+init.join(', ')+'; @i >= 0; @i--';
+			}
+			if (vars.temp){
+				patt += "#HEAD( `@temp = @ref[@i]`, Let )";
+			}
+			return patt;
+		}
+		function rewriteForRange(node, param){
+			var vars;
+			if (node[1]){
+				vars = this.handle.variables;
+				vars.left = node[0];
+				vars.right = node[2];
+				if (vars.left.type == 'NUMBER' || vars.right.type == 'NUMBER'){
+					return "var @i = @right; @i >= @left; @i--";
+				}
+				return "var @i = @left; @i <= @right; @i++";
+			}
+			node = node[0][0];
+			if (node.type == 'NUMBER'){
+				return "var @i = 0; @i < @; @i++";
+			}
+			if (node.is('Variable')){
+				return "var @i = 0; @i < @.length; @i++";
+			}
+			if (node.is('Value')){
+				return "var @i = 0, @ref = @; @i < @ref.length; @i++";
+			}
+			return "var @i = 0, @ref = (@); @i < @ref.length; @i++";
+		};
+	});
+	return module.exports;
+})('./settings/standards/es5/for.js', './settings/standards/es5', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Card
+		Card = require("../../../core/card.js")
+		module.exports = function(node, param){
+			var handle, vars, scope, i, name, extend, block, start, init_block;
+			handle = this.handle;
+			vars = handle.variables;
+			scope = node.scope;
+			if (node[i = 1].type == 'NameExpr'){
+				name = node[i++];
+			}else if (node.parent.type == 'AssignExpr' && node.parent[0].type == 'VariableExpr'){
+				name = node.parent[0][0];
+			}else {
+				name = '_Class_';
+			}
+			if (node[i].type == 'ExtendsExpr'){
+				extend = node[i++];
+				scope.super = 'this.__super__';
+			}else {
+				scope.super = 'Object.prototype';
+			}
+			name = vars.name = scope.name = name.text || name;
+			block = this.read(node[i], false, true)[1];
+			start = 0;
+			for (var j = 0; j < block.length; j++){
+				if (block[j].type){
+					if (/VarStam|LetStam|AssignExpr|RequireExpr|COMMENT|STRING/.test(block[j].type)){
+						continue;
+					}
+				}
+				start = j;
+				break;
+			}
+			if (extend){
+				block.insert(start, ClassExtends.call(this, scope, extend));
+			}
+			block.insert(start, ClassConstructor.call(this, scope));
+			block.add(new Card('Line', 'return '+name));
+			init_block = this.pattern('(function(){@})()', block, 'ClassInit');
+			if (node.parent.type == 'AssignExpr'){
+				return init_block;
+			}
+			return this.pattern('var @name = @', init_block, 'ClassDecl');
+		}
+		function ClassConstructor(scope){
+			var cache, constructor, propertys, argu, block;
+			cache = scope.cache;
+			constructor = cache.constructors && cache.constructors[0];
+			propertys = cache.propertys;
+			if (constructor){
+				argu = this.read(constructor[1]);
+				if (propertys){
+					constructor.scope.cachePush('head', propertys);
+				}
+				block = this.read(constructor[2], false, true)[1];
+			}else {
+				argu = '()';
+				block = new Card('Block', propertys);
+			}
+			return this.pattern('function @name@[0]{@[1]}', [argu, block], 'ConstructorExpr');
+		}
+		function ClassExtends(scope, node){
+			var list, params;
+			list = [];
+			params = node[1];
+			list.push(this.pattern('@name.prototype = Object.create(@[0].prototype)', params, 'Line'));
+			list.push(this.pattern('@name.prototype.__super__ = @[0].prototype', params, 'Line'));
+			list.push(this.pattern('@name.prototype.constructor = @name', params, 'Line'));
+			if (params.length > 1){
+				list.push(this.pattern('@name.__extends__ = function(){for(var i=0, args = arguments; i<args.length; i++){var _super = args[i].prototype;for (var name in _super){if (_super[name].hasOwnProperty(name)){this.prototype[name] = _super[name];}}}}', params, 'Line'));
+				list.push(this.pattern('@name.__extends__(#COMMA(1))', params));
+			}
+			return list;
+		};
+	});
+	return module.exports;
+})('./settings/standards/es5/class.js', './settings/standards/es5', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		module.exports = function(node, params){
+			var name, scope, member;
+			name = 'this';
+			scope = node.scope;
+			if (scope.valid.type == 'Class'){
+				name = scope.valid.name;
+			}else {
+				if (node[1]){
+					member = node[1].text;
+				}else if (node.parent.type == 'AccessExpr' && node.parent[1].type == 'MemberExpr'){
+					member = node.parent[1][1].text;
+				}
+				if (member && scope.member(member) == 'static'){
+					name = scope.query('Class').name;
+				}
+				// TODO: AT
+				// else if scope.parent.type == 'Function':
+				// 	f_scope = scope.parent;
+				// 	while f_scope.parent.type == 'Function':
+				// 		f_scope = f_scope.parent;
+				// 	f_scope.cachePush( 'head', 'var _this = this' );
+				// 	name = '_this';
+				// 	// console.log('???????', f_scope.name)
+				
+				if (node[1]){}
+				return name+'.@1';
+			}
+			return name;
+		};
+	});
+	return module.exports;
+})('./settings/standards/es5/at.js', './settings/standards/es5', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		function SUGAR(src, params){
+			var map, node;
+			if (!this.prepor){
+				return;
+			}
+			if (!(map = this.prepor[params[0]])){
+				return;
+			}
+			for (var name in map){
+				if (!map.hasOwnProperty(name)) continue;
+				var sugar = map[name];
+				if (node = sugar.parse(this, src)){
+					return node;
+				}
+			}
+		}
+		module.exports.SUGAR = SUGAR
+		function ROUTE(src, params){
+			var token, text, patt, res;
+			if (params.length){
+				for (var item, i = 0; i < params.length; i++){
+					item = params[i];
+					item = item.replace(/\s*→\s*/, '→').split('→');
+					if (item.length == 2){
+						params[item[0]] = item[1];
+					}else {
+						params['default'] = item[0];
+					}
+				}
+				params.length = 0;
+			}
+			token = src.current;
+			text = token.text;
+			patt = params.hasOwnProperty(text) ? params[text] : params['default'];
+			if (patt){
+				if (text == patt){
+					return token;
+				}
+				if (this.parser(patt)){
+					return this.parser(patt, src);
+				}
+				if (res = this.pattern(patt, src)){
+					return res;
+				}
+			}
+		}
+		module.exports.ROUTE = ROUTE
+		function ISPARAM(src, argus){
+			var params;
+			params = this.handle.params;
+			if (params && argus){
+				for (var item, i = 0; i < argus.length; i++){
+					item = argus[i];
+					if (params.indexOf(item) != -1){
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+		module.exports.ISPARAM = ISPARAM
+		function IS(src, params){
+			var index, yes, no, ref, token, text, types, res;
+			ref = checkIsMethodArgus(params, src), index = ref[0], yes = ref[1], no = ref[2];
+			if (!(token = src[index])){
+				return !yes && no ? true : false;
+			}
+			text = token.text;
+			types = token.types;
+			if (yes){
+				for (var name, i = 0; i < yes.length; i++){
+					name = yes[i];
+					if (res = this.parser(name, src, null, true)){
+						return res;
+					}
+					if (types.indexOf(name) != -1 || name == text){
+						if (!no || (!token.is.apply(token, no) && name != text)){
+							return token;
+						}
+					}
+				}
+			}else if (no){
+				if (!token.is.apply(token, no) && name != text){
+					return token;
+				}
+			}else {
+				throw Error.create('params error', token, new Error());
+			}
+			return false;
+		}
+		module.exports.IS = IS
+		function INDENT(src, params){
+			var cache, last, check_indent;
+			cache = this.handle.cache;
+			while (last = cache[cache.length-1]){
+				if (last.type == 'BlockNode'){
+					if (last.subType == 'IndentBlock')
+						check_indent = last.theIndent;
+					break;
+				}
+				cache = last;
+			}
+			if (check_indent != null && check_indent != src.lineIndent()){
+				return false;
+			}
+			return true;
+		}
+		module.exports.INDENT = INDENT
+		function CONCAT(src, params){
+			var a, b, patt, temp, ab, types, token;
+			a = params[0] || src.current.text;
+			b = params[1];
+			if (a && a.isToken){
+				a = a.text;
+			}
+			if (b && b.isToken){
+				b = b.text;
+			}
+			if (typeof a == 'string'){
+				if (/\.{3}|\|| /.test(a) && a.length > 2){
+					patt = a;
+					a = src.index;
+					if (temp = this.pattern(patt, src, null, 'Temp')){
+						b = src.index;
+					}else {
+						return false;
+					}
+				}else if ((ab = src.indexPair(a, b || a, src.index, true)) && ab[0] == src.index){
+					a = ab[0];
+					b = ab[1];
+				}else {
+					return false;
+				}
+			}
+			if (a < b){
+				types = params[2] && params[2].split(' ') || src.current.types.slice();
+				src.index = b;
+				token = src[a].clone(src.join(a, b), types);
+				token.location.code = token.text;
+				token.location.end = src[b].location.end;
+				return token;
+			}
+			return false;
+		}
+		module.exports.CONCAT = CONCAT
+		function checkIsMethodArgus(argus, src){
+			var mode, vals, lf, m, temp, yes, no, index, num;
+			if (argus.length == 1){
+				mode = null, vals = argus[0], lf = argus[1];
+			}else {
+				mode = argus[0], vals = argus[1], lf = argus[2];
+			}
+			if (typeof mode == 'string'){
+				if (!(m = mode.trim().match(/([\+\-]{1,2})(\d+)/))){
+					throw Error.create('"" pattern error', new Error());
+				}
+				mode = [m[1], parseInt(m[2])];
+			}
+			if (typeof vals == 'string'){
+				temp = vals.split(' ');
+				yes = [];
+				no = [];
+				for (var item, i = 0; i < temp.length; i++){
+					item = temp[i];
+					if (item[0] == '!'){
+						no.push(item.substr(1));
+					}else {
+						yes.push(item);
+					}
+				}
+				vals = {"yes": yes.length && yes, "no": no.length && no};
+				argus[0] = mode;
+				argus[1] = vals;
+			}
+			index = src.index;
+			if (mode){
+				num = mode[1];
+				while (--num >= 0){
+					switch (mode[0]){
+						case '++':
+							index++;
+							break;
+						case '+':
+						default:
+							index = src.nextIndex(index, !lf);
+							break;
+						case '--':
+							index--;
+							break;
+						case '-':
+							index = src.prevIndex(index, !lf);
+							break;
+					}
+				}
+			}
+			return [index, vals.yes, vals.no];
+		};
+	});
+	return module.exports;
+})('./core/grammar/method.js', './core/grammar', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Asset = (function(){
+			var Method, cache, asset_re;
+			Method = require("./method.js");
+			cache = Jsop.data();
+			asset_re = /#(\w*)(\()?|@(\w+)|@\[(.*?)\]|@|(--\w+\b)/;
+			function Asset(str){
+				var match;
+				if (!(typeof str == 'string')){
+					match = str;
+					str = match[0];
+				}else {
+					match = Asset.test(str);
+				}
+				this.string = str;
+				checkAssetType(this, match);
+			};
+			Asset.prototype.parse = function (){
+				switch (this.type){
+					case 'Acc':
+						return parseAccAsset.apply(this, arguments);
+					case 'Call':
+						return parseCallAsset.apply(this, arguments);
+					case 'Cache':
+						return parseCacheAsset.apply(this, arguments);
+					case 'Argv':
+						return Argv[this.name];
+					case 'Logic':
+						return parseLogicAsset.apply(this, arguments);
+				}
+			};
+			Asset.prototype.isAsset = true;
+			Asset.compile = function(match, logic){
+				var str;
+				if (typeof match == 'string'){
+					if (cache[match]){
+						return cache[match];
+					}
+					if (logic){
+						match = [match, null, match];
+					}else {
+						match = Asset.test(match);
+					}
+				}
+				str = match[0];
+				if (!cache[str]){
+					cache[str] = new Asset(match);
+				}
+				return cache[str];
+			};
+			Asset.test = function(text, is_all){
+				var m, ab;
+				if (m = text.match(asset_re)){
+					if (m[2]){
+						if (ab = SText.indexPair(text, '(', ')', m.index+m[1].length)){
+							m[2] = text.slice(ab[0]+1, ab[1]);
+							m[0] = text.slice(m.index, ab[1]+1);
+						}
+					}
+					if (is_all){
+						if (m[0] != text){
+							return;
+						}
+					}
+				}
+				return m;
+			};
+			Asset.parse = function(asset, node, std){
+				if (!asset.isAsset){
+					asset = Asset.compile(asset);
+				}
+				return asset.parse(node, std);
+			};
+			// compile asset
+			function checkAssetType(self, match){
+				var m;
+				if (match[1]){
+					checkCallAsset(self, match[1], match[2]);
+					return true;
+				}
+				if (match[2]){
+					if (m = Asset.test(match[2], true)){
+						return checkAssetType(self, m);
+					}
+					checkLogicAsset(self, match[2]);
+					return true;
+				}
+				if (match[3]){
+					self.type = 'Cache';
+					self.name = match[3];
+					if (/^\d+$/.test(self.name)){
+						self.quick = true;
+					}
+					return true;
+				}
+				if (match[5]){
+					self.type = 'Argv';
+					self.name = match[5];
+					return true;
+				}
+				checkAccAsset(self, match[4]);
+				return true;
+			};
+			function checkCallAsset(self, name, params){
+				self.type = 'Call';
+				self.name = name;
+				if (params){
+					params = SText.split(params, ',', true);
+					for (var item, i = 0; i < params.length; i++){
+						item = params[i];
+						if (i == 0 && /^@(\w+|\[.*?\])?$/.test(item)){
+							params[i] = Asset.compile(item);
+						}else if (/^\`([\w\W]*?)\`$/.test(item)){
+							params[i] = item.slice(1, -1).trim();
+						}
+					}
+				}
+				self.params = params || [];
+				return true;
+			};
+			function checkAccAsset(self, params){
+				self.type = 'Acc';
+				if (params){
+					params = params.split('.');
+					for (var item, i = 0; i < params.length; i++){
+						item = params[i];
+						params[i] = /^-?\d+$/.test(item) ? parseInt(item) : item;
+					}
+				}
+				self.params = params || [];
+				return true;
+			};
+			function checkLogicAsset(self, text){
+				var slice, temp, item;
+				self.type = 'Logic';
+				self.length = 0;
+				slice = SText.split(text, /\&\&|\|\|/, false);
+				for (var str, i = 0; i < slice.length; i++){
+					str = slice[i];
+					str = str.trim();
+					temp = SText.split(str, / (?:\=\=\=|\!\=\=|\=\=|\!\=|\=|\>\=|\<\=|\>|\<) /, false);
+					if (temp.length > 3){
+						throw Error.create(5006, str, new Error());
+					}
+					item = {
+						"left": checkLogicCompute(temp[0]),
+						"right": checkLogicCompute(temp[2]),
+						"oper": temp[1] && temp[1].trim(),
+						"string": str,
+						"and": slice[++i] == '&&'};
+					self[self.length++] = item;
+				}
+				return self;
+			};
+			function checkLogicCompute(text){
+				var list, slice, m;
+				if (text){
+					list = [];
+					slice = SText.split(text.trim(), /(?:^| )(?:\+|\-) |!/, false);
+					for (var str, i = 0; i < slice.length; i++){
+						str = slice[i];
+						str = str.trim();
+						if (/^\[.*\]$/.test(str)){
+							list.push(SText.split(str.slice(1, -1), ' ', true, true));
+						}else {
+							if (m = Asset.test(str, true)){
+								list.push(Asset.compile(m));
+							}else if (str){
+								list.push(SText.cleanESC(str));
+							}
+						}
+					}
+					return list;
+				}
+			};
+			// parse asset
+			function parseAccAsset(node, std){
+				var list, len, ref;
+				if (list = this.params){
+					for (var acc, i = 0; i < list.length; i++){
+						acc = list[i];
+						if (!node){
+							return;
+						}
+						if (acc < 0){
+							len = node.length;
+							if (/block/i.test(node.type)){
+								while (acc++ < 0){
+									len -= 1;
+									while (node[len] && node[len].is('COMMENT')){
+										len -= 1;
+									}
+								}
+								node = node[len];
+							}else {
+								node = node[len+acc];
+							}
+							continue;
+						}
+						if (acc == '@'){
+							node = node.parent;
+							continue;
+						}
+						if (ref = checkQuick(acc, node, std)){
+							node = ref;
+							continue;
+						}
+						node = node[acc];
+					}
+				}
+				return node;
+			};
+			function parseCallAsset(node, std){
+				var params, name, ref;
+				params = this.params;
+				name = this.name;
+				if (params && params.length){
+					if (params[0].isAsset && (params[0].type == 'Acc' || params[0].type == 'Cache')){
+						node = params[0].parse(node, std);
+						params = params.slice(1);
+					}
+				}
+				ref = std.parser(name, node, params, true);
+				if (ref != null){
+					return ref;
+				}
+				return callMethod(name, node, params, std);
+			};
+			function parseCacheAsset(node, std){
+				var vars, ref;
+				if (this.quick){
+					return node[this.name];
+				}
+				vars = std.handle.variables;
+				if (vars.hasOwnProperty(this.name)){
+					return vars[this.name];
+				}
+				if (ref = checkQuick(this.name, node, std)){
+					return ref;
+				}
+				// if @.name == 'ref' || @.name == 'i':
+				// 	return callMethod('VAR', node, ['let', @.name], std);
+				return '';
+			};
+			function checkQuick(name, node, std){
+				var scope;
+				switch (name){
+					case 'ref':
+						return callMethod('VAR', node, ['undefined ref', name], std);
+					case 'i':
+						return callMethod('VAR', node, [name], std);
+					case 'name':
+						return node.isScope ? node.valid.name : node.scope.valid.name;
+					case 'super':
+						scope = (node.isScope ? node : node.scope).query('Class');
+						return scope && scope.super;
+					case 'Class':case 'Function':case 'Root':
+						return node.isScope ? node.query(name) : node.scope.query(name);
+				}
+			};
+			function parseLogicAsset(node, std){
+				var ref;
+				ref = false;
+				for (var item, i = 0; i < this.length; i++){
+					item = this[i];
+					ref = parseLogicCompare(item, node, std);
+					if (ref){
+						if (!item.and){
+							return true;
+						}
+					}else if (item.and){
+						return false;
+					}
+				}
+				return false;
+			};
+			function parseLogicCompare(item, node, std){
+				var oper, asset, left, right;
+				oper = item.oper;
+				if (!oper){
+					return parseLogicCompute(item.left, node, std);
+				}
+				if (oper == '='){
+					if (item.left.length == 1){
+						asset = item.left[0];
+						if (asset.isAsset && asset.type == 'Cache'){
+							std.handle.variables[asset.name] = parseLogicCompute(item.right, node, std);
+							return true;
+						}
+					}
+					return false;
+				}
+				left = parseLogicCompute(item.left, node, std);
+				right = parseLogicCompute(item.right, node, std);
+				switch (oper){
+					case '===':case '!==':case '==':case '!=':
+						if (typeof right == 'string'){
+							right = [right];
+						}
+						if (left){
+							if (left.text && right.indexOf(left.text) != -1){
+								return oper[0] == '!' ? false : true;
+							}
+							if (oper.length == 3){
+								if (left.type && right.indexOf(left.type) != -1){
+									return oper[0] == '!' ? false : true;
+								}
+							}else {
+								if (left.is && left.is.apply(left, right)){
+									return oper == '!=' ? false : true;
+								}
+							}
+						}
+						if (right.indexOf(left) != -1){
+							return oper[0] == '!' ? false : true;
+						}
+						return oper[0] == '!' ? true : false;
+					case '>=':
+						return left >= right;
+					case '<=':
+						return left <= right;
+					case '>':
+						return left > right;
+					case '<':
+						return left < right;
+				}
+			};
+			function parseLogicCompute(exps, node, std){
+				var list, _not;
+				if (!exps || !exps.length){
+					return null;
+				}
+				list = [];
+				for (var exp, i = 0; i < exps.length; i++){
+					exp = exps[i];
+					if (exp.isAsset){
+						exp = exp.parse(node, std);
+					}else if (exp == '!'){
+						_not = true;
+						continue;
+					}
+					list.push(_not ? !exp : exp);
+					_not = false;
+				}
+				if (list.length == 1){
+					return list[0];
+				}
+				for (var i = 0; i < list.length; i++){
+					if (list[i].isToken || list[i].isSyntax || list[i].isCard){
+						list[i] = list[i].text;
+					}
+				}
+				return eval(list.join(''));
+			};
+			function callMethod(name, node, params, std){
+				if (!(Method.hasOwnProperty(name))){
+					throw Error.create(5002, name, std, node, new Error());
+				}
+				return Method[name].call(std, node, params);
+			};
+			return Asset;
+		})()
+		module.exports = Asset;
+	});
+	return module.exports;
+})('./core/standard/asset.js', './core/standard', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Asset, Card
+		Asset = null
+		Card = require("../card.js")
+		function EACH(node, params){
+			var i, index, patt, rep, sep, list;
+			if (/^\d$/.test(params[i = 0])){
+				index = parseInt(params[i++]);
+			}else {
+				index = 0;
+			}
+			if (/#|@/.test(params[i])){
+				patt = params[i++];
+			}
+			if (params[i] && /. \-\-\> ./.test(params[i])){
+				rep = SText.split(params[i++], '\-\-\>', true, true);
+			}
+			if (params[i]){
+				sep = params[i++];
+			}
+			list = [];
+			for (var item, j = index; j < node.length; j++){
+				item = node[j];
+				if (patt){
+					item = this.pattern(patt.replace(/\$/g, j), item);
+				}else {
+					if (rep && item.isToken && rep[0] == item.text){
+						item = rep[1];
+					}else {
+						item = this.read(item);
+					}
+				}
+				if (item){
+					list.push(item);
+					if (sep){
+						list.push(sep);
+					}
+				}
+			}
+			if (sep && list[list.length-1] == sep){
+				list.pop();
+			}
+			return list;
+		}
+		module.exports.EACH = EACH
+		function COMMA(node, params){
+			var list;
+			params = (params || []).concat([', ']);
+			list = EACH.call(this, node, params);
+			return new Card('CommaExpr', list);
+		}
+		module.exports.COMMA = COMMA
+		function INSERT(node, params){
+			var name, asset, type, scope;
+			name = params[0];
+			asset = checkAsset(params[1], node, this);
+			type = params[2];
+			scope = type && node.scope.query(type) || node.scope;
+			scope.cachePush(name, asset);
+			return true;
+		}
+		module.exports.INSERT = INSERT
+		function HEAD(node, params){
+			return INSERT.call(this, node, ['head', params[0], params[1]]);
+		}
+		module.exports.HEAD = HEAD
+		function END(node, params){
+			return INSERT.call(this, node, ['end', params[0], params[1]]);
+		}
+		module.exports.END = END
+		function CHECK(node, params){
+			var state;
+			if (!(state = node.scope.check(node))){
+				return node.scope.define(node);
+			}
+			return state[0];
+		}
+		module.exports.CHECK = CHECK
+		function STATE(node, params){
+			var state, target, alias;
+			if (params.length){
+				state = params[0];
+				target = checkAsset(params[1], node, this);
+				alias = params[2];
+				return node.scope.define(state, target, alias);
+			}else {
+				return node.scope.state(node);
+			}
+		}
+		module.exports.STATE = STATE
+		function ALIAS(node, params){
+			var text, token;
+			if (text = node.scope.alias(node)){
+				token = node.tokens(0).clone(text);
+				return token;
+			}else {
+				return node;
+			}
+		}
+		module.exports.ALIAS = ALIAS
+		function CONST(node, params){
+			var text, scope, cache;
+			text = node.text;
+			if (node.parent.type == 'AssignExpr'){
+				return text;
+			}
+			scope = node.scope.root;
+			!scope.consts && (scope.consts = {});
+			if (scope.consts[text]){
+				return scope.consts[text];
+			}else {
+				scope.consts[text] = checkVariable('_rg_', scope);
+				cache = scope.cache;
+				!cache.head && (cache.head = []);
+				cache.head.push(scope.consts[text]+' = '+text);
+				return scope.consts[text];
+			}
+		}
+		module.exports.CONST = CONST
+		function VALUE(node, params){
+			var name, ref, _name;
+			if (!params || !params.length){
+				// return node.is('Value', 'Operate') ? @.read(node) : @.pattern('(@)', node);
+				return node.is('AssignExpr') ? this.pattern('(@)', node) : this.read(node);
+			}
+			name = params[0];
+			if (/@|#/.test(name)){
+				ref = checkAsset(name, node, this);
+				// if node.parent.is('AssignExpr'):
+				// 	return ref.insert(0, '(').add(')');
+				return ref;
+			}
+			if (['VariableExpr', 'AccessExpr', 'IDENTIFIER'].indexOf(node.type)>=0){
+				return this.handle.variables[name] = node;
+			}
+			_name = checkVariable(name, node.scope, node);
+			this.handle.variables[name] = _name;
+			return this.pattern('(@'+name+' = @)', node);
+		}
+		module.exports.VALUE = VALUE
+		function LIST(node, params){
+			var list, ref;
+			list = [];
+			for (var i = 0; i < params.length; i++){
+				ref = this.pattern(params[i], node);
+				if (isArray(ref)){
+					list.push.apply(list, ref);
+				}else {
+					list.push(ref);
+				}
+			}
+			return list;
+		}
+		module.exports.LIST = LIST
+		function VAR(node, params){
+			var type, name, _name, asset;
+			type = params[0];
+			name = params[1];
+			if (!name){
+				name = type, type = 'undefined';
+			}
+			_name = checkVariable(name, node.scope, node, type);
+			if (asset = params[2]){
+				if (/#|@/.test(asset)){
+					asset = checkAsset(asset, node, this);
+				}
+				if (asset){
+					node.scope.define(type, asset, _name);
+				}
+			}
+			return this.handle.variables[name] = _name;
+		}
+		module.exports.VAR = VAR
+		function STR(node, params){
+			if (node.is('STRING')){
+				return node;
+			}
+			return this.pattern('"@"', node);
+		}
+		module.exports.STR = STR
+		function DEL(node, params){
+			node.parent[node.index] = null;
+			return true;
+		}
+		module.exports.DEL = DEL
+		function CARD(node, params){
+			var type, list, card;
+			type = params[0];
+			if (params[1]){
+				node = checkAsset(params[1], node, this);
+			}
+			list = [];
+			for (var i = 0; i < node.length; i++){
+				if (node[i]){
+					if (node[i].isNode){
+						list.push(this.read(node[i]));
+					}else {
+						list.push(node[i]);
+					}
+				}
+			}
+			if (list.length){
+				switch (type){
+					case 'var':
+						card = this.pattern('var #COMMA(@)', list);
+						card.type = 'VarStam';
+						return card;
+					default:
+						return new Card(type || 'Line', list);
+				}
+			}
+		}
+		module.exports.CARD = CARD
+		function checkAsset(text, node, std){
+			var m;
+			!Asset && (Asset = require("./asset.js"));
+			if (m = Asset.test(text)){
+				if (m[0] == text){
+					return Asset.parse(text, node, std);
+				}
+				return std.pattern(text, node);
+			}
+			return text;
+		}
+		function checkVariable(name, scope, node, type, deep){
+			var name_map, i, _name, state;
+			if (name == null) name = 'i';
+			if (deep == null) deep = true;
+			if (name.length == 1){
+				name_map = [
+					'i',
+					'j',
+					'k',
+					'l',
+					'm',
+					'n',
+					'o',
+					'p',
+					'q',
+					'r',
+					's',
+					't',
+					'u',
+					'v',
+					'w',
+					'k',
+					'y',
+					'z'];
+				i = name_map.indexOf(name);
+			}else {
+				i = 0;
+			}
+			_name = name;
+			while (state = checkExist(_name, scope, deep)){
+				if (state == 'undefined ref'){
+					break;
+				}
+				if (name_map){
+					_name = name_map[++i];
+				}else {
+					_name = name+(i++);
+				}
+			}
+			if (node.parent.is('Assign')){
+				node = node.parent;
+			}
+			if (node.parent.is('ArgusStam')){
+				node = node.parent;
+			}
+			if (node.is('VarStam', 'LetStam', 'ConstStam') || node.parent.is('VarStam', 'LetStam', 'ConstStam')){
+				return _name;
+			}
+			scope.define(type || 'undefined', _name);
+			return _name;
+		}
+		function checkExist(name, scope, deep){
+			var state, node;
+			if (state = scope.state(name)){
+				return state;
+			}
+			if (deep && (node = scope.target)){
+				node.each(function(target, indexs){
+					var type;
+					type = target.type;
+					if (target.is('Function') || type == 'MemberExpr'){
+						return 0;
+					}
+					if (type == 'IDENTIFIER' || type == 'KEYWORD'){
+						if (target.text == name){
+							state = 'unknow';
+							return false;
+						}
+					}
+				});
+			}
+			return state;
+		};
+	});
+	return module.exports;
+})('./core/standard/method.js', './core/standard', false);
+module.exports = (function(_filename, _dirname, main){var module  = Module.main(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var cmd_help
+		require("./tea.js")
+		cmd_help = "* <r:TeaJS:> version <g:0.2.0:>\n\
+		-h, --help                           显示帮助\n\
+		-f, --file    <file path>            编译文件路径\n\
+		-p, --path    <project dir>          项目目录\n\
+		-o, --out     <output path>          输出文件 或 目标目录\n\
+		-e, --eval    <Tea script snippet>   编译一段字符串\n\
+		-d, --define  <file path>            宏定义文件路径，默认加载项目下的 __define.tea 文件\n\
+		-m, --map     [source output path]   生成 source map 文件\n\
+		-c, --concat                         合并文件\n\
+		-v, --verbose                        显示编译信息\n\
+		-s, --safe                           安全模式编译\n\
+		    --clear                          清理注释\n\
+		    --tab     <number>               设置 tab size\n\
+		    --token                          输出 token 解析\n\
+		    --ast                            输出 ast 解析\n\
+		    --nopp                           不进行预编译\n\
+		    --test                           编译后运行\n\
+		... 自定义参数，用于预编译时判断与读取(使用Argv['--name']读取)"
+		if (!module.parent){
+			(function(){
+				var files, ctx;
+				Argv.parse(process.argv, cmd_help);
+				if (Argv['--help']){
+					print(Argv.help());
+					Tea.exit();
+				}
+				if (Argv['--tab']){
+					Tea.tabsize(parseInt(Argv['--tab']));
+				}
+				if (Argv['--define']){
+					files = checkPath(Argv['--define'], Argv['--path']);
+					if (!files){
+						print('* <g:Cant find define file as <r:"'+Argv['--define']+'":>!!:>');
+						Tea.exit();
+					}
+					Tea.prep.load(files);
+				}
+				if (Argv['--eval'] && Argv['--eval'].length){
+					ctx = Tea.context(null, Argv['--eval']);
+					nextStep(ctx);
+					return;
+				}
+				if (Argv['--file'] || Argv['--path']){
+					checkDefine(Argv['--path'] || Fp.dirName(Argv['--file']));
+					files = checkPath(Argv['--file'], Argv['--path']);
+					for (var file, i = 0; i < files.length; i++){
+						file = files[i];
+						ctx = Tea.context(file);
+						nextStep(ctx);
+					}
+					return;
+				}
+				Argv.pipe(function(chunk){
+					if (!chunk){
+						print('\n* Are you <g:NongShaLei??????:>\n');
+						print(Argv.help());
+						Tea.exit();
+					}
+					ctx = Tea.context(null, chunk);
+					nextStep(ctx);
+					return;
+				});
+			})();
+			function nextStep(ctx){
+				var out;
+				Tea.log('* <g:Load:>  : '+(ctx.fileName || 'by stdin'));
+				if (Argv['--token']){
+					print(ctx.fileName);
+					print(ctx.source);
+				}
+				if (Argv['--ast']){
+					print(ctx.fileName);
+					print(ctx.AST);
+				}
+				if (Argv['--ast'] || Argv['--token']){
+					return;
+				}
+				if (Argv['--out']){
+					out = checkOut(Argv['--out'], Argv['--path'], ctx.fileName);
+					ctx.output(out, Argv['--map']);
+					Tea.log('* <g:Output:>: '+out);
+				}
+				if (Argv['--test']){
+					runTest(ctx);
+				}else if (!Argv['--out']){
+					console.log(ctx.output());
+				}
+			};
+			function runTest(ctx, param){
+				var child_process, out, cmds, temp_file;
+				child_process = require("child_process");
+				out = ctx.outfile;
+				cmds = [];
+				if (!out){
+					temp_file = ctx.fileName.replace(/\.(js|tea)$/ig, '')+'.tmp.js';
+					ctx.output(temp_file);
+					cmds.push('node', temp_file);
+				}else {
+					cmds.push('node', out);
+				}
+				if (typeof param == 'string'){
+					cmds = cmds.concat(param.split(' '));
+				}
+				Tea.log('* <r:Test:>  : '+cmds.join(' '));
+				child_process.exec(cmds.join(' '), {"maxBuffer": 50000*1024}, function(err, stdout, stderr){
+					var text;
+					text = stdout+''+stderr;
+					print(text.replace(/^/mg, '\t  | '));
+					if (temp_file){
+						child_process.execSync('rm -rf '+temp_file);
+					}
+					Tea.exit();
+				});
+			};
+			function checkPath(file, path, out){
+				var files, file_list, temp;
+				if (path){
+					path = Fp.resolve(path);
+				}
+				if (file){
+					files = [];
+					file_list = [];
+					if (isArray(file)){
+						for (var i = 0; i < file.length; i++){
+							file_list.push(Fp.resolve(path, file[i]));
+						}
+					}else {
+						file_list.push(Fp.resolve(path, file));
+					}
+					for (var file, i = 0; i < file_list.length; i++){
+						file = file_list[i];
+						if (/[^\w\/]/.test(file) || Fp.isDir(file)){
+							temp = Fp.checkFiles(file, null, ['index.tea']);
+							files.push.apply(files, temp);
+						}else if (Fp.isFile(file)){
+							files.push(file);
+						}else if (Fp.isFile(file+'.tea')){
+							files.push(file+'.tea');
+						}
+					}
+				}else {
+					files = Fp.scanFile(path, /\.tea/, 100);
+				}
+				for (var file, i = files.length - 1; i >= 0; i--){
+					file = files[i];
+					if (/(__define\.tea)$/.test(file)){
+						files.splice(i, 1);
+					}
+				}
+				return files;
+			};
+			function checkOut(out, path, file){
+				out = Fp.resolve(out, true);
+				if (Fp.isDir(out) || /\/$/.test(out)){
+					if (path){
+						out = Fp.join(out, Fp.relative(Fp.resolve(path), Fp.resolve(file)));
+					}else {
+						out = Fp.join(out, Fp.baseName(file));
+					}
+					out = out.replace(/\.tea$/, checkExt());
+				}
+				return out;
+			};
+			function checkExt(){
+				switch (Argv['--std']){
+					case 'es5':case 'es6':
+					default:
+						return '.js';
+				}
+			};
+			function checkDefine(path){
+				var file;
+				file = Fp.join(Fp.resolve(path), '__define.tea');
+				if (Fp.isFile(file)){
+					Tea.prep.load(file);
+				}
+			};
+		};
+	});
+	return module.load();
+})('./index.js', '.', true);

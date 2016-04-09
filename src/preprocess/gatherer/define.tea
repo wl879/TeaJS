@@ -1,0 +1,72 @@
+
+exports['#define'] = function(prepor, src, index):
+	token = src[index];
+	a = src.nextIndex(index);
+	if src[a].is('IDENTIFIER', 'KEYWORD'):
+		name = src[a].text;
+		if src[ a + 1 ].text == '(':
+			args = src.join( a + 2, (a = src.indexOf(')', a))-1 ).split(',');
+		[a, b, body] = checkDefineBody.call(@, src, src.nextIndex(a), prepor);
+		prepor.add('macro', name, args, body, token.location);
+		src.delete(index, b);
+		// debug log
+		Tea.log('#define marco: '+name, token.location);
+
+exports['#undef'] = function(prepor, src, index):
+	token = src[index];
+	b     = src.indexOf('\n', index) || src.length - 1;
+	names = src.join(index+1, b-1).trim().split(',');
+	prepor.undef.apply(prepor, names);
+	src.delete(index, b);
+	// debug log
+	Tea.log('#undef marco : '+names.join(','), token.location);
+
+exports['#expr'] = exports['#stam'] = function (prepor, src, index):
+
+	token = src[index];
+	type  = token.text.substr(1);
+	a     = src.nextIndex(index);
+	name  = src[a].text;
+	a     = src.nextIndex(a);
+	if src[a].text == '<':
+		pattern = src.join( a+1, (a = src.indexOf('>', a)) - 1 );
+	[a, b, body] = checkDefineBody.call(@, src, src.nextIndex(a), prepor);
+	prepor.add(type, name, pattern, body, token.location);
+	src.delete(index, b);
+	// debug log
+	Tea.log('#define '+type+' : '+name, token.location);
+
+exports['#argv'] = function(prepor, src, index):
+	token = src[index];
+	b     = src.indexOf('\n', index) || src.length -1;
+	argv  = src.join(index+1, b).trim();
+	Argv.parse( argv.split(' ') );
+	src.delete(index, b);
+	// debug log
+	Tea.log('#argv        : '+argv, token.location);
+
+exports['#line'] = function(prepor, src, index):
+	token = src[index];
+	token.text = token.location.lineNumber+'';
+	token.types = ['NUMBER', 'CONST'];
+
+function checkDefineBody(src, a, prepor):
+	mark = src[a];
+	if mark.text == '\n' && src[a+1].text == '{':
+		mark = src[++a];
+	if mark.text == '{':
+		b = src.indexPair('{', '}', a, true)[1];
+		body_src = src.clone(a+1, b-1);
+		b = src.indexOf('\n', b) || src.length -1;
+	else:
+		b = src.indexOf('\n', a) || src.length -1;
+		body_src = src.clone(a, b-1);
+
+	for i, token -> body_src:
+		if !token || token.text == '#script':
+			continue;
+		if @[token.type]:
+			i = @[token.type](prepor, body_src, i) || i;
+	
+	text = body_src.join();
+	return [a, b, text, body_src]

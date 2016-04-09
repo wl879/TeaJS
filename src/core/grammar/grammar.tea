@@ -1,0 +1,135 @@
+
+class Grammar:
+	
+	require "../syntax.js", "./pattern.js";
+
+	constructor( prepor ):
+		@.prepor = prepor;
+		@.handle    = {};
+
+	next(src, ig_lf):
+		src.next(ig_lf, true);
+		if @.parser('COMMENT', src, null, false, true):
+			@.next(src, ig_lf);
+		return src;
+
+	parser(name, src, params, __try, __inherit_handle):
+		if arguments.length == 1:
+			return name in Grammar;
+
+		if not name in Grammar:
+			__try && return;
+			Err 4001, name;
+
+		parser  = Grammar[name];
+
+		_handle = @.handle;
+		if !__inherit_handle:
+			@.handle = {name : name, debug: parser.debug, up: _handle, start: src.index};
+
+		if parser.fn:
+			ref = parser.fn.call(@, src, params);
+		else:
+			@.handle.pattern = parser.pattern;
+			ref = @.pattern(parser.pattern, src, params);
+	
+		if @.handle.error:
+			return errorResponse(@.handle.error, src, @);
+
+		if ref:
+			ref = packResponse(ref, parser.name, parser.mode, @.handle);
+			if _handle != @.handle:
+				_handle.subs |= [];
+				_handle.subs.push( @.handle );
+
+		@.handle.end = src.index;
+		@.handle = _handle;
+		return ref;
+
+	pattern(patt, src, params, packname):
+		if !patt.isPattern:
+			patt = Pattern.compile(patt);
+			if !src:
+				return patt;
+
+		if packname:
+			_handle = @.handle;
+			@.handle = {name : packname, pattern: patt, up: _handle};
+
+		if ref = patt.parse(@, src, params):
+			if ref.error:
+				return errorResponse(ref.error, src, @);
+
+		if packname:
+			ref = packResponse(ref, packname, null, @.handle);
+			if _handle != @.handle:
+				_handle.subs |= [];
+				_handle.subs.push( @.handle );
+			@.handle = _handle;
+
+		return ref;
+
+	stack():
+		if @.handle.subs:
+			ref = getSubsStack( @.handle );
+		else:
+			ref = getUpStack( @.handle );
+		ref.className = 'GrammarStack';
+		return ref;
+
+	error(msg, target):
+		if @.handle.try:
+			return;
+		if msg:
+			@.handle.error = { message: msg, target : target };
+
+	function packResponse(res, name, mode, handle):
+		switch mode:
+			case 'not check':
+				return res;
+			case 'ret node':
+				if !res.isSyntax || (res.type != name && !handle.packName):
+					return new Syntax(name, res);
+			default:
+				if res.isToken || res.isSyntax:
+					return res;
+				if res.length == 1:
+					return res[0];
+				if res.length > 1:
+					return new Syntax(name, res);
+		return res;
+
+	function getSubsStack(handle):
+		if !handle.subs:
+			return handle.name;
+		stack = {name: handle.name, subs: [] };
+		if handle.error:
+			stack.name = '∆'+stack.name;
+		if handle.packName:
+			stack.name += '('+handle.packName+')';
+		for sub => handle.subs:
+			stack.subs.push( getSubsStack(sub) );
+		return stack;
+
+	function getUpStack(handle, __sub):
+		stack = {name: handle.name, subs:[]};
+		if handle.error:
+			stack.name = '∆'+stack.name;
+		if __sub:
+			stack.subs.push(__sub);
+		if handle.up:
+			return getUpStack(handle.up, stack)
+		return stack;
+
+	function errorResponse(err, src, grm):
+		if err.message === '∆':
+			err.message = 1100;
+
+		if err.message == 1100 || err.message == 1101:	
+			if Error.code && Error.code[ err.target.types[1] ]:
+				err.message =  Error.code[ err.target.types[1] ];
+			else:
+				print grm.stack();
+		Err err.message, err.target;
+
+module.exports = Grammar;

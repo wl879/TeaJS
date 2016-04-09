@@ -1,0 +1,244 @@
+---
+repository:
+    tea:
+        patterns:
+            # comment
+            -   match: //.*?$|#!.*?$
+                name: comment.line.double-slash.js
+            -   match: "#!.*?$"
+                name: comment.line.number-sign.js
+            -   name: comment.block
+                begin: "\\/\\*"
+                end: "\\*\\/"
+            # string
+            -   match: \'{3}(?!')|\"{3}(?!")|`
+                name: storage.type.template
+            -   name: string.quoted.single.js
+                begin: "'{4}|'"
+                end: "'{4}|'"
+                patterns:
+                -   match: \\(x\h{2}|[0-2][0-7]{,2}|3[0-6][0-7]?|37[0-7]?|[4-7][0-7]?|.)
+                    name: constant.character.escape.js
+            -   name: string.quoted.double.js
+                begin: "\"{4}|\""
+                end: "\"{4}|\""
+                patterns:
+                -   match: \\(x\h{2}|[0-2][0-7]{,2}|3[0-6][0-7]|37[0-7]?|[4-7][0-7]?|.)
+                    name: constant.character.escape.js
+
+                -   match: \$\{((?:\{.*?\}|[^\{\}])+)\}|\$(\w+)
+                    name: constant.character.escape.js
+                    captures:
+                        '1':
+                            name: variable.parameter
+                        '2':
+                            name: variable.parameter
+            # regexp
+            -   name: string.regexp.js
+                begin: (?<=^|[=(:,|&!]|return|if|else|while|switch|not)\s*/(?![/*+{}?])
+                end: \/[igm]*
+                patterns:
+                -   match: (\\.)|\[((?:\\]|.)*?)\]
+                    captures:
+                        '1':
+                            name: constant.character.escape
+                        '2':
+                            name: constant.character.escape
+                -   match: ([\^$?*+|.])
+                    name: keyword.operator
+            # number
+            -   match: (?<![a-zA-Z])(0[xX][0-9a-fA-F]+|(?:\.\d+|\d+(?:\.\d+)?)(?:e\-?\d+)?)
+                name: constant.numeric
+            # member
+            -   match: \.(length|__proto__|prototype|constructor|call|apply|toString|replace|exports|split|keys|slice|splice|push|pop|shift|unshift)\b
+                captures:
+                    '1':
+                        name: support.constant
+            # sub
+            -   name: keyword.other
+                begin: (?<!return|var|let|const)(?<=\w|\]\))\s*\[\s*(?!['"])
+                end: \]
+                patterns:
+                -   match: \w+
+                    name: variable.parameter
+            # function
+            -   match: \b(function|export default|export|get|set|static|prototype|property) +([$\w]+) *\((.*?)\)(?=\s*[:{])
+                captures:
+                    '1':
+                        name: storage.type
+                    '2':
+                        name: entity.name.function
+                    '3':
+                        name: variable.parameter
+            -   match: ^\s*([$\w]+)(?<!if|else|while|with|switch|try|catch|finally) *\((.*?)\)(?=\s*[:{])
+                captures:
+                    '1':
+                        name: entity.name.function
+                    '2':
+                        name: variable.parameter
+            -   match: (function) *\(([^()]*)\)(?=\s*[:{])
+                captures:
+                    '1':
+                        name: storage.type
+                    '2':
+                        name: variable.parameter
+            -   match: \(([^()]*)\) *=>
+                name: entity.name.function
+                captures:
+                    '1':
+                        name: variable.parameter
+            -   match: \b(class) +((?!extends\b)[$\w]+)( +extends +(,?[$\w]+))?
+                captures:
+                    '1':
+                        name: storage.type
+                    '2':
+                        name: entity.name.function
+                    '3':
+                        name: keyword.operator
+                    '4':
+                        name: variable.parameter
+            # keywords
+            -   match: \b(true|false|null|Infinity|NaN|undefined|global|void|exports|module)\b
+                name: constant.character
+            -   match: \b(for|goto|if|else|return|switch|case|default|try|catch|finally|throw|while|with|do|break|continue|delete|debugger|yield|import|require)\b
+                name: keyword.control
+            -   match: \b(as|in|of|not is|not|is|and|or|typeof|new|instanceof|extends)\b
+                name: keyword.operator
+            -   match: \b(var|let|const|class|function|constructor|export|prototype|property)\b
+                name: storage.type
+            -   match: \b(eval|super|Array|Number|Function|Object)\b
+                name: support.function
+            -   match: \b(this|JSON|console|Math)\b
+                name: support.function
+            # names
+            -   match: "\\b(?:(__[\\$a-zA-Z_]\\w*)|([A-Z][\\$a-zA-Z_]\\w*))\\b"
+                captures:
+                    '1':
+                        name: constant.character
+                    '2':
+                        name: storage.type
+            # simply json
+            -   begin: (?<!\))\s*\{
+                end: \}
+                patterns:
+                -   match: ("[^"]+"|\w+|\d+)\s*(?=\:)
+                    captures:
+                        '1':
+                            name: entity.name.function
+                -   include: '#tea'
+            # empty arguments
+            -   match: "\\(\\s*\\)"
+                name: comment
+            # symbol
+            -   match: (\:{2}|\.{2})
+                name: storage
+            -   match: ([<>?\|][=-]+|[=-]+[<>?\|])
+                name: keyword.other
+            -   match: ([^\w\s"'#{};,\.\[\]():])
+                name: keyword.operator
+            #  call
+            -   match: ([\$a-zA-Z_]\w*) +(?!as|in|of|not is|not|is|and|or|instanceof)(?=[\w"']|[-+][\$w(])
+                name: entity.name.tag
+            # pattern
+            -   name: keyword
+                begin: "(^|(?<=[:=,(]))\\s*<"
+                end: ">"
+                patterns:
+                -   include: "#syntax_pattern"
+                -   match: "\\\\>"
+    
+    syntax_pattern:
+        patterns:
+            -   match: \@(\@\=|\@|\=|\?|\~|\:|\!)\w+
+                name: comment
+            -   match: (\+\?|\*?|\?\:|\?\!|\?\=|\?|\+|\*|\!|∆\w+|∅|→|\\n\b|\&(==|===|\!=|\!==))
+                name: string
+            -   match: "[A-Z]\\w+"
+                name: storage.type
+            -   match: (\w+|[^\{\}\(\)\[\]\#\|\,]|[\{\}\(\)\[\]\,\#\|](?=\s*[→∅?+*!∆]))
+                name: constant.character
+            -   include: "#syntax_sub_1"
+            
+    syntax_sub_1:
+        begin: "(?<!\\\\)\\("
+        beginCaptures:
+            "0": {name: "keyword"}
+        end: "(?<!\\\\)\\)"
+        endCaptures:
+            "0": {name: "keyword"}
+        patterns:
+            -   include: "#syntax_sub_2"
+            -   include: "#syntax_pattern"
+
+    syntax_sub_2:
+        begin: "(?<!\\\\)\\("
+        end: "(?<!\\\\)\\)"
+        beginCaptures:
+            "0": {name: "variable.parameter"}
+        endCaptures:
+            "0": {name: "variable.parameter"}
+        patterns:
+            -   include: "#syntax_pattern"
+
+patterns:
+-   include: "#tea"
+
+-   begin: "#(include)"
+    end: ";|(?<!,)\\n"
+    patterns:
+    -   match: "(?:(?:[^,;\\s\\\\]+(?:\\\\ )*)+)"
+        name: entity.name.function
+    captures:
+        '1':
+            name: keyword.prep
+        '2':
+            name: entity.name.function
+
+-   match: "#(script|endif|end|ifdef|if|elifdef|elif|else)"
+    name: keyword.other
+
+-   match: "#(token)\\ +([\\$a-zA-Z_]\\w*(?:\\s*,\\s*[\\$a-zA-Z_]\\w*)*)|#(exp|stat)\\
+        +([\\$a-zA-Z_]\\w*)\\ +(\\/[^\\/]+\\/)|#(define)\\ +([\\$a-zA-Z_]\\w*)(?:\\(((?:\\(.*?\\)|[^\\)]*)*)\\))?|#(test|end\\w*)(.*$)|#(run|endrun|line|token|define|exp|stat|argv|undef|if\\w*|el\\w+)\\b|#(include)\\s*((?:(?:[^,;\\s\\\\]+(?:\\\\
+        )*)+)(?:\\s*,\\s*(?:(?:[^,;\\s\\\\]+(?:\\\\ )*)+))*)"
+    captures:
+        '1':
+            name: keyword.prep
+        '2':
+            name: entity.name.function
+        '3':
+            name: keyword.prep
+        '4':
+            name: entity.name.function
+        '5':
+            name: variable.parameter
+        '6':
+            name: keyword.prep
+        '7':
+            name: entity.name.function
+        '8':
+            name: variable.parameter
+        '9':
+            name: keyword.prep
+        '10':
+            name: comment
+        '11':
+            name: keyword.prep
+        '12':
+            name: keyword.prep
+        '13':
+            name: entity.name.function
+
+-   match: "#\\w+"
+    name: entity.name.tag
+
+
+fileTypes:
+-   tea
+firstLineMatch: "^#!/usr/bin/env node"
+foldingStartMarker: ''
+foldingStopMarker: ''
+keyEquivalent: "^~T"
+uuid: 93E017CC-6F27-11D9-90EB-000D93589AF6
+comment: 'TeaJS Syntax: version 0.1'
+name: TeaJS
+scopeName: source.js

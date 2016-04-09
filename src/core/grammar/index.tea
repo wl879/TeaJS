@@ -1,0 +1,48 @@
+
+require  "./pattern.js", "./grammar.js";
+
+export create(prepor):
+	return new Grammar(prepor);
+
+export pattern(text, src, prepor):
+	patt = Pattern.compile(text);
+	if src:
+		grm = new Grammar(prepor);
+		node = grm.pattern(patt, src);
+		return node;
+	return patt;
+
+export parser(name, src, params, prepor):
+	grm = new Grammar(prepor);
+	node = grm.parser(name, src, params, true);
+	if node && !node.isSyntax && node.length == 1:
+		node = node[0];
+	return node;
+
+export define(name, patt, mode):
+	if mode == 'debug':
+		mode = null;
+		debug = true;
+	if !mode:
+		if name.match(/\w+(Token|Expr|Decl|Patt|Stam)$/):
+			mode = 'ret node';
+		else:
+			mode = 'not check';
+
+	if patt as 'function':
+		Grammar[name] = {
+			name : name
+			mode : mode
+			fn   : patt
+			debug : debug
+		};
+	else:
+		Grammar[name] = {
+			name : name
+			mode : mode
+			pattern : Pattern.compile(patt)
+			debug : debug
+		};
+		if debug:
+			print( '| * '+name, Grammar[name].pattern );
+	return Grammar[name];

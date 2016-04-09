@@ -1,71 +1,54 @@
+
 require "../lib/tea.js";
 
-var argv = process.argv.slice();
-while argv[0] && Path.basename( argv[0] ) != Path.basename(__filename):
+argv = process.argv.slice();
+while argv[0] && Fp.baseName( argv[0] ) != Fp.baseName(__filename):
 	argv.shift();
 if argv.length:
 	argv.shift();
 else:
 	argv = process.argv.slice();
 
-function start(file):
-	var text = Text.readFile(file);
-	var ctx = tea.context( {file:file} ),
-		src = ctx.source;
-	var res = {}, last = src.length, is_split = false, n = 0;
-	for i <- src:
-		if src[i].type == 'CommDecl':
-			is_split = true;
-			if m = src[i].text.match(/\/\/\s*#:(\w+)?/):
-				c_src = src.clone(i+2, last);
-				res[m[1]||n++] = {
-					title: src[i].text,
-					src: c_src,
-					ctx: tea.context( {source:c_src} )
-				}
-				last = i - 1;
-	res['all'] = {src:src, ctx:ctx, title:file};
-	return res;
-			
-try:
-	switch argv[0]:
-		case 'tmp':
-			var res = start( Path.resolve('./test/tmp/tmp.js') )
-		case 'syntax':
-			debug.enable('log+syntax');
-			tea.argv['--reg'] = true;
-			var res = start( Path.resolve('./test/tmp/source.js') );
-			for i, item in res:
-				if i == 'all':
-					continue;
-				print item.title;
-				print item.src;
-				print item.ctx.ast;
-				print item.ctx.scope;
-				console.log item.ctx.rewriter.text;
-				break;
-		case 'prepp':
-		case 'token':
-			debug.enable('log+prep')
-			var res = start( Path.resolve('./test/tmp/prepp.js') );
-			// print res.all.src;
-			// print '====';
-			// console.log( res.all.ctx.rewriter.text );
-		case 'writer':
-			debug.enable('log+write');
-			// var ctx = tea.context({file:'./src/rewriter/reader.tea'});
-			// // print ctx.ast;
-			// print ctx.rewriter;
-			debug.enable('log+syntax');
-			var res = start( Path.resolve('./test/tmp/source.js') );
-			for i, item in res:
-				if i == 'all':
-					continue;
-				print item.title;
-				// print item.src;
-				print.cellText item.src.join(), item.ctx.rewriter.text, ' --> ';
-				print item.ctx.ast;
-				break;
-catch e:
-	console.log(e.stack)
+source_file = {};
+for i, file -> Fp.scanFile(__dirname+'/source'):
+	source_file[ Fp.name(file) ] = file;
+
+if argv[0]:
+	param = argv[0];
+	if m = param.match(/src\/(\w+)\//):
+		file_keys = Object.keys(source_file);
+		target = m[1];
+		test_map = {
+			'preprocess' : ['pre-p']
+			'string': ['string']
+			'settings': [ 'pre-p'||file_keys[ Math.floor(Math.random()*1000)%file_keys.length ] ]
+		};
+		if 0 && test_map[ target ]:
+			temp = {};
+			for name => test_map[ target ]:
+				temp[name] = source_file[name];
+			source_file = temp;
+	else if source_file[param]:
+		temp = {};
+		temp[param] = source_file[param];
+		source_file = temp;
+
+source_file = {'require': source_file['try']}
+
+for name, file in source_file:
+	runTest(file);
+	
+
+function runTest(file, text):
+	print "<-->";
+	console.log('[Test source file] '+file);
+	ctx = Tea.context(file, text);
+	print ctx.source;
+	// print '<-->'
+	print ctx.AST;
+	// print ctx.CAST;
+	print ctx.scope;
+	print.bd( ctx.output() );
+	// print '<-->';
+	// print ctx.scope;
 

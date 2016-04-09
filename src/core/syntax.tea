@@ -1,0 +1,52 @@
+
+Node = require "./node.js";
+
+class Syntax extends Node:
+
+	constructor(type):
+		@.type        = type;
+		// @.subType     = null;
+		@.length      = 0;
+		if arguments.length > 1:
+			@.add.apply( @, Jsop.toArray(arguments, 1) );
+
+	get text():
+		tokens = @.tokens();
+		texts = [];
+		for tk => tokens:
+			texts.push(tk.text);
+		return texts.join('');
+
+	add ():
+		for item => arguments:
+			if !item:
+				continue;
+			if item.isSyntax || item.isToken:
+				item.parent = @;
+				@[ @.length++ ] = item;
+			else if isArray(item):
+				if item.length:
+					@.add.apply(@, item);
+			else:
+				Err 'Syntax can only add object of "Syntax" or "Code" and "NaN" types ! >> '+item;
+		return @;
+
+	insert(pos):
+		args = Jsop.toArray(arguments, 1);
+		for i = pos -> @:
+			args.push( @[i] );
+		@.length = pos;
+		@.add.apply(@, args);
+		return @;
+
+	clone ():
+		var node = new Syntax(@.type);
+		for i -> @:
+			node[node.length++] = @[i];
+		node.parent = @.parent;
+		node.scope = @.scope;
+		return node;
+
+	@::isSyntax = true;
+
+module.exports = Syntax;
