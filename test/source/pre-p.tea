@@ -26,20 +26,17 @@
   if(..)
 }
 
-
 // define Loops statment
-#stam LoopStam <Expression:BlockNode\n for ForCondition>
-{
-  @[1] (@[2]) @[0]
-}
+#expr LoopRight <for ForCondition END∅>
+#stam LoopStam <Expression@:BlockNode\n LoopRight> @[1.0] (@[1.1]) @[0]
 console.log(1) for a => arr;
 
 // test argv
-#argv -os 'android'
+#argv --os 'android'
 
 // test script
 #script
-if (Tea.argv['-os'] == 'android') {
+if (Tea.argv['--os'] == 'android') {
   write "console.log('This is Android os')";
 }else:
   write "console.log('This is iOS')";

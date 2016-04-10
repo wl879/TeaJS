@@ -2,47 +2,42 @@
 
 require "./tea.js";
 
-cmd_help = """
-* <r:TeaJS:> version <g:VER:>
-CMDHELP
-""";
-
 if !module.parent:
 	(function(){
 
-		Argv.parse( process.argv, cmd_help );
+		Tea.argv.parse( process.argv );
 
-		if Argv['--help']:
-			print Argv.help();
+		if Tea.argv['--help']:
+			print Tea.argv.help();
 			Tea.exit();
 
-		if Argv['--tab']:
-			Tea.tabsize( parseInt(Argv['--tab']) );
+		if Tea.argv['--tab']:
+			Tea.tabsize( parseInt(Tea.argv['--tab']) );
 
-		if Argv['--define']:
-			files = checkPath( Argv['--define'], Argv['--path'] );
+		if Tea.argv['--define']:
+			files = checkPath( Tea.argv['--define'], Tea.argv['--path'] );
 			if !files:
-				print '* <g:Cant find define file as <r:"'+Argv['--define']+'":>!!:>';
+				print '* <g:Cant find define file as <r:"'+Tea.argv['--define']+'":>!!:>';
 				Tea.exit();
 			Tea.prep.load( files );
 
-		if Argv['--eval'] && Argv['--eval'].length:
-			ctx = Tea.context(null, Argv['--eval']);
+		if Tea.argv['--eval'] && Tea.argv['--eval'].length:
+			ctx = Tea.context(null, Tea.argv['--eval']);
 			nextStep(ctx);
 			return;
 
-		if Argv['--file'] || Argv['--path']:
-			checkDefine( Argv['--path'] || Fp.dirName(Argv['--file']) );
-			files = checkPath( Argv['--file'], Argv['--path'] );
+		if Tea.argv['--file'] || Tea.argv['--path']:
+			checkDefine( Tea.argv['--path'] || Fp.dirName(Tea.argv['--file']) );
+			files = checkPath( Tea.argv['--file'], Tea.argv['--path'] );
 			for file => files:
 				ctx = Tea.context(file);
 				nextStep(ctx);
 			return;
 
-		Argv.pipe(function(chunk){
+		Tea.argv.pipe(function(chunk){
 			if !chunk:
 				print '\n* Are you <g:NongShaLei??????:>\n';
-				print Argv.help();
+				print Tea.argv.help();
 				Tea.exit();
 			ctx = Tea.context(null, chunk);
 			nextStep(ctx);
@@ -53,23 +48,23 @@ if !module.parent:
 	function nextStep(ctx):
 		Tea.log('* <g:Load:>  : '+(ctx.fileName||'by stdin'));
 
-		if Argv['--token']:
+		if Tea.argv['--token']:
 			print ctx.fileName;
 			print ctx.source;
-		if Argv['--ast']:
+		if Tea.argv['--ast']:
 			print ctx.fileName;
 			print ctx.AST;
-		if Argv['--ast'] || Argv['--token']:
+		if Tea.argv['--ast'] || Tea.argv['--token']:
 			return;
 
-		if Argv['--out']:
-			out = checkOut(Argv['--out'], Argv['--path'], ctx.fileName);
-			ctx.output(out, Argv['--map']);
+		if Tea.argv['--out']:
+			out = checkOut(Tea.argv['--out'], Tea.argv['--path'], ctx.fileName);
+			ctx.output(out, Tea.argv['--map']);
 			Tea.log('* <g:Output:>: '+out);
 
-		if Argv['--test']:
+		if Tea.argv['--test']:
 			runTest(ctx);
-		else if !Argv['--out']:
+		else if !Tea.argv['--out']:
 			console.log( ctx.output() );
 
 	function runTest(ctx, param):
@@ -130,7 +125,7 @@ if !module.parent:
 		return out;
 
 	function checkExt():
-		switch Argv['--std']:
+		switch Tea.argv['--std']:
 			case 'es5', 'es6': default:
 				return '.js';
 

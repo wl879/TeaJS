@@ -69,12 +69,22 @@ class Grammar:
 
 		return ref;
 
-	stack():
+	stack( check ):
 		if @.handle.subs:
 			ref = getSubsStack( @.handle );
 		else:
 			ref = getUpStack( @.handle );
 		ref.className = 'GrammarStack';
+
+		if check == 'loop':
+			text = print.toText(ref);
+			list = text.replace(/^\s*\| \*.*$/mg,'').replace(/[\s\-\*\>]+/g, '-').split('-');
+			for i -> list:
+				if list[i]:
+					if m = list.slice(i+1).join('-').match( new RegExp(list[i]+'.*?'+list[i], 'g')):
+						if m.length > 5:
+							return '∞ '+m[0];
+			return text;
 		return ref;
 
 	error(msg, target):
@@ -99,28 +109,6 @@ class Grammar:
 					return new Syntax(name, res);
 		return res;
 
-	function getSubsStack(handle):
-		if !handle.subs:
-			return handle.name;
-		stack = {name: handle.name, subs: [] };
-		if handle.error:
-			stack.name = '∆'+stack.name;
-		if handle.packName:
-			stack.name += '('+handle.packName+')';
-		for sub => handle.subs:
-			stack.subs.push( getSubsStack(sub) );
-		return stack;
-
-	function getUpStack(handle, __sub):
-		stack = {name: handle.name, subs:[]};
-		if handle.error:
-			stack.name = '∆'+stack.name;
-		if __sub:
-			stack.subs.push(__sub);
-		if handle.up:
-			return getUpStack(handle.up, stack)
-		return stack;
-
 	function errorResponse(err, src, grm):
 		if err.message === '∆':
 			err.message = 1100;
@@ -131,5 +119,36 @@ class Grammar:
 			else:
 				print grm.stack();
 		Err err.message, err.target;
+
+	function getSubsStack(handle):
+		if !handle.subs:
+			return handle.name;
+		stack = {name: handle.name, subs: [] };
+
+		if stack.name && !Grammar[stack.name]:
+			stack.name = '['+stack.name+']';
+
+		if handle.error:
+			stack.name = '∆'+stack.name;
+		if handle.packName:
+			stack.name += '('+handle.packName+')';
+
+		for sub => handle.subs:
+			stack.subs.push( getSubsStack(sub) );
+		return stack;
+
+	function getUpStack(handle, __sub):
+		stack = {name: handle.name, subs:[]};
+		if stack.name && !Grammar[stack.name]:
+			stack.name = '['+stack.name+']';
+		if handle.error:
+			stack.name = '∆'+stack.name;
+		if __sub:
+			stack.subs.push(__sub);
+		if handle.up:
+			return getUpStack(handle.up, stack)
+		return stack;
+
+
 
 module.exports = Grammar;

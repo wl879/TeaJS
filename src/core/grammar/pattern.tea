@@ -4,6 +4,7 @@ class Pattern:
 	Asset  = require "./asset.js";
 	Syntax = require "../syntax";
 	cache  = Jsop.data();
+	check_loop = {}
 
 	constructor( str ):
 		@.length = 0;
@@ -38,6 +39,15 @@ class Pattern:
 		return @;
 
 	parse(grm, src, params):
+		if check_loop.index != src.index:
+			check_loop.count = {};
+			check_loop.index = src.index;
+			check_loop.times = 0;
+		else:
+			if check_loop.times > 500:
+				Err 4003, grm.stack('loop');
+			check_loop.times ++;
+
 		handle        = grm.handle;
 		_params       = handle.params;
 		handle.params = params;

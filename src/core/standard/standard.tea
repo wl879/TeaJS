@@ -74,15 +74,6 @@ class Standard:
 			return card;
 
 	function checkBlockNode(std, node):
-
-		// if ref:
-		// 	if ref.type == 'Root' || ref.type == 'Block':
-		// 		block = ref;
-		// 	else if ref[1] && ref[1].type == 'Block':
-		// 		block = ref[1];		
-		// 	if block:
-		// 		console.log('?????????', ref.type, loop)
-
 		scope = node.scope;
 		if scope.target != node:
 			return;
@@ -102,10 +93,6 @@ class Standard:
 
 		if std.prepor && std.prepor.standards[name]:
 			ref = std.prepor.standards[name].parse( std, node );
-		// 	std_conds = std.prepor.get(name, 'statement', 'expression'):
-		// 	if std_conds.read:
-		// 		ref = std_conds.read(std, node);
-				// ref = checkPattern(std, ref, node, params);
 
 		if !ref:
 			if sub_std = std.standard[name]:

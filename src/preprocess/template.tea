@@ -28,7 +28,6 @@ export create(text, args):
 	return temps;
 
 export createScript(script, args = [], prepor):
-
 	script = Tea.compile(script, prepor);
 	temp = "
 		(function(${args.join(',')}){

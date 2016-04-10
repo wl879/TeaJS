@@ -40,7 +40,7 @@ exports['#argv'] = function(prepor, src, index):
 	token = src[index];
 	b     = src.indexOf('\n', index) || src.length -1;
 	argv  = src.join(index+1, b).trim();
-	Argv.parse( argv.split(' ') );
+	Tea.argv.parse( argv.split(' ') );
 	src.delete(index, b);
 	// debug log
 	Tea.log('#argv        : '+argv, token.location);

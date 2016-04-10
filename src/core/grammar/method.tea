@@ -3,6 +3,9 @@ export SUGAR(src, params):
 	if !@.prepor:
 		return;
 	if not map = @.prepor[params[0]]:
+		if sugar = @.prepor.check(params[0]):
+			if node = sugar.parse(@, src):
+				return node;
 		return;
 	for name, sugar in map:
 		if node = sugar.parse(@, src):
@@ -100,7 +103,6 @@ export CONCAT(src, params):
 		token.location.end = src[b].location.end;
 		return token;
 	return false;
-			
 
 function checkIsMethodArgus(argus, src):
 

@@ -30,20 +30,12 @@ module.exports = {
 
 	"Expression"           : <[ function → FunctionExpr, class → Class, Ternary ] (&==[Access] (Params@@CallExpr | (=@@AssignExpr | ASSIGN@@AssignPatt) AssignRight∆1107))?>
 
-	"Object"               : <CONST |
-							[
-								\@           → AtExpr,
-								\[           → ArrayExpr,
-								\(           → CompelExpr,
-								\{           → JsonExpr,
-								super        → SuperExpr,
-								require      → RequireExpr
-							] | VariableExpr | #SUGAR(expression)>
+	"Object"               : <CONST | [\@ → AtExpr, \[ → ArrayExpr,\( → CompelExpr,\{ → JsonExpr, super → SuperExpr, require → RequireExpr] | VariableExpr | #SUGAR(expression)>
 
 	"CONST"               : <REGEXP | STRING | TAG>
 	"REGEXP"              : <[\/ \/=] → #CONCAT( \/=\\|\/...*\/\\|\/ [g i m y]*, , REGEXP CONST)>
 	"STRING"              : <QUOTE → #CONCAT( , , STRING CONST)>
-	"TAG"                 : <#+ [IDENTIFIER KEYWORD]>
+	"TAG"                 : <# → #CONCAT(#+ [IDENTIFIER KEYWORD], , TAG CONST)>
 
 	"Access"              : <Object (MemberExpr@~AccessExpr)*>
 	"Value"               : <[@ this]?@@ThisExpr → Object (MemberExpr@~AccessExpr | ParamsExpr@~CallExpr)* SlicePatt?@~SliceExpr>
@@ -90,8 +82,9 @@ module.exports = {
 							yield        → YieldStam]>
 
 	// TODO: coming soon for support syntax  
-	"YieldStam" : <yield Expression>
-	"ImportStam": <import!∆1>
+	"YieldStam"           : <yield Expression>
+	"ImportStam"          : <import!∆1>
+	"ExportDecl"          : <export∅ (default [MethodDecl Declaration Expression] | [MethodDecl Declaration ArgusStam])∆1011>
 	// -----------------------------
 
 	"Unary"               : <not Expression@@NotExpr | PREFIX Value@@PrefixExpr | new Value@@NewExpr | UNARY #Unary@@UnaryExpr | Value POSTFIX?@@PostfixExpr>
@@ -125,7 +118,6 @@ module.exports = {
 	"Comma"               : <Expression (,∅ Expression∆1125)*@@CommaExpr>
 	"CompelExpr"          : <(∅ CommaExpr∆1126 )∅>
 	"LabelStam"           : <IDENTIFIER : Statement>
-	// "SeleteLeft"          : <(<- | if [--1, BLANK !HEAD]→) Comma∆1127>
 	"SeleteLeft"          : <(<- | if\n) Comma∆1127>
 	"SeleteRight"         : <[&& || and or ->] Statement∆1127>
 	"LinkStam"            : <Access (..∅ (Access Params?)@:LinkPatt)+>
@@ -154,7 +146,6 @@ module.exports = {
 	"ProtoDecl"           : <prototype∅  [MethodDecl ArgusStam]>
 	"PropertyDecl"        : <property∅   [MethodDecl ArgusStam]>
 	"ConstructorDecl"     : <constructor@:NameExpr  ArgusExpr [{ :]→ Block∆1106>
-	"ExportDecl"          : <export∅ (default [MethodDecl Declaration Expression] | [MethodDecl Declaration ArgusStam])∆1011>
 	
 	"If"                  : <if ConditionExpr StamBlock∆1012@@IfPatt>
 	"Else"                : <else@@ElsePatt (if∅ ConditionExpr@@ElseIfPatt | ConditionExpr [{ :]→@@ElseIfPatt)? StamBlock∆1019>

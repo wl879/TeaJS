@@ -1,5 +1,6 @@
-var argv, source_file, param, m, file_keys, target, test_map, temp;
+var argv, source_file, ref, param, m, file_keys, target, test_map, temp;
 require("../lib/tea.js");
+Tea.argv['--verbose'] = true;
 argv = process.argv.slice();
 while (argv[0] && Fp.baseName(argv[0]) != Fp.baseName(__filename)){
 	argv.shift();
@@ -10,22 +11,28 @@ if (argv.length){
 	argv = process.argv.slice();
 }
 source_file = {};
-for (var i_ref = Fp.scanFile(__dirname+'/source'), i=0, file; i < i_ref.length; i++){
-	file = i_ref[i];
-	source_file[Fp.name(file)] = file;
+for (var ref = Fp.scanFile(__dirname+'/source'), file, i = 0; i < ref.length; i++){
+	file = ref[i];
+	if (/\.tea/.test(file)){
+		source_file[Fp.name(file)] = file;
+	}
 }
 if (argv[0]){
 	param = argv[0];
-	if (m = param.match(/src\/(\w+)\//)){
+	if (m = param.match(/src\/(\w+(\/\w+)*)\//)){
 		file_keys = Object.keys(source_file);
 		target = m[1];
-		test_map = {'preprocess' : ['pre-p'],
-			'string' : ['string'],
-			'settings' : ['pre-p' || file_keys[Math.floor(Math.random()*1000)%file_keys.length]]};
-		if (0 && test_map[target]){
+		test_map = {
+			'core/grammar': ['pre-p'],
+			'preprocess/gatherer': ['pre-p'],
+			'preprocess/prepor': ['pre-p'],
+			'preprocess': ['pre-p'],
+			'string': ['string'],
+			'settings': ['pre-p' || file_keys[Math.floor(Math.random()*1000)%file_keys.length]]};
+		if (test_map[target]){
 			temp = {};
-			for (var _i=0, name; _i < test_map[target].length; _i++){
-				name = test_map[target][_i];
+			for (var name, i = 0; i < test_map[target].length; i++){
+				name = test_map[target][i];
 				temp[name] = source_file[name];
 			}
 			source_file = temp;
@@ -36,7 +43,6 @@ if (argv[0]){
 		source_file = temp;
 	}
 }
-source_file = {'require' : source_file['try']};
 for (var name in source_file){
 	if (!source_file.hasOwnProperty(name)) continue;
 	var file = source_file[name];
@@ -47,10 +53,8 @@ function runTest(file, text){
 	print("<-->");
 	console.log('[Test source file] '+file);
 	ctx = Tea.context(file, text);
-	print(ctx.source);
-	// print '<-->'
+	// print ctx.source;
 	print(ctx.AST);
 	// print ctx.CAST;
-	print(ctx.scope);
 	print.bd(ctx.output());
-}
+};

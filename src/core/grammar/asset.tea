@@ -234,6 +234,8 @@ export default class Asset:
 		token = src.current;
 		if token.types.indexOf( name ) != -1:
 			return token;
+		if grm.prepor && ref = grm.prepor.check(name, null, src, grm):
+			return ref;
 		if grm.parser(name):
 			return grm.parser(name, src, @.param);
 		if name == token.text:

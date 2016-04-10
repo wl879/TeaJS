@@ -24,7 +24,7 @@ class Asset:
 			case 'Cache':
 				return parseCacheAsset.apply(@, arguments);
 			case 'Argv':
-				return Argv[@.name];
+				return Tea.argv[@.name];
 			case 'Logic':
 				return parseLogicAsset.apply(@, arguments);
 

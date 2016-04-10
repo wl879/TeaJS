@@ -1,6 +1,38 @@
 
-require "../utils";
-class Tea:
+if typeof global == 'undefined':
+	if typeof window == 'undefined':
+		throw 'Tea script run environment error!';
+	window.global = window;
+
+id_index = 0;
+
+global.SText = require "../utils/stext";
+
+global.Jsop = require "../utils/jsop";
+
+global.print = require "../utils/print";
+
+global.Fp = require "../utils/fp";
+
+global.isArray = Array.isArray;
+
+global.isJson = Jsop.isJson;
+
+global.isClass = Jsop.isClass;
+
+global.ID = function():
+	return parseInt((Date.now()+'').substr(-8)+(id_index++)+Math.round( Math.random()*100) )+'';
+
+global.__checkGlobal = function():
+	var def = 'global process GLOBAL root console Path Tea Fp'.split(' ');
+	for name in global:
+		if def.indexOf(name) >= 0:
+			continue;
+		if typeof global[name] == 'function':
+			continue;
+		print('[Global scope pollution]', name, global[name]);
+
+export default class Tea:
 
 	Helper     = require "./helper";
 	Token      = require "./core/token";
@@ -17,7 +49,7 @@ class Tea:
 	constructor(file, text, prepor, std, outfile, map):
 		this.fileName = file;
 		this.dirName  = Fp.dirName(this.fileName)
-		this.std      = std || Argv['--std'] || 'es5';
+		this.std      = std || Tea.argv['--std'] || 'es5';
 		this.outfile  = outfile;
 		this.outmap   = map;
 		if text && text.isSource:
@@ -43,7 +75,7 @@ class Tea:
 			dirname    = this.dirName;
 			main       = Tea.CAST(this.AST, std, this.prepor);
 			this._cast = main;
-			if Argv['--concat'] && (list = main.scope.cache.require) && list.length:
+			if Tea.argv['--concat'] && (list = main.scope.cache.require) && list.length:
 				requires = {};
 				for file => list:
 					if !requires[file]:
@@ -92,12 +124,17 @@ class Tea:
 		return script;
 
 	// static
-	Tea.argv     = Argv;
+	Tea.argv     = require("../utils/argv").create();
 	Tea.filename = __filename;
 	Tea.dirname  = __dirname;
 	Tea.prep     = Preprocess;
 	Tea.version  = "VER";
-	
+	Tea.argv.set(
+		"""
+		* <r:TeaJS:> version <g:VER:>
+		CMDHELP
+		"""
+	)
 	static context(file, text, prepor, stdv):
 		return new Tea(file, text, prepor, stdv);
 
@@ -196,4 +233,4 @@ class Tea:
 			if scope.cache.require && scope.cache.require.length:
 				list.push.apply(list, scope.cache.require);
 
-module.exports = global.Tea = Tea;
+global.Tea = Tea;

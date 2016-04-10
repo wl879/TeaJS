@@ -40,7 +40,7 @@ class Prepor:
 			delete @.map[name];
 			delete @.macro[name];
 
-	check( name, type, src):
+	check( name, type, src, parser):
 		mark = name.match(/^(#*)/)[1];
 		if mark:
 			name = name.substr(mark.length);
@@ -48,8 +48,11 @@ class Prepor:
 			if type && _type != type:
 				return false;
 			tar = @[_type][name];
-			if _type == 'macro' && src:
-				return checkMarco(@, tar, src, mark);
+			if src:
+				if _type == 'macro':
+					return checkMarco(@, tar, src, mark);
+				else:
+					return tar.parse(parser, src);
 			return tar;
 
 	function checkMarco(prepor, macro, src, mark):
@@ -60,6 +63,7 @@ class Prepor:
 			value = macro.parse( params );
 		else:
 			value = macro.parse();
+
 		b = src.index;
 		src.delete(a, b);
 		if value:

@@ -89,4 +89,5 @@ function checkMarco(src, prepor):
 		if token && token.type == 'IDENTIFIER':
 			src.index = i;
 			prepor.check( token.text, 'macro', src);
-	return src.join();
+	text = src.join();
+	return text;

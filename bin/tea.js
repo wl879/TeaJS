@@ -1,7 +1,37 @@
 #!/usr/bin/env node
 var Module = (function(){_cache = {};_main  = new Module();function Module(filename, dirname){this.id = filename;this.filename = filename;this.dirname = dirname;this.exports = {};this.loaded = false;this.children = [];this.parent = null;};Module.prototype.require = function(file){var id = resolve(this.dirname, file);var mod = _cache[id];if (!mod && !/.js/.test(id)){if(mod = _cache[id+'.js'])id = id+'.js';}if (!mod){if(mod = _cache[id+'/index.js'])id = id+'/index.js';}if (mod){this.children.push(id);return mod.loaded ? mod.exports : mod.load(this);}this.children.push(file);return module.require(file);};Module.prototype.load = function(parent){this.loaded = true;if(parent) this.parent = parent;this.creater();module.constructor._cache[this.id] = this;return this.exports;};Module.prototype.register = function(creater){var id = this.id;if (!_cache[id]){_cache[id] = this;this.creater = creater;}};Module.makeRequire = function(module){function require(path){return module.require(path);};require.main = _main;require.resolve = function(path){return resolve(module.dirname, path)};require.extensions = null;require.cache = null;return require;};Module.main = function(filename, dirname){_main.id = '.';_main.filename = filename;_main.dirname = dirname;_main.parent  = module.parent;return _main;};function resolve(from, to){if(/^(\~|\/)/.test(to)) return to;if (from && from != '.') to = from + '/' + to;var m = null;while( m = to.match(/\/[^\/]+?\/\.\.\/|\/\.\//) ){to = to.substr(0, m.index) + to.substr(m.index+m[0].length-1);}return to;};return Module;})();
 (function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		require("../utils")
+		var id_index
+		if (typeof global == 'undefined'){
+			if (typeof window == 'undefined'){
+				throw 'Tea script run environment error!';
+			}
+			window.global = window;
+		}
+		id_index = 0
+		global.SText = require("../utils/stext")
+		global.Jsop = require("../utils/jsop")
+		global.print = require("../utils/print")
+		global.Fp = require("../utils/fp")
+		global.isArray = Array.isArray
+		global.isJson = Jsop.isJson
+		global.isClass = Jsop.isClass
+		global.ID = function(){
+			return parseInt((Date.now()+'').substr(-8)+(id_index++)+Math.round(Math.random()*100))+'';
+		}
+		global.__checkGlobal = function(){
+			var def = 'global process GLOBAL root console Path Tea Fp'.split(' ');
+			for (var name in global){
+				if (!global.hasOwnProperty(name)) continue;
+				if (def.indexOf(name) >= 0){
+					continue;
+				}
+				if (typeof global[name] == 'function'){
+					continue;
+				}
+				print('[Global scope pollution]', name, global[name]);
+			}
+		}
 		var Tea = (function(){
 			var Helper, Token, Source, SourceMap, Syntax, Scope, Card, Grammar, Standard, Preprocess;
 			Helper = require("./helper");
@@ -18,7 +48,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			function Tea(file, text, prepor, std, outfile, map){
 				this.fileName = file;
 				this.dirName = Fp.dirName(this.fileName);
-				this.std = std || Argv['--std'] || 'es5';
+				this.std = std || Tea.argv['--std'] || 'es5';
 				this.outfile = outfile;
 				this.outmap = map;
 				if (text && text.isSource){
@@ -47,7 +77,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 					dirname = this.dirName;
 					main = Tea.CAST(this.AST, std, this.prepor);
 					this._cast = main;
-					if (Argv['--concat'] && (list = main.scope.cache.require) && list.length){
+					if (Tea.argv['--concat'] && (list = main.scope.cache.require) && list.length){
 						requires = {};
 						for (var file, i = 0; i < list.length; i++){
 							file = list[i];
@@ -103,11 +133,29 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				return script;
 			};
 			// static
-			Tea.argv = Argv;
+			Tea.argv = require("../utils/argv").create();
 			Tea.filename = __filename;
 			Tea.dirname = __dirname;
 			Tea.prep = Preprocess;
 			Tea.version = "0.2.0";
+			Tea.argv.set("* <r:TeaJS:> version <g:0.2.0:>\n\
+			-h, --help                           显示帮助\n\
+			-f, --file    <file path>            编译文件路径\n\
+			-p, --path    <project dir>          项目目录\n\
+			-o, --out     <output path>          输出文件 或 目标目录\n\
+			-e, --eval    <Tea script snippet>   编译一段字符串\n\
+			-d, --define  <file path>            宏定义文件路径，默认加载项目下的 __define.tea 文件\n\
+			-m, --map     [source output path]   生成 source map 文件\n\
+			-c, --concat                         合并文件\n\
+			-v, --verbose                        显示编译信息\n\
+			-s, --safe                           安全模式编译\n\
+			    --clear                          清理注释\n\
+			    --tab     <number>               设置 tab size\n\
+			    --token                          输出 token 解析\n\
+			    --ast                            输出 ast 解析\n\
+			    --nopp                           不进行预编译\n\
+			    --test                           编译后运行\n\
+			... 自定义参数，用于预编译时判断与读取(使用Argv['--name']读取)");
 			Tea.context = function(file, text, prepor, stdv){
 				return new Tea(file, text, prepor, stdv);
 			};
@@ -227,1668 +275,11 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			};
 			return Tea;
 		})()
-		module.exports = global.Tea = Tea;
+		module.exports = Tea
+		global.Tea = Tea;
 	});
 	return module.exports;
 })('./tea.js', '.', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		var id_index;
-		if (typeof global == 'undefined'){
-		    if (typeof window == 'undefined'){
-		        throw 'Tea script run environment error!';
-		    }
-		    window.global = window;
-		}
-		id_index = 0;
-		global.SText = require("./stext");
-		global.Jsop = require("./jsop");
-		global.print = require("./print");
-		global.Fp = require("./fp");
-		global.Argv = require("./argv").create();
-		global.isArray = Array.isArray;
-		global.isJson = Jsop.isJson;
-		global.isClass = Jsop.isClass;
-		global.ID = function(){
-		    return parseInt((Date.now()+'').substr(-8)+(id_index++)+Math.round(Math.random()*100))+'';
-		};
-		global.checkGlobal = function(){
-		    var def = 'global process GLOBAL root console Path Tea Fp'.split(' ');
-		    for (var name in global){
-		        if (!global.hasOwnProperty(name)) continue;
-		        if (def.indexOf(name) >= 0){
-		            continue;
-		        }
-		        if (typeof global[name] == 'function'){
-		            continue;
-		        }
-		        print('[r<Global scope pollution>]', name, global[name]);
-		    }
-		};;
-	});
-	return module.exports;
-})('../utils/index.js', '../utils', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		require("./printer.js")
-		require("./error.js")
-		exports.log = require("./log.js");
-	});
-	return module.exports;
-})('./helper/index.js', './helper', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		var Node
-		Node = require("./node.js")
-		var Token = (function(){
-			function Token(text, types, location){
-				var instance;
-				if (!types || typeof types == 'number'){
-					instance = Token.create(text, types, location);
-					text = instance.text;
-					types = instance.types;
-					location = instance.location;
-					if (instance.error){
-						this.error = instance.error;
-					}
-				}
-				this.text = text;
-				this.types = types;
-				this.indent = -1;
-				this.location = location || null;
-			};
-			Token.prototype = Object.create(Node.prototype);
-			Token.prototype.__super__ = Node.prototype;
-			Token.prototype.constructor = Token;
-			Token.map = {"types": {}, "literals": {}, "complexs": [], "complexre": null};
-			Token.prototype.__defineGetter__("types", function(){
-				return this._types;
-			});
-			Token.prototype.__defineSetter__("types", function(types){
-				if (types){
-					this._types = Jsop.toArray(types);
-					this.type = this._types[0];
-				}
-				return this._types;
-			});
-			Token.prototype.__defineGetter__("fileName", function(){
-				return this.location && this.location.fileName;
-			});
-			Token.prototype.__defineGetter__("start", function(){
-				return this.location && this.location.start;
-			});
-			Token.prototype.__defineGetter__("end", function(){
-				return this.location && this.location.end;
-			});
-			// rewrite
-			Token.prototype.isToken = true;
-			Token.prototype.clone = function (text, types){
-				var token = new Token(text || this.text, types || this.types, this.location);
-				token.parent = this.parent;
-				token.indent = this.indent;
-				token.scope = this.scope;
-				return token;
-			};
-			Token.define = function(types, literals){
-				var map, literal_re, tmp;
-				map = Token.map;
-				if (!literals || !literals.length){
-					for (var type, i = 0; i < types.length; i++){
-						type = types[i];
-						!map.types[type] && (map.types[type] = []);
-					}
-				}
-				for (var literal, i = 0; i < literals.length; i++){
-					literal = literals[i];
-					if (map.types.hasOwnProperty(literal) && /^[A-Z]\w+$/.test(literal)){
-						Token.define(types, map.types[literal]);
-						continue;
-					}
-					if (/\w\W|\W\w/.test(literal)){
-						literal_re = literal.replace(/(\W)/g, '\\$1');
-						if (map.complexs.indexOf(literal_re) == -1){
-							map.complexs.push(literal_re);
-						}
-					}
-					for (var type, j = 0; j < types.length; j++){
-						type = types[j];
-						!map.types[type] && (map.types[type] = []);
-						if (map.types[type].indexOf(literal) == -1){
-							map.types[type].push(literal);
-						}
-					}
-					if (tmp = map.literals[literal]){
-						for (var type, j = 0; j < types.length; j++){
-							type = types[j];
-							if (tmp.indexOf(type) == -1){
-								tmp.push(type);
-							}
-						}
-					}else {
-						map.literals[literal] = types.slice();
-					}
-				}
-				if (map.complexs.length){
-					map.complexs.sort(function(a, b){return b.length-a.length});
-					map.complexre = new RegExp('^(?:'+map.complexs.join('|')+')(?!\\w)', 'g');
-				}
-			};
-			Token.create = function(text, index, location){
-				var token_literals, code, token_complex_re, match, types;
-				if (index == null) index = 0;
-				if (!(text = text.substr(index))){
-					throw Error.create('create token object of param is empty!', new Error());
-				}
-				token_literals = Token.map.literals;
-				do {
-					if (token_literals.hasOwnProperty(text)){
-						code = text;
-						break;
-					}
-					token_complex_re = Token.map.complexre;
-					if (token_complex_re && (match = text.match(token_complex_re))){
-						if (token_literals.hasOwnProperty(match[0])){
-							code = match[0];
-							break;
-						}
-					}
-					if (match = text.match(/^\n/)){
-						code = match[0];
-						break;
-					}
-					if (match = text.match(/^[\r\t\f\ ]+/)){
-						code = match[0], types = ['BLANK'];
-						break;
-					}
-					if (match = text.match(/^\#+\w+/)){
-						code = match[0], types = ['TAG'];
-						break;
-					}
-					if (match = text.match(/^(0[xX][0-9a-fA-F]+|(?:\.\d+|\d+(?:\.\d+)?)(?:e\-?\d+)?)/)){
-						code = match[0], types = ['NUMBER', 'CONST'];
-						break;
-					}
-					if (match = text.match(/^([\$a-zA-Z_][\w\$]*)/)){
-						code = match[0];
-						if (!(token_literals.hasOwnProperty(match[0]))){
-							types = ['IDENTIFIER'];
-						}
-						break;
-					}
-					if (!(match = text.match(/^[^\w\_\s]+/))){
-						return {
-							"error": 'tokenize parse error! unexpected token like as "'+text.slice(0, 5)+'"'};
-					}
-					code = match[0];
-					while (code){
-						if (token_literals.hasOwnProperty(code)){
-							break;
-						}
-						code = code.slice(0, -1);
-					}
-					if (!code){
-						code = match[0][0], types = ['CHARACTER'];
-					}
-					if (code == '\\'){
-						code = text.substr(0, 2);
-						types = ['SYMBOL'];
-					}
-					break;
-					break;
-				} while(true)
-				!types && (types = token_literals[code]);
-				if (!types){
-					return {"error": 'tokenize parse error! unexpected token like as "'+code+'"'};
-				}
-				return new Token(code, types || token_literals[code], location && location.fission(code, index));
-			};
-			Token.tokenize = function(text, index, opt){
-				var list, len, tokn;
-				if (index == null) index = 0;
-				list = [], len = text.length;
-				while (index < len){
-					if (tokn = Token.create(text, index)){
-						if (tokn.error){
-							throw Error.create(tokn.error, [text, index, text[index]], new Error());
-						}
-						list.push(opt == 'code list' ? tokn.text : tokn);
-						index += tokn.text.length;
-					}else {
-						break;
-					}
-				}
-				return list;
-			};
-			return Token;
-		})()
-		module.exports = Token;
-	});
-	return module.exports;
-})('./core/token.js', './core', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		var Source = (function(){
-			var Token, Location, re_cache;
-			Token = require("./token.js");
-			Location = require("./location.js");
-			re_cache = {};
-			function Source(text, file){
-				this.index = 0;
-				this.length = 0;
-				if (arguments.length){
-					this.read(text, file);
-				}
-			};
-			Source.prototype.__defineGetter__("current", function(){
-				return this.get(this.index);
-			});
-			Source.prototype.__defineGetter__("string", function(){
-				return this.join();
-			});
-			Source.prototype.__defineGetter__("peek", function(){
-				return this.get(this.nextIndex(this.index, true));
-			});
-			Source.prototype.__defineGetter__("prev", function(){
-				return this.get(this.prevIndex(this.index, true));
-			});
-			Source.prototype.read = function (text, file){
-				var loc, i, len, token;
-				loc = new Location(file, text);
-				text = loc.source;
-				file = loc.fileName;
-				this.index = 0;
-				this.length = 0;
-				i = 0;
-				len = text.length;
-				while (i < len && (token = Token.create(text, i, loc))){
-					if (token.error){
-						throw Error.create(token.error, [text, i, text[i], file], new Error());
-					}
-					i = token.location.end+1;
-					this.add(token);
-				}
-				return this.refresh();
-			};
-			Source.prototype.get = function (index){
-				return this[index] || new Token('\4');
-			};
-			Source.prototype.add = function (token){
-				if (!token || !token.isToken){
-					throw Error.create('Add the wrong parameters('+isClass(token)+'), Only to can add Lexeme object', new Error());
-				}
-				this[this.length++] = token;
-				return this;
-			};
-			Source.prototype.back = function (opt, catch_comm){
-				while (opt > 1){
-					this.index = this.prevIndex(this.index, opt--, catch_comm);
-				}
-				this.index = this.prevIndex(this.index, opt, catch_comm);
-				return this;
-			};
-			Source.prototype.next = function (opt, catch_comm){
-				while (opt > 1){
-					this.index = this.nextIndex(this.index, opt--, catch_comm);
-				}
-				this.index = this.nextIndex(this.index, opt, catch_comm);
-				return this;
-			};
-			Source.prototype.nextIndex = function (index, ig_lf, catch_comm){
-				return countIndex(1, this, index, ig_lf, catch_comm);
-			};
-			Source.prototype.prevIndex = function (index, ig_lf, catch_comm){
-				return countIndex(-1, this, index, ig_lf, catch_comm);
-			};
-			Source.prototype.delete = function (a, b){
-				if (b == null) b = a;
-				for (var i=a; i <= b; i++){
-					this[i] = null;
-				}
-				return this;
-			};
-			Source.prototype.insert = function (pos, value, del_len){
-				var list, indent, head_token;
-				if (pos == null) pos = 0;
-				if (del_len == null) del_len = 0;
-				if (typeof value == 'string'){
-					value = new Source(value, 'preprocess/insert');
-				}else if (value.isToken){
-					value = [value];
-				}
-				list = [pos, del_len];
-				if (indent = this.lineIndent(pos)){
-					indent = SText.copy(' ', indent);
-				}
-				for (var token, i = 0; i < value.length; i++){
-					token = value[i];
-					if (!token || token.type == 'EOT'){
-						continue;
-					}
-					if (indent && token.indent >= 0){
-						if (token.is('BLANK')){
-							token.text += indent;
-							token.indent = token.text.length;
-						}else {
-							token.indent = null;
-							head_token = token.clone(indent, ['BLANK']);
-							head_token.indent = indent.length;
-							list.push(head_token);
-						}
-					}
-					list.push(token);
-				}
-				Array.prototype.splice.apply(this, list);
-				return this;
-			};
-			Source.prototype.clone = function (a, b){
-				var src, i;
-				src = new Source();
-				a = a < 0 ? this.length+a : (a || 0);
-				b = b < 0 ? this.length+b : (b || this.length-1);
-				for (i = a; i <= b; i++){
-					if (this[i]){
-						src.add(this[i]);
-					}
-				}
-				if (b != this.length-1){
-					src.add(new Token('\4'));
-				}
-				return src;
-			};
-			Source.prototype.indexPair = function (s1, s2, index, not_throw_error){
-				index = index != null ? index : this.index;
-				var ab = indexPair(this, s1, s2, index);
-				if (!ab && !not_throw_error){
-					throw Error.create(1004, s2, this[index], new Error());
-				}
-				return ab;
-			};
-			Source.prototype.indexLine = function (index){
-				index = index != null ? index : this.index;
-				var a = index, b = index, len = this.length-2;
-				while (a > len || (a > 0 && this[a-1] && this[a-1].type != 'LF')){
-					a--;
-				}
-				while (b < len && (!this[b] || this[b].type != 'LF')){
-					b++;
-				}
-				return [(a > len ? len : a), (b > len ? len : b), index];
-			};
-			Source.prototype.indexOf = function (target, index){
-				var is_re, is_str;
-				if (index == null) index = 0;
-				if (!(is_re = target instanceof RegExp)){
-					is_str = typeof target == 'string';
-				}
-				for (var i = index; i < this.length; i++){
-					if (!this[i]){
-						continue;
-					}
-					if (is_re){
-						if (target.test(this[i].text)){
-							return i;
-						}
-					}else if (is_str){
-						if (this[i].text == target){
-							return i;
-						}
-					}else if (this[i] == target){
-						return i;
-					}
-				}
-			};
-			Source.prototype.matchOf = function (re, index){
-				var m;
-				if (index == null) index = 0;
-				var a, b;
-				if (m = this.string.match(re)){
-					for (var tk, i = index; i < this.length; i++){
-						tk = this[i];
-						if (!tk){
-							continue;
-						}
-						if (tk.start == m.index){
-							a = i;
-						}
-						if (tk.end == m.index+m[0].length){
-							b = i;
-						}
-						if (a != null && b != null){
-							return [a, b];
-						}
-					}
-				}
-			};
-			Source.prototype.lineIndent = function (index){
-				index = index != null ? index : this.index;
-				while (index >= 0){
-					if (this[index] && this[index].indent >= 0){
-						return this[index].indent;
-					}
-					index--;
-				}
-				return -1;
-			};
-			Source.prototype.trimIndent = function (a, b, len){
-				var i, token;
-				a = a < 0 ? this.length+a : (a || 0);
-				b = b < 0 ? this.length+b : (b || this.length-1);
-				if (len == null){
-					for (i = a; i <= b; i++){
-						token = this[i];
-						if (token && token.indent >= 0){
-							if (len == null || token.indent < len){
-								len = token.indent;
-							}
-						}
-					}
-				}
-				if (len > 0){
-					for (i = a; i <= b; i++){
-						token = this[i];
-						if (token && token.indent >= 0){
-							token.indent = Math.max(token.indent-len, 0);
-							if (token.type = 'BLANK'){
-								token.text = token.text.substr(0, token.indent);
-							}
-						}
-					}
-				}
-				return this;
-			};
-			Source.prototype.refresh = function (index){
-				var target;
-				if (typeof index == 'number'){
-					this.index = index;
-				}
-				target = this[this.index];
-				clearSource(this);
-				for (var token, i = this.length - 1; i >= 0; i--){
-					token = this[i];
-					token.indent = -1;
-					if (!i || (token.type == 'LF' && (token = this[i+1]))){
-						if (token.type == 'BLANK'){
-							token.text = SText.spaceTab(token.text);
-							token.indent = token.text.length;
-						}else {
-							token.indent = 0;
-						}
-					}
-				}
-				if (target != this[this.index]){
-					index = this.indexOf(target);
-					if (index >= 0){
-						this.index = index;
-					}
-				}
-				return this;
-			};
-			Source.prototype.join = function (a, b){
-				if (isArray(a)){
-					b = a[1], a = a[0];
-				}
-				a = a < 0 ? this.length+a : (a || 0), b = b < 0 ? this.length+b : (b || b === 0 ? b : this.length);
-				var texts = [];
-				for (var i=a; i <= b; i++){
-					if (this[i] && this[i].text != '\4') texts.push(this[i].text);
-				}
-				return texts.join('');
-			};
-			Source.prototype.isSource = true;
-			function countIndex(ori, src, index, ig_lf, catch_comm){
-				var len = src.length-1, type;
-				while ((index += ori) >= 0 && index <= len){
-					type = src[index] && src[index].type;
-					if (!type || type == 'BLANK' || (!catch_comm && type == 'COMMENT') || (ig_lf && type == 'LF')){
-						continue;
-					}
-					return index;
-				}
-				if (ori > 0){
-					return index > len ? len : index;
-				}
-				return index < 0 ? 0 : index;
-			};
-			function indexPair(src, s1, s2, index){
-				var s1_re, s2_re, len, a, jump, text;
-				s1_re = re_cache[s1] || (re_cache[s1] = new RegExp('^('+SText.re(s1)+')$'));
-				s2_re = re_cache[s2] || (re_cache[s2] = new RegExp('^('+SText.re(s2)+')$'));
-				len = src.length;
-				a = -1;
-				jump = 0;
-				while (index < len){
-					if (src[index]){
-						text = src[index].text;
-						if (text == '\\'){
-							index += 2;
-							continue;
-						}
-						if (s1_re.test(text)){
-							if (a == -1){
-								a = index;
-							}else if (s1 == s2 || s2_re.test(text)){
-								return [a, index];
-							}else {
-								jump += 1;
-							}
-						}else if (s2_re.test(text) && a != -1){
-							if (jump == 0){
-								return [a, index];
-							}
-							jump -= 1;
-						}
-					}
-					index += 1;
-				}
-			};
-			function clearSource(src){
-				var len, a, list;
-				len = src.length;
-				for (var token, i = 0; i < src.length; i++){
-					token = src[i];
-					if (!token){
-						continue;
-					}
-					if (token.type == 'EOT'){
-						src[i] = null;
-						continue;
-					}
-					if (token.is('HEAD')){
-						a = i;
-						while (i < len){
-							if (!src[i]){
-								i++;
-								continue;
-							}
-							if (src[i].type == 'LF'){
-								if (src[a].indent >= 0){
-									src.delete(a, i);
-								}else {
-									src.delete(a, i-1);
-								}
-								break;
-							}
-							if (src[i].is('BLANK', 'END')){
-								i++;
-								continue;
-							}
-							break;
-						}
-					}
-				}
-				list = [];
-				for (var token, i = 0; i < src.length; i++){
-					token = src[i];
-					if (token){
-						list.push(token);
-					}
-					src[i] = null;
-				}
-				src.length = 0;
-				Array.prototype.push.apply(src, list);
-				return src.add(new Token('\4'));
-			};
-			return Source;
-		})()
-		module.exports = Source;
-	});
-	return module.exports;
-})('./core/source.js', './core', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		var SourceMap = (function(){
-			var VLQ_SHIFT, VLQ_CONTINUATION_BIT, VLQ_VALUE_MASK, BASE64_CHARS;
-			VLQ_SHIFT = 5;
-			VLQ_CONTINUATION_BIT = 1<<VLQ_SHIFT;
-			VLQ_VALUE_MASK = VLQ_CONTINUATION_BIT-1;
-			BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-			function SourceMap(){
-				this.version = 3;
-				this.file = '';
-				this.sourceRoot = '';
-				this.names = [];
-				this._sources = [];
-				this._mappings = [];
-			};
-			SourceMap.prototype.parse = function (card){
-				var list, sources, line, line_num, add_comma, last_vlq, last_col, last_loc_line, last_loc_col, loc, vlq, m;
-				list = card.toList();
-				sources = this._sources;
-				line = '';
-				line_num = 1;
-				add_comma = null;
-				last_vlq = null;
-				last_col = 0;
-				last_loc_line = 1;
-				last_loc_col = 0;
-				for (var item, i = 0; i < list.length; i++){
-					item = list[i];
-					if (item.isToken){
-						if (item.location && item.location.fileName){
-							loc = item.location;
-							vlq = encodeVlq(line.length-last_col, sourceId(sources, loc.fileName), loc.lineNumber-last_loc_line, loc.columnNumber-last_loc_col);
-							add_comma ? this._mappings.push(',') : (add_comma = true);
-							this._mappings.push(vlq);
-							last_vlq = vlq;
-							last_col = line.length;
-							last_loc_line = loc.lineNumber;
-							last_loc_col = loc.columnNumber;
-						}
-						item = item.text;
-					}
-					if (/\n/.test(item)){
-						while (m = item.match(/\n/)){
-							this._mappings.push(';');
-							line_num++;
-							line = item = item.substr(m.index+1);
-						}
-						add_comma = last_col = 0;
-					}else {
-						line += item;
-					}
-				}
-				return this;
-			};
-			SourceMap.prototype.addName = function (name){
-				var i = this.names.indexOf(name);
-				if (i == -1){
-					return this.names.push(name)-1;
-				}
-				return i;
-			};
-			SourceMap.prototype.__defineGetter__("sources", function(){
-				var ss = [];
-				var dir = Fp.dirName(this.file);
-				for (var file, i = 0; i < this._sources.length; i++){
-					file = this._sources[i];
-					ss.push(Fp.relative(dir, file));
-				}
-				return ss;
-			});
-			SourceMap.prototype.__defineGetter__("mappings", function(){
-				return this._mappings.join('');
-			});
-			SourceMap.prototype.__defineGetter__("text", function(){
-				var data;
-				data = {
-					"version": 3,
-					"file": this.file || '',
-					"sourceRoot": '',
-					"sources": this.sources,
-					"names": this.names,
-					"mappings": this.mappings};
-				return SText(data);
-			});
-			function sourceId(sources, filename){
-				var i;
-				i = sources.indexOf(filename);
-				if (i == -1){
-					return sources.push(filename)-1;
-				}
-				return i;
-			};
-			function encodeVlq(){
-				var vlq, signBit, valueToEncode, answer, nextChunk;
-				vlq = [];
-				for (var value, i = 0; i < arguments.length; i++){
-					value = arguments[i];
-					signBit = value < 0 ? 1 : 0;
-					valueToEncode = (Math.abs(value)<<1)+signBit;
-					answer = '';
-					while (valueToEncode || !answer){
-						nextChunk = valueToEncode&VLQ_VALUE_MASK;
-						valueToEncode = valueToEncode>>VLQ_SHIFT;
-						if (valueToEncode){
-							nextChunk = nextChunk|VLQ_CONTINUATION_BIT;
-						}
-						answer += encodeBase64(nextChunk);
-					}
-					vlq.push(answer);
-				}
-				return vlq.join('');
-			};
-			function encodeBase64(value){
-				if (BASE64_CHARS[value]){
-					return BASE64_CHARS[value];
-				}
-				throw Error.create("Cannot Base64 encode value: "+value, new Error());
-			};
-			return SourceMap;
-		})()
-		module.exports = SourceMap;
-	});
-	return module.exports;
-})('./core/sourcemap.js', './core', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		var Node
-		Node = require("./node.js")
-		var Syntax = (function(){
-			function Syntax(type){
-				this.type = type;
-				// @.subType     = null;
-				this.length = 0;
-				if (arguments.length > 1){
-					this.add.apply(this, Jsop.toArray(arguments, 1));
-				}
-			};
-			Syntax.prototype = Object.create(Node.prototype);
-			Syntax.prototype.__super__ = Node.prototype;
-			Syntax.prototype.constructor = Syntax;
-			Syntax.prototype.__defineGetter__("text", function(){
-				var tokens, texts;
-				tokens = this.tokens();
-				texts = [];
-				for (var tk, i = 0; i < tokens.length; i++){
-					tk = tokens[i];
-					texts.push(tk.text);
-				}
-				return texts.join('');
-			});
-			Syntax.prototype.add = function (){
-				for (var item, i = 0; i < arguments.length; i++){
-					item = arguments[i];
-					if (!item){
-						continue;
-					}
-					if (item.isSyntax || item.isToken){
-						item.parent = this;
-						this[this.length++] = item;
-					}else if (isArray(item)){
-						if (item.length){
-							this.add.apply(this, item);
-						}
-					}else {
-						throw Error.create('Syntax can only add object of "Syntax" or "Code" and "NaN" types ! >> '+item, new Error());
-					}
-				}
-				return this;
-			};
-			Syntax.prototype.insert = function (pos){
-				var args;
-				args = Jsop.toArray(arguments, 1);
-				for (var i = pos; i < this.length; i++){
-					args.push(this[i]);
-				}
-				this.length = pos;
-				this.add.apply(this, args);
-				return this;
-			};
-			Syntax.prototype.clone = function (){
-				var node = new Syntax(this.type);
-				for (var i = 0; i < this.length; i++){
-					node[node.length++] = this[i];
-				}
-				node.parent = this.parent;
-				node.scope = this.scope;
-				return node;
-			};
-			Syntax.prototype.isSyntax = true;
-			return Syntax;
-		})()
-		module.exports = Syntax;
-	});
-	return module.exports;
-})('./core/syntax.js', './core', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		var Scope = (function(){
-			var scope_map, decl_types;
-			scope_map = {};
-			decl_types = ["function", "static", "proto", "name", 'class', 'argument'];
-			function Scope(type, node, parent){
-				this.type = type;
-				this.target = node;
-				this.name = null;
-				this.variables = {};
-				this.undefines = {};
-				this.cache = {};
-				if (this.type == 'Class'){
-					this.protos = {};
-					this.statics = {};
-				}
-				if (parent){
-					this.upper = parent;
-					!parent.subs && (parent.subs = []);
-					parent.subs.push(this);
-				}
-			};
-			Scope.prototype.__defineGetter__("valid", function(){
-				var scope;
-				scope = this;
-				while (scope.type == 'Let'){
-					scope = scope.upper;
-				}
-				return scope;
-			});
-			Scope.prototype.__defineGetter__("parent", function(){
-				var upper;
-				upper = this.upper;
-				while (upper.type == 'Let'){
-					upper = upper.upper;
-				}
-				return upper;
-			});
-			Scope.prototype.__defineGetter__("root", function(){
-				var rot;
-				rot = this;
-				while (rot && rot.type != 'Root'){
-					rot = rot.upper;
-				}
-				return rot;
-			});
-			Scope.prototype.query = function (name){
-				var scope;
-				scope = this;
-				while (scope && (scope.type != name && scope.name != name)){
-					if (scope.type == 'Root' || scope.type == 'Global'){
-						return;
-					}
-					scope = scope.upper;
-				}
-				return scope;
-			};
-			Scope.prototype.define = function (state, id, alias){
-				var scope;
-				if (state.isToken || state.isSyntax){
-					alias = id, id = state, state = null;
-				}
-				if (id.isToken){
-					id = id.parent;
-				}
-				if (!state){
-					state = checkScopeMap(id);
-					if (!alias && state == 'let'){
-						alias = 'l_$';
-					}
-				}
-				if (!state){
-					return;
-				}
-				if (id.type == 'NameExpr'){
-					this.name = id[0].text;
-				}
-				switch (state){
-					case 'name':
-						this.name = id[0].text;
-						break;
-					case 'function':case 'class':
-						setDefine(this.parent, id, state, alias);
-						break;
-					case 'proto':case 'static':
-						if (!(scope = this.query('Class'))){
-							throw Error.create(1002, id, new Error());
-						}
-						setDefine(scope, id, state, alias);
-						break;
-					case 'for_let':
-						setDefine(this, id, state, alias);
-						break;
-					case 'let':
-						if (!alias && id.parent && id.query('LetStam')){
-							alias = 'l_$';
-						}
-						setDefine(this, id, state, alias);
-						break;
-					default:
-						setDefine(this.valid, id, state, alias);
-						break;
-				}
-				return state;
-			};
-			function setDefine(scope, ids, state, alias){
-				var variables, text, exist;
-				variables = scope[state+'s'] || scope.variables;
-				if (typeof ids == 'string'){
-					ids = [{"text": ids}];
-				}
-				for (var id, i = 0; i < ids.length; i++){
-					id = ids[i];
-					text = id.text;
-					if (variables.hasOwnProperty(text)){
-						exist = variables[text];
-						if (exist[0] == 'const'){
-							throw Error.create(1003, vars, new Error());
-						}
-						if (state == 'undefined' || state == 'unknow'){
-							continue;
-						}
-					}else if (state == 'undefined' || state.indexOf('undefined') != -1){
-						scope.undefines[text] = id.isToken ? id : text;
-					}
-					!variables[text] && (variables[text] = [undefined]);
-					variables[text][0] = state;
-					if (alias){
-						variables[text][1] = alias.replace(/\$/g, text);
-					}
-				}
-			};
-			Scope.prototype.state = function (target, level){
-				var state;
-				if (level == null) level = 0;
-				if (state = this.check(target, level, true)){
-					return state[0];
-				}
-			};
-			Scope.prototype.alias = function (target, level){
-				var state;
-				if (level == null) level = 0;
-				if (state = this.check(target, level, true)){
-					return state[1];
-				}
-			};
-			Scope.prototype.check = function (target, level, not_define){
-				var name, ref, scope, state, stop, _scope;
-				if (level == null) level = 0;
-				ref = checkTarget(target), target = ref[0], name = ref[1];
-				scope = this;
-				if (scope.variables.hasOwnProperty(name)){
-					return scope.variables[name];
-				}
-				while (scope.type == 'Let'){
-					scope = scope.upper;
-					if (scope.variables.hasOwnProperty(name)){
-						return scope.variables[name];
-					}
-				}
-				if (level !== 1){
-					if (target && !not_define){
-						state = checkScopeMap(target);
-						if (state && state != 'undefined' && state != 'unknow'){
-							return [this.define(state, target)];
-						}
-					}
-					if (level.isScope){
-						stop = level;
-						level = 0;
-					}
-					_scope = null;
-					while (scope = scope.upper){
-						if (scope == stop && scope != _scope && --level){
-							break;
-						}
-						_scope = scope;
-						if (scope.variables.hasOwnProperty(name)){
-							state = scope.variables[name];
-							this.variables[name] = [/undefined|defined|name/.test(state[0]) ? 'unknow' : state[0], state[1]];
-							return scope.variables[name];
-						}
-					}
-					if (state){
-						return [this.define(state, target)];
-					}
-				}
-			};
-			Scope.prototype.member = function (target){
-				var name, ref, cls;
-				ref = checkTarget(target), target = ref[0], name = ref[1];
-				if (cls = this.query('Class')){
-					if (cls.protos.hasOwnProperty(name)){
-						return 'proto';
-					}
-					if (cls.statics.hasOwnProperty(name)){
-						return 'static';
-					}
-				}
-			};
-			Scope.prototype.cachePush = function (name, something){
-				var cache;
-				cache = this.cache;
-				!cache[name] && (cache[name] = []);
-				cache[name].push(something);
-				return cache[name];
-			};
-			Scope.prototype.isScope = true;
-			Scope.init = function(ast, check_define, __scope){
-				var type;
-				if (!__scope){
-					__scope = new Scope(ast.is('Let', 'Class', 'Function', 'Root') || 'Root', ast);
-					ast.scope = __scope;
-				}
-				for (var node, i = 0; i < ast.length; i++){
-					node = ast[i];
-					if (type = node.is('Let', 'Class', 'Function', 'Root')){
-						node.scope = new Scope(type, node, __scope);
-						Scope.init(node, check_define, node.scope);
-					}else {
-						node.scope = __scope;
-						if (scope_map[node.type]){
-							if (type = checkScopeMap(node, scope_map[node.type])){
-								if (decl_types.indexOf(type) != -1){
-									__scope.define(type, node);
-								}
-							}
-						}
-						if (node.isSyntax){
-							Scope.init(node, check_define, __scope);
-						}
-					}
-				}
-				return ast.scope;
-			};
-			Scope.defineScope = function(patt){
-				var slices;
-				slices = SText.split(patt, '->', true);
-				compileScopeMap(slices.pop(), slices.reverse(), 0, scope_map);
-			};
-			Scope.test = function(node){
-				return !!scope_map[node.type];
-			};
-			function compileScopeMap(type, patt, index, __sub){
-				var names, test, top, ref, m, testIndex, sub, sub2;
-				names = patt[index];
-				if (names[0] == '<'){
-					names = names.substr(1).trim();
-					test = true;
-				}else if (/\<\-/.test(names)){
-					ref = names.split('<-'), top = ref[0], names = ref[1];
-					top = top.trim().split(' ');
-				}
-				names = names.trim().split(' ');
-				for (var name, i = 0; i < names.length; i++){
-					name = names[i];
-					if (m = name.match(/^(\w+)\[(\d+)\]$/)){
-						name = m[1];
-						testIndex = m[2];
-					}
-					sub = sub2 = null;
-					if (test){
-						__sub[name] = __sub[name] || {};
-						sub = __sub;
-						if (testIndex){
-							__sub[name].testIndex = true;
-							sub2 = __sub[name][testIndex] = __sub[name][testIndex] || {};
-						}else {
-							sub2 = __sub[name].subs = __sub[name].subs || {};
-						}
-					}else {
-						sub = __sub[name] = __sub[name] || {};
-						if (testIndex){
-							__sub[name].testIndex = true;
-							sub = __sub[name][testIndex] = __sub[name][testIndex] || {};
-						}
-					}
-					if (top){
-						__sub[name].tops = top;
-						top.default = type;
-					}
-					if (index < patt.length-1){
-						compileScopeMap(type, patt, index+1, sub);
-						if (sub2){
-							compileScopeMap(type, patt, index+1, sub2);
-						}
-					}else if (!top){
-						__sub[name].default = type;
-					}
-				}
-			};
-			function checkScopeMap(node, _map, _not_def){
-				var parent, map, index, ref;
-				if (!_map){
-					if (scope_map[node.type]){
-						return checkScopeMap(node, scope_map[node.type]);
-					}
-					return;
-				}
-				if (parent = node.parent){
-					if (parent.type == 'ArgusStam'){
-						parent = parent.parent;
-					}
-					if (parent && (map = _map[parent.type])){
-						if (map.testIndex){
-							index = node.index;
-							if (map[index]){
-								if (ref = checkScopeMap(parent, map[index], true) || map.default){
-									return ref;
-								}
-							}
-							return checkScopeMap(parent, map, true) || _map.default;
-						}
-						return checkScopeMap(parent, map);
-					}
-					if (_map.tops){
-						if (parent.scope && _map.tops.indexOf(parent.scope.valid.type) != -1){
-							return _map.tops.default;
-						}
-					}
-				}
-				if (_map.subs){
-					return checkScopeMap(node, _map.subs);
-				}
-				if (!_not_def && _map.default){
-					return _map.default;
-				}
-			};
-			function checkTarget(target){
-				var name;
-				if (target.isSyntax || target.isToken){
-					name = target.text;
-					if (target.isToken){
-						target = target.parent;
-					}
-				}else {
-					name = target;
-					target = null;
-				}
-				return [target, name];
-			};
-			return Scope;
-		})()
-		module.exports = Scope;
-	});
-	return module.exports;
-})('./core/scope.js', './core', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		var Card = (function(){
-			var not_semicolon, width_limit;
-			not_semicolon = /^(COMMENT|IfStam|WhileStam|DoWhileStam|WithStam|ForStam|SwitchStam|CaseStam|DefaultStam)$/;
-			width_limit = 80;
-			Card.prototype.isCard = true;
-			function Card(type){
-				this.type = type || '';
-				this.length = 0;
-				if (arguments.length > 1){
-					this.add.apply(this, Jsop.toArray(arguments, 1));
-				}
-			};
-			Card.prototype.add = function (){
-				var type;
-				for (var item, i = 0; i < arguments.length; i++){
-					item = arguments[i];
-					if (!item){
-						continue;
-					}
-					if (item.isToken){
-						if (!item.is('EOT')){
-							this[this.length++] = item;
-						}
-						continue;
-					}
-					type = typeof item;
-					if (item.isCard || type == 'string'){
-						this[this.length++] = item;
-						continue;
-					}
-					if (type == 'number'){
-						this[this.length++] = item+'';
-						continue;
-					}
-					if (isArray(item)){
-						this.add.apply(this, item);
-						continue;
-					}
-					throw Error.create(5004, isClass(item), new Error());
-				}
-				return this;
-			};
-			Card.prototype.insert = function (pos){
-				var args;
-				args = Jsop.toArray(arguments, 1);
-				for (var i = pos; i < this.length; i++){
-					args.push(this[i]);
-				}
-				this.length = pos;
-				this.add.apply(this, args);
-				return this;
-			};
-			Card.prototype.delete = function (a, b){
-				if (b == null) b = a;
-				Array.prototype.splice.call(this, a, b-a+1);
-				return this;
-			};
-			Card.prototype.__defineGetter__("text", function(){
-				return this.toScript();
-			});
-			Card.prototype.toScript = function (){
-				if (!this._formated){
-					format(this);
-				}
-				return toText(this);
-			};
-			Card.prototype.toList = function (){
-				var list;
-				list = [];
-				for (var item, i = 0; i < this.length; i++){
-					item = this[i];
-					if (!item) continue;
-					if (item.isCard){
-						list.push.apply(list, item.toList());
-					}else {
-						list.push(item);
-					}
-				}
-				return list;
-			};
-			function toText(list){
-				var texts = [];
-				for (var item, i = 0; i < list.length; i++){
-					item = list[i];
-					if (item.isToken){
-						if (item.is('EOT')){
-							continue;
-						}
-						texts.push(item.text);
-					}else if (item.isCard || isArray(item)){
-						texts.push(toText(item));
-					}else {
-						texts.push(item);
-					}
-				}
-				return texts.join('');
-			};
-			function countText(card){
-				var texts;
-				texts = [];
-				for (var item, i = 0; i < card.length; i++){
-					item = card[i];
-					if (!item){
-						continue;
-					}
-					if (item.isToken){
-						texts.push(item.text);
-					}else if (item.isCard){
-						texts.push(countText(item));
-					}else {
-						texts.push(item);
-					}
-				}
-				return texts.join('');
-			};
-			function countTextLen(card, limit){
-				var len;
-				len = 0;
-				for (var item, i = 0; i < card.length; i++){
-					item = card[i];
-					if (limit && len >= limit){
-						return len;
-					}
-					if (item.isToken){
-						len += item.text.length;
-					}else if (item.isCard || isArray(item)){
-						len += countTextLen(item, limit && limit-len);
-					}else {
-						len += item.length;
-					}
-				}
-				return len;
-			};
-			function format(card){
-				each(card);
-				if (card.type == 'Root'){
-					if (card.length){
-						lineFeed(card);
-					}
-				}
-				return card;
-			};
-			function each(card){
-				var parent;
-				parent = card.type;
-				for (var item, i = 0; i < card.length; i++){
-					item = card[i];
-					if (!item){
-						continue;
-					}
-					switch (item.type){
-						case 'COMMENT':
-							if (Argv['--clear']){
-								card[i] = null;
-							}
-							break;
-						case 'ArrayExpr':
-							formatArray(item);
-							break;
-						case 'JsonExpr':
-							formatJson(item);
-							break;
-						case 'VarStam':case 'ConstStam':case 'LetStam':
-							formatVar(item);
-							break;
-						case 'Block':
-							if (item.length){
-								each(item);
-								lineFeed(item, parent);
-								indentLine(item, parent);
-								if (card.type == 'BlockNode'){
-									item.add('\n');
-								}else if (typeof card[i+1] == 'string' && /^\s*}/.test(card[i+1])){
-									item.add('\n');
-								}
-							}
-							break;
-						default:
-							if (item.isCard){
-								each(item);
-							}else if (item == ','){
-								card[i] = ', ';
-							}
-							break;
-					}
-				}
-				return card;
-			};
-			function lineFeed(card, parent){
-				for (var line, i = card.length - 1; i >= 0; i--){
-					line = card[i];
-					if (line){
-						if (!not_semicolon.test(line.type) && parent != 'Block'){
-							card.insert(i+1, ';');
-						}
-						if (i || parent && parent != 'Block'){
-							card.insert(i, '\n');
-						}
-					}
-				}
-			};
-			function indentLine(card, parent){
-				for (var item, i = 0; i < card.length; i++){
-					item = card[i];
-					if (item == '\n'){
-						card[i] = '\n\t';
-						continue;
-					}else if (i === 0 && parent){
-						card.insert(0, '\t');
-						continue;
-					}
-					if (item.isToken){
-						if (!item.is('STRING')){
-							card[i] = item.text.replace(/\n/g, '\n\t');
-						}
-						continue;
-					}
-					if (item.isCard){
-						indentLine(item);
-						continue;
-					}
-					if (typeof item == 'string'){
-						card[i] = item.replace(/\n/g, '\n\t');
-					}
-				}
-				return card;
-			};
-			function formatArray(card){
-				var comma;
-				comma = card[1];
-				if (comma && comma.type == 'CommaExpr'){
-					if (countTextLen(comma, width_limit) >= width_limit){
-						for (var i = 0; i < comma.length; i++){
-							if (comma[i].isCard){
-								each(comma[i]);
-							}else if (comma[i] == ', ' || comma[i] == ','){
-								comma[i] = ',\n';
-							}
-						}
-						comma.insert(0, '\n');
-						indentLine(comma);
-						return;
-					}
-				}
-				each(card);
-			};
-			function formatJson(card){
-				var comma;
-				comma = card[1];
-				if (comma && comma.type == 'CommaExpr'){
-					if (countTextLen(comma, width_limit) >= width_limit){
-						for (var i = 0; i < comma.length; i++){
-							if (comma[i].isCard){
-								each(comma[i]);
-							}else if (comma[i] == ', ' || comma[i] == ','){
-								comma[i] = ',\n';
-							}
-						}
-						comma.insert(0, '\n');
-						indentLine(comma);
-						return;
-					}
-				}
-				each(card);
-			};
-			function formatVar(card){
-				var comma, text;
-				comma = card[1];
-				if (comma && comma.type == 'CommaExpr'){
-					text = countText(comma);
-					if (/\=/.test(text) && text.length >= width_limit){
-						for (var i = 0; i < comma.length; i++){
-							if (comma[i].isCard){
-								each(comma[i]);
-							}else if (comma[i] == ', ' || comma[i] == ','){
-								comma[i] = ',\n';
-							}
-						}
-						indentLine(comma);
-						return;
-					}
-				}
-				each(card);
-			};
-			return Card;
-		})()
-		module.exports = Card;
-	});
-	return module.exports;
-})('./core/card.js', './core', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		var Pattern = require("./pattern.js")
-		var Grammar = require("./grammar.js")
-		function create(prepor){
-			return new Grammar(prepor);
-		}
-		module.exports.create = create
-		function pattern(text, src, prepor){
-			var patt, grm, node;
-			patt = Pattern.compile(text);
-			if (src){
-				grm = new Grammar(prepor);
-				node = grm.pattern(patt, src);
-				return node;
-			}
-			return patt;
-		}
-		module.exports.pattern = pattern
-		function parser(name, src, params, prepor){
-			var grm, node;
-			grm = new Grammar(prepor);
-			node = grm.parser(name, src, params, true);
-			if (node && !node.isSyntax && node.length == 1){
-				node = node[0];
-			}
-			return node;
-		}
-		module.exports.parser = parser
-		function define(name, patt, mode){
-			var debug;
-			if (mode == 'debug'){
-				mode = null;
-				debug = true;
-			}
-			if (!mode){
-				if (name.match(/\w+(Token|Expr|Decl|Patt|Stam)$/)){
-					mode = 'ret node';
-				}else {
-					mode = 'not check';
-				}
-			}
-			if (typeof patt == 'function'){
-				Grammar[name] = {"name": name, "mode": mode, "fn": patt, "debug": debug};
-			}else {
-				Grammar[name] = {"name": name, "mode": mode, "pattern": Pattern.compile(patt), "debug": debug};
-				if (debug){
-					print('| * '+name, Grammar[name].pattern);
-				}
-			}
-			return Grammar[name];
-		}
-		module.exports.define = define;
-	});
-	return module.exports;
-})('./core/grammar/index.js', './core/grammar', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		var Standard, versions
-		Standard = require("./standard.js")
-		exports.versions = (versions = [])
-		function create(version, prepor){
-			if (!(Standard.hasOwnProperty(version))){
-				throw Error.create(5007, version, new Error());
-			}
-			return new Standard(version, prepor);
-		}
-		module.exports.create = create
-		function define(name, map){
-			var std_obj;
-			if (versions.indexOf(name) == -1){
-				versions.push(name);
-				!Standard[name] && (Standard[name] = {});
-			}
-			std_obj = compile(map, Standard[name]);
-			return std_obj;
-		}
-		module.exports.define = define
-		function compile(map, std_obj){
-			var std, ref;
-			for (var names in map){
-				if (!map.hasOwnProperty(names)) continue;
-				var item = map[names];
-				std = _compile(item);
-				for (var ref = names.split(' '), name, i = 0; i < ref.length; i++){
-					name = ref[i];
-					if (!/^[A-Z]/.test(name)){
-						throw Error.create(5001, name, new Error());
-					}
-					std_obj[name] = std;
-				}
-			}
-			return std_obj;
-		}
-		module.exports.compile = compile
-		function _compile(data){
-			var stds;
-			stds = {};
-			stds.isStandard = true;
-			if (typeof data == 'string' || typeof data == 'function'){
-				stds['default'] = data;
-			}else if (isArray(data)){
-				stds = [];
-				stds.isStandard = 'list';
-				for (var i = 0; i < data.length; i++){
-					stds.push(_compile(data[i]));
-				}
-			}else {
-				for (var cond in data){
-					if (!data.hasOwnProperty(cond)) continue;
-					var val = data[cond];
-					if (typeof val == 'object'){
-						val = _compile(val);
-					}
-					stds[cond.replace(/\s*\n\s*/g, ' ')] = val;
-				}
-			}
-			return stds;
-		};
-	});
-	return module.exports;
-})('./core/standard/index.js', './core/standard', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		var Processor, Gatherer, Template, Source, bases
-		Processor = require("./prepor")
-		Gatherer = require("./gatherer")
-		Template = require("./template.js")
-		Source = require("../core/source.js")
-		bases = new Processor()
-		function create(something){
-			var prepor;
-			prepor = new Processor();
-			prepor.extend(bases);
-			if (something){
-				if (something.isSource){
-					gather(something, prepor);
-				}else {
-					prepor.extend(something);
-					prepor.parent = something;
-				}
-			}
-			return prepor;
-		}
-		module.exports.create = create
-		function gather(src, prepor){
-			!prepor && (prepor = new Processor());
-			for (var token, i = 0; i < src.length; i++){
-				token = src[i];
-				if (!token){
-					continue;
-				}
-				if (Gatherer[token.type]){
-					i = Gatherer[token.type](prepor, src, i) || i;
-				}
-			}
-			src.refresh(0);
-			return prepor;
-		}
-		module.exports.gather = gather
-		function concatModule(main, list){
-			return Template.concatModule(main, list);
-		}
-		module.exports.concatModule = concatModule
-		function load(files){
-			var src, prepor;
-			if (typeof files == 'string'){
-				files = [files];
-			}
-			for (var file, i = 0; i < files.length; i++){
-				file = files[i];
-				if (src = new Source(null, file)){
-					if (prepor = gather(src)){
-						extend(prepor);
-					}
-				}
-			}
-			return bases;
-		}
-		module.exports.load = load
-		function extend(prepor){
-			bases.extend(prepor);
-			return bases;
-		}
-		module.exports.extend = extend;
-	});
-	return module.exports;
-})('./preprocess/index.js', './preprocess', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		var Token, Node, Grammar, Scope, Standard, ref, names, values, ref0, mode, ref1, ref2
-		Token = require("../core/token.js")
-		Node = require("../core/node.js")
-		Grammar = require("../core/grammar")
-		Scope = require("../core/scope.js")
-		Standard = require("../core/standard")
-		for (var name in (ref = require("./token.js"))){
-			if (!ref.hasOwnProperty(name)) continue;
-			var value = ref[name];
-			names = name.split(' ').filter(function($){return $});
-			values = value.replace(/([^\n])\s*\n+\s*/g, '$1  ').split('  ').filter(function($){return $});
-			Token.define(names, values);
-		}
-		for (var name in (ref0 = require("./syntax"))){
-			if (!ref0.hasOwnProperty(name)) continue;
-			var value = ref0[name];
-			mode = null;
-			if (typeof value == 'string'){
-				value = value.replace(/\n\s*/g, ' ');
-			}
-			if (/:debug$/.test(name)){
-				mode = 'debug';
-				name = name.slice(0, -6);
-			}
-			Grammar.define(name, value, mode);
-		}
-		for (var name in (ref1 = require("./node.js"))){
-			if (!ref1.hasOwnProperty(name)) continue;
-			var value = ref1[name];
-			names = name.split(' ').filter(function($){return $});
-			values = value.replace(/\s*\n+\s*/g, '  ').split('  ').filter(function($){return $});
-			Node.define(names, values);
-		}
-		for (var ref2 = require("./scope.js"), value, i = 0; i < ref2.length; i++){
-			value = ref2[i];
-			Scope.defineScope(value);
-		}
-		Standard.define('es5', require("./standards/es5"));
-	});
-	return module.exports;
-})('./settings/index.js', './settings', false);
 (function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var pair, pair_re, sep_cache, tabsize;
 		module.exports = SText;
@@ -3296,6 +1687,1628 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 	return module.exports;
 })('../utils/fp/index.js', '../utils/fp', false);
 (function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		require("./printer.js")
+		require("./error.js")
+		exports.log = require("./log.js");
+	});
+	return module.exports;
+})('./helper/index.js', './helper', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Node
+		Node = require("./node.js")
+		var Token = (function(){
+			function Token(text, types, location){
+				var instance;
+				if (!types || typeof types == 'number'){
+					instance = Token.create(text, types, location);
+					text = instance.text;
+					types = instance.types;
+					location = instance.location;
+					if (instance.error){
+						this.error = instance.error;
+					}
+				}
+				this.text = text;
+				this.types = types;
+				this.indent = -1;
+				this.location = location || null;
+			};
+			Token.prototype = Object.create(Node.prototype);
+			Token.prototype.__super__ = Node.prototype;
+			Token.prototype.constructor = Token;
+			Token.map = {"types": {}, "literals": {}, "complexs": [], "complexre": null};
+			Token.prototype.__defineGetter__("types", function(){
+				return this._types;
+			});
+			Token.prototype.__defineSetter__("types", function(types){
+				if (types){
+					this._types = Jsop.toArray(types);
+					this.type = this._types[0];
+				}
+				return this._types;
+			});
+			Token.prototype.__defineGetter__("fileName", function(){
+				return this.location && this.location.fileName;
+			});
+			Token.prototype.__defineGetter__("start", function(){
+				return this.location && this.location.start;
+			});
+			Token.prototype.__defineGetter__("end", function(){
+				return this.location && this.location.end;
+			});
+			// rewrite
+			Token.prototype.isToken = true;
+			Token.prototype.clone = function (text, types){
+				var token = new Token(text || this.text, types || this.types, this.location);
+				token.parent = this.parent;
+				token.indent = this.indent;
+				token.scope = this.scope;
+				return token;
+			};
+			Token.define = function(types, literals){
+				var map, literal_re, tmp;
+				map = Token.map;
+				if (!literals || !literals.length){
+					for (var type, i = 0; i < types.length; i++){
+						type = types[i];
+						!map.types[type] && (map.types[type] = []);
+					}
+				}
+				for (var literal, i = 0; i < literals.length; i++){
+					literal = literals[i];
+					if (map.types.hasOwnProperty(literal) && /^[A-Z]\w+$/.test(literal)){
+						Token.define(types, map.types[literal]);
+						continue;
+					}
+					if (/\w\W|\W\w/.test(literal)){
+						literal_re = literal.replace(/(\W)/g, '\\$1');
+						if (map.complexs.indexOf(literal_re) == -1){
+							map.complexs.push(literal_re);
+						}
+					}
+					for (var type, j = 0; j < types.length; j++){
+						type = types[j];
+						!map.types[type] && (map.types[type] = []);
+						if (map.types[type].indexOf(literal) == -1){
+							map.types[type].push(literal);
+						}
+					}
+					if (tmp = map.literals[literal]){
+						for (var type, j = 0; j < types.length; j++){
+							type = types[j];
+							if (tmp.indexOf(type) == -1){
+								tmp.push(type);
+							}
+						}
+					}else {
+						map.literals[literal] = types.slice();
+					}
+				}
+				if (map.complexs.length){
+					map.complexs.sort(function(a, b){return b.length-a.length});
+					map.complexre = new RegExp('^(?:'+map.complexs.join('|')+')(?!\\w)', 'g');
+				}
+			};
+			Token.create = function(text, index, location){
+				var token_literals, code, token_complex_re, match, types;
+				if (index == null) index = 0;
+				if (!(text = text.substr(index))){
+					throw Error.create('create token object of param is empty!', new Error());
+				}
+				token_literals = Token.map.literals;
+				do {
+					if (token_literals.hasOwnProperty(text)){
+						code = text;
+						break;
+					}
+					token_complex_re = Token.map.complexre;
+					if (token_complex_re && (match = text.match(token_complex_re))){
+						if (token_literals.hasOwnProperty(match[0])){
+							code = match[0];
+							break;
+						}
+					}
+					if (match = text.match(/^\n/)){
+						code = match[0];
+						break;
+					}
+					if (match = text.match(/^[\r\t\f\ ]+/)){
+						code = match[0], types = ['BLANK'];
+						break;
+					}
+					if (match = text.match(/^\#+\w+/)){
+						code = match[0], types = ['TAG'];
+						break;
+					}
+					if (match = text.match(/^(0[xX][0-9a-fA-F]+|(?:\.\d+|\d+(?:\.\d+)?)(?:e\-?\d+)?)/)){
+						code = match[0], types = ['NUMBER', 'CONST'];
+						break;
+					}
+					if (match = text.match(/^([\$a-zA-Z_][\w\$]*)/)){
+						code = match[0];
+						if (!(token_literals.hasOwnProperty(match[0]))){
+							types = ['IDENTIFIER'];
+						}
+						break;
+					}
+					if (!(match = text.match(/^[^\w\_\s]+/))){
+						return {
+							"error": 'tokenize parse error! unexpected token like as "'+text.slice(0, 5)+'"'};
+					}
+					code = match[0];
+					while (code){
+						if (token_literals.hasOwnProperty(code)){
+							break;
+						}
+						code = code.slice(0, -1);
+					}
+					if (!code){
+						code = match[0][0], types = ['CHARACTER'];
+					}
+					if (code == '\\'){
+						code = text.substr(0, 2);
+						types = ['SYMBOL'];
+					}
+					break;
+					break;
+				} while(true)
+				!types && (types = token_literals[code]);
+				if (!types){
+					return {"error": 'tokenize parse error! unexpected token like as "'+code+'"'};
+				}
+				return new Token(code, types || token_literals[code], location && location.fission(code, index));
+			};
+			Token.tokenize = function(text, index, opt){
+				var list, len, tokn;
+				if (index == null) index = 0;
+				list = [], len = text.length;
+				while (index < len){
+					if (tokn = Token.create(text, index)){
+						if (tokn.error){
+							throw Error.create(tokn.error, [text, index, text[index]], new Error());
+						}
+						list.push(opt == 'code list' ? tokn.text : tokn);
+						index += tokn.text.length;
+					}else {
+						break;
+					}
+				}
+				return list;
+			};
+			return Token;
+		})()
+		module.exports = Token;
+	});
+	return module.exports;
+})('./core/token.js', './core', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Source = (function(){
+			var Token, Location, re_cache;
+			Token = require("./token.js");
+			Location = require("./location.js");
+			re_cache = {};
+			function Source(text, file){
+				this.index = 0;
+				this.length = 0;
+				if (arguments.length){
+					this.read(text, file);
+				}
+			};
+			Source.prototype.__defineGetter__("current", function(){
+				return this.get(this.index);
+			});
+			Source.prototype.__defineGetter__("string", function(){
+				return this.join();
+			});
+			Source.prototype.__defineGetter__("peek", function(){
+				return this.get(this.nextIndex(this.index, true));
+			});
+			Source.prototype.__defineGetter__("prev", function(){
+				return this.get(this.prevIndex(this.index, true));
+			});
+			Source.prototype.read = function (text, file){
+				var loc, i, len, token;
+				loc = new Location(file, text);
+				text = loc.source;
+				file = loc.fileName;
+				this.index = 0;
+				this.length = 0;
+				i = 0;
+				len = text.length;
+				while (i < len && (token = Token.create(text, i, loc))){
+					if (token.error){
+						throw Error.create(token.error, [text, i, text[i], file], new Error());
+					}
+					i = token.location.end+1;
+					this.add(token);
+				}
+				return this.refresh();
+			};
+			Source.prototype.get = function (index){
+				return this[index] || new Token('\4');
+			};
+			Source.prototype.add = function (token){
+				if (!token || !token.isToken){
+					throw Error.create('Add the wrong parameters('+isClass(token)+'), Only to can add Lexeme object', new Error());
+				}
+				this[this.length++] = token;
+				return this;
+			};
+			Source.prototype.back = function (opt, catch_comm){
+				while (opt > 1){
+					this.index = this.prevIndex(this.index, opt--, catch_comm);
+				}
+				this.index = this.prevIndex(this.index, opt, catch_comm);
+				return this;
+			};
+			Source.prototype.next = function (opt, catch_comm){
+				while (opt > 1){
+					this.index = this.nextIndex(this.index, opt--, catch_comm);
+				}
+				this.index = this.nextIndex(this.index, opt, catch_comm);
+				return this;
+			};
+			Source.prototype.nextIndex = function (index, ig_lf, catch_comm){
+				return countIndex(1, this, index, ig_lf, catch_comm);
+			};
+			Source.prototype.prevIndex = function (index, ig_lf, catch_comm){
+				return countIndex(-1, this, index, ig_lf, catch_comm);
+			};
+			Source.prototype.delete = function (a, b){
+				if (b == null) b = a;
+				for (var i=a; i <= b; i++){
+					this[i] = null;
+				}
+				return this;
+			};
+			Source.prototype.insert = function (pos, value, del_len){
+				var list, indent, head_token;
+				if (pos == null) pos = 0;
+				if (del_len == null) del_len = 0;
+				if (typeof value == 'string'){
+					value = new Source(value, 'preprocess/insert');
+				}else if (value.isToken){
+					value = [value];
+				}
+				list = [pos, del_len];
+				if (indent = this.lineIndent(pos)){
+					indent = SText.copy(' ', indent);
+				}
+				for (var token, i = 0; i < value.length; i++){
+					token = value[i];
+					if (!token || token.type == 'EOT'){
+						continue;
+					}
+					if (i && indent && token.indent >= 0){
+						if (token.is('BLANK')){
+							token.text += indent;
+							token.indent = token.text.length;
+						}else {
+							token.indent = null;
+							head_token = token.clone(indent, ['BLANK']);
+							head_token.indent = indent.length;
+							list.push(head_token);
+						}
+					}
+					list.push(token);
+				}
+				Array.prototype.splice.apply(this, list);
+				return this;
+			};
+			Source.prototype.clone = function (a, b){
+				var src, i;
+				src = new Source();
+				a = a < 0 ? this.length+a : (a || 0);
+				b = b < 0 ? this.length+b : (b || this.length-1);
+				for (i = a; i <= b; i++){
+					if (this[i]){
+						src.add(this[i]);
+					}
+				}
+				if (b != this.length-1){
+					src.add(new Token('\4'));
+				}
+				return src;
+			};
+			Source.prototype.indexPair = function (s1, s2, index, not_throw_error){
+				index = index != null ? index : this.index;
+				var ab = indexPair(this, s1, s2, index);
+				if (!ab && !not_throw_error){
+					throw Error.create(1004, s2, this[index], new Error());
+				}
+				return ab;
+			};
+			Source.prototype.indexLine = function (index){
+				index = index != null ? index : this.index;
+				var a = index, b = index, len = this.length-2;
+				while (a > len || (a > 0 && this[a-1] && this[a-1].type != 'LF')){
+					a--;
+				}
+				while (b < len && (!this[b] || this[b].type != 'LF')){
+					b++;
+				}
+				return [(a > len ? len : a), (b > len ? len : b), index];
+			};
+			Source.prototype.indexOf = function (target, index){
+				var is_re, is_str;
+				if (index == null) index = 0;
+				if (!(is_re = target instanceof RegExp)){
+					is_str = typeof target == 'string';
+				}
+				for (var i = index; i < this.length; i++){
+					if (!this[i]){
+						continue;
+					}
+					if (is_re){
+						if (target.test(this[i].text)){
+							return i;
+						}
+					}else if (is_str){
+						if (this[i].text == target){
+							return i;
+						}
+					}else if (this[i] == target){
+						return i;
+					}
+				}
+			};
+			Source.prototype.matchOf = function (re, index){
+				var m;
+				if (index == null) index = 0;
+				var a, b;
+				if (m = this.string.match(re)){
+					for (var tk, i = index; i < this.length; i++){
+						tk = this[i];
+						if (!tk){
+							continue;
+						}
+						if (tk.start == m.index){
+							a = i;
+						}
+						if (tk.end == m.index+m[0].length){
+							b = i;
+						}
+						if (a != null && b != null){
+							return [a, b];
+						}
+					}
+				}
+			};
+			Source.prototype.lineIndent = function (index){
+				index = index != null ? index : this.index;
+				while (index >= 0){
+					if (this[index] && this[index].indent >= 0){
+						return this[index].indent;
+					}
+					index--;
+				}
+				return -1;
+			};
+			Source.prototype.trimIndent = function (a, b, len){
+				var i, token;
+				a = a < 0 ? this.length+a : (a || 0);
+				b = b < 0 ? this.length+b : (b || this.length-1);
+				if (len == null){
+					for (i = a; i <= b; i++){
+						token = this[i];
+						if (token && token.indent >= 0){
+							if (len == null || token.indent < len){
+								len = token.indent;
+							}
+						}
+					}
+				}
+				if (len > 0){
+					for (i = a; i <= b; i++){
+						token = this[i];
+						if (token && token.indent >= 0){
+							token.indent = Math.max(token.indent-len, 0);
+							if (token.type = 'BLANK'){
+								token.text = token.text.substr(0, token.indent);
+							}
+						}
+					}
+				}
+				return this;
+			};
+			Source.prototype.refresh = function (index){
+				var target;
+				if (typeof index == 'number'){
+					this.index = index;
+				}
+				target = this[this.index];
+				clearSource(this);
+				for (var token, i = this.length - 1; i >= 0; i--){
+					token = this[i];
+					token.indent = -1;
+					if (!i || (token.type == 'LF' && (token = this[i+1]))){
+						if (token.type == 'BLANK'){
+							token.text = SText.spaceTab(token.text);
+							token.indent = token.text.length;
+						}else {
+							token.indent = 0;
+						}
+					}
+				}
+				if (target != this[this.index]){
+					index = this.indexOf(target);
+					if (index >= 0){
+						this.index = index;
+					}
+				}
+				return this;
+			};
+			Source.prototype.join = function (a, b){
+				if (isArray(a)){
+					b = a[1], a = a[0];
+				}
+				a = a < 0 ? this.length+a : (a || 0), b = b < 0 ? this.length+b : (b || b === 0 ? b : this.length);
+				var texts = [];
+				for (var i=a; i <= b; i++){
+					if (this[i] && this[i].text != '\4') texts.push(this[i].text);
+				}
+				return texts.join('');
+			};
+			Source.prototype.isSource = true;
+			function countIndex(ori, src, index, ig_lf, catch_comm){
+				var len = src.length-1, type;
+				while ((index += ori) >= 0 && index <= len){
+					type = src[index] && src[index].type;
+					if (!type || type == 'BLANK' || (!catch_comm && type == 'COMMENT') || (ig_lf && type == 'LF')){
+						continue;
+					}
+					return index;
+				}
+				if (ori > 0){
+					return index > len ? len : index;
+				}
+				return index < 0 ? 0 : index;
+			};
+			function indexPair(src, s1, s2, index){
+				var s1_re, s2_re, len, a, jump, text;
+				s1_re = re_cache[s1] || (re_cache[s1] = new RegExp('^('+SText.re(s1)+')$'));
+				s2_re = re_cache[s2] || (re_cache[s2] = new RegExp('^('+SText.re(s2)+')$'));
+				len = src.length;
+				a = -1;
+				jump = 0;
+				while (index < len){
+					if (src[index]){
+						text = src[index].text;
+						if (text == '\\'){
+							index += 2;
+							continue;
+						}
+						if (s1_re.test(text)){
+							if (a == -1){
+								a = index;
+							}else if (s1 == s2 || s2_re.test(text)){
+								return [a, index];
+							}else {
+								jump += 1;
+							}
+						}else if (s2_re.test(text) && a != -1){
+							if (jump == 0){
+								return [a, index];
+							}
+							jump -= 1;
+						}
+					}
+					index += 1;
+				}
+			};
+			function clearSource(src){
+				var len, a, list;
+				len = src.length;
+				for (var token, i = 0; i < src.length; i++){
+					token = src[i];
+					if (!token){
+						continue;
+					}
+					if (token.type == 'EOT'){
+						src[i] = null;
+						continue;
+					}
+					if (token.is('HEAD')){
+						a = i;
+						while (i < len){
+							if (!src[i]){
+								i++;
+								continue;
+							}
+							if (src[i].type == 'LF'){
+								if (src[a].indent >= 0){
+									src.delete(a, i);
+								}else {
+									src.delete(a, i-1);
+								}
+								break;
+							}
+							if (src[i].is('BLANK', 'END')){
+								i++;
+								continue;
+							}
+							break;
+						}
+					}
+				}
+				list = [];
+				for (var token, i = 0; i < src.length; i++){
+					token = src[i];
+					if (token){
+						list.push(token);
+					}
+					src[i] = null;
+				}
+				src.length = 0;
+				Array.prototype.push.apply(src, list);
+				return src.add(new Token('\4'));
+			};
+			return Source;
+		})()
+		module.exports = Source;
+	});
+	return module.exports;
+})('./core/source.js', './core', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var SourceMap = (function(){
+			var VLQ_SHIFT, VLQ_CONTINUATION_BIT, VLQ_VALUE_MASK, BASE64_CHARS;
+			VLQ_SHIFT = 5;
+			VLQ_CONTINUATION_BIT = 1<<VLQ_SHIFT;
+			VLQ_VALUE_MASK = VLQ_CONTINUATION_BIT-1;
+			BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+			function SourceMap(){
+				this.version = 3;
+				this.file = '';
+				this.sourceRoot = '';
+				this.names = [];
+				this._sources = [];
+				this._mappings = [];
+			};
+			SourceMap.prototype.parse = function (card){
+				var list, sources, line, line_num, add_comma, last_vlq, last_col, last_loc_line, last_loc_col, loc, vlq, m;
+				list = card.toList();
+				sources = this._sources;
+				line = '';
+				line_num = 1;
+				add_comma = null;
+				last_vlq = null;
+				last_col = 0;
+				last_loc_line = 1;
+				last_loc_col = 0;
+				for (var item, i = 0; i < list.length; i++){
+					item = list[i];
+					if (item.isToken){
+						if (item.location && item.location.fileName){
+							loc = item.location;
+							vlq = encodeVlq(line.length-last_col, sourceId(sources, loc.fileName), loc.lineNumber-last_loc_line, loc.columnNumber-last_loc_col);
+							add_comma ? this._mappings.push(',') : (add_comma = true);
+							this._mappings.push(vlq);
+							last_vlq = vlq;
+							last_col = line.length;
+							last_loc_line = loc.lineNumber;
+							last_loc_col = loc.columnNumber;
+						}
+						item = item.text;
+					}
+					if (/\n/.test(item)){
+						while (m = item.match(/\n/)){
+							this._mappings.push(';');
+							line_num++;
+							line = item = item.substr(m.index+1);
+						}
+						add_comma = last_col = 0;
+					}else {
+						line += item;
+					}
+				}
+				return this;
+			};
+			SourceMap.prototype.addName = function (name){
+				var i = this.names.indexOf(name);
+				if (i == -1){
+					return this.names.push(name)-1;
+				}
+				return i;
+			};
+			SourceMap.prototype.__defineGetter__("sources", function(){
+				var ss = [];
+				var dir = Fp.dirName(this.file);
+				for (var file, i = 0; i < this._sources.length; i++){
+					file = this._sources[i];
+					ss.push(Fp.relative(dir, file));
+				}
+				return ss;
+			});
+			SourceMap.prototype.__defineGetter__("mappings", function(){
+				return this._mappings.join('');
+			});
+			SourceMap.prototype.__defineGetter__("text", function(){
+				var data;
+				data = {
+					"version": 3,
+					"file": this.file || '',
+					"sourceRoot": '',
+					"sources": this.sources,
+					"names": this.names,
+					"mappings": this.mappings};
+				return SText(data);
+			});
+			function sourceId(sources, filename){
+				var i;
+				i = sources.indexOf(filename);
+				if (i == -1){
+					return sources.push(filename)-1;
+				}
+				return i;
+			};
+			function encodeVlq(){
+				var vlq, signBit, valueToEncode, answer, nextChunk;
+				vlq = [];
+				for (var value, i = 0; i < arguments.length; i++){
+					value = arguments[i];
+					signBit = value < 0 ? 1 : 0;
+					valueToEncode = (Math.abs(value)<<1)+signBit;
+					answer = '';
+					while (valueToEncode || !answer){
+						nextChunk = valueToEncode&VLQ_VALUE_MASK;
+						valueToEncode = valueToEncode>>VLQ_SHIFT;
+						if (valueToEncode){
+							nextChunk = nextChunk|VLQ_CONTINUATION_BIT;
+						}
+						answer += encodeBase64(nextChunk);
+					}
+					vlq.push(answer);
+				}
+				return vlq.join('');
+			};
+			function encodeBase64(value){
+				if (BASE64_CHARS[value]){
+					return BASE64_CHARS[value];
+				}
+				throw Error.create("Cannot Base64 encode value: "+value, new Error());
+			};
+			return SourceMap;
+		})()
+		module.exports = SourceMap;
+	});
+	return module.exports;
+})('./core/sourcemap.js', './core', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Node
+		Node = require("./node.js")
+		var Syntax = (function(){
+			function Syntax(type){
+				this.type = type;
+				// @.subType     = null;
+				this.length = 0;
+				if (arguments.length > 1){
+					this.add.apply(this, Jsop.toArray(arguments, 1));
+				}
+			};
+			Syntax.prototype = Object.create(Node.prototype);
+			Syntax.prototype.__super__ = Node.prototype;
+			Syntax.prototype.constructor = Syntax;
+			Syntax.prototype.__defineGetter__("text", function(){
+				var tokens, texts;
+				tokens = this.tokens();
+				texts = [];
+				for (var tk, i = 0; i < tokens.length; i++){
+					tk = tokens[i];
+					texts.push(tk.text);
+				}
+				return texts.join('');
+			});
+			Syntax.prototype.add = function (){
+				for (var item, i = 0; i < arguments.length; i++){
+					item = arguments[i];
+					if (!item){
+						continue;
+					}
+					if (item.isSyntax || item.isToken){
+						item.parent = this;
+						this[this.length++] = item;
+					}else if (isArray(item)){
+						if (item.length){
+							this.add.apply(this, item);
+						}
+					}else {
+						throw Error.create('Syntax can only add object of "Syntax" or "Code" and "NaN" types ! >> '+item, new Error());
+					}
+				}
+				return this;
+			};
+			Syntax.prototype.insert = function (pos){
+				var args;
+				args = Jsop.toArray(arguments, 1);
+				for (var i = pos; i < this.length; i++){
+					args.push(this[i]);
+				}
+				this.length = pos;
+				this.add.apply(this, args);
+				return this;
+			};
+			Syntax.prototype.clone = function (){
+				var node = new Syntax(this.type);
+				for (var i = 0; i < this.length; i++){
+					node[node.length++] = this[i];
+				}
+				node.parent = this.parent;
+				node.scope = this.scope;
+				return node;
+			};
+			Syntax.prototype.isSyntax = true;
+			return Syntax;
+		})()
+		module.exports = Syntax;
+	});
+	return module.exports;
+})('./core/syntax.js', './core', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Scope = (function(){
+			var scope_map, decl_types;
+			scope_map = {};
+			decl_types = ["function", "static", "proto", "name", 'class', 'argument'];
+			function Scope(type, node, parent){
+				this.type = type;
+				this.target = node;
+				this.name = null;
+				this.variables = {};
+				this.undefines = {};
+				this.cache = {};
+				if (this.type == 'Class'){
+					this.protos = {};
+					this.statics = {};
+				}
+				if (parent){
+					this.upper = parent;
+					!parent.subs && (parent.subs = []);
+					parent.subs.push(this);
+				}
+			};
+			Scope.prototype.__defineGetter__("valid", function(){
+				var scope;
+				scope = this;
+				while (scope.type == 'Let'){
+					scope = scope.upper;
+				}
+				return scope;
+			});
+			Scope.prototype.__defineGetter__("parent", function(){
+				var upper;
+				upper = this.upper;
+				while (upper.type == 'Let'){
+					upper = upper.upper;
+				}
+				return upper;
+			});
+			Scope.prototype.__defineGetter__("root", function(){
+				var rot;
+				rot = this;
+				while (rot && rot.type != 'Root'){
+					rot = rot.upper;
+				}
+				return rot;
+			});
+			Scope.prototype.query = function (name){
+				var scope;
+				scope = this;
+				while (scope && (scope.type != name && scope.name != name)){
+					if (scope.type == 'Root' || scope.type == 'Global'){
+						return;
+					}
+					scope = scope.upper;
+				}
+				return scope;
+			};
+			Scope.prototype.define = function (state, id, alias){
+				var scope;
+				if (state.isToken || state.isSyntax){
+					alias = id, id = state, state = null;
+				}
+				if (id.isToken){
+					id = id.parent;
+				}
+				if (!state){
+					state = checkScopeMap(id);
+					if (!alias && state == 'let'){
+						alias = 'l_$';
+					}
+				}
+				if (!state){
+					return;
+				}
+				if (id.type == 'NameExpr'){
+					this.name = id[0].text;
+				}
+				switch (state){
+					case 'name':
+						this.name = id[0].text;
+						break;
+					case 'function':case 'class':
+						setDefine(this.parent, id, state, alias);
+						break;
+					case 'proto':case 'static':
+						if (!(scope = this.query('Class'))){
+							throw Error.create(1002, id, new Error());
+						}
+						setDefine(scope, id, state, alias);
+						break;
+					case 'for_let':
+						setDefine(this, id, state, alias);
+						break;
+					case 'let':
+						if (!alias && id.parent && id.query('LetStam')){
+							alias = 'l_$';
+						}
+						setDefine(this, id, state, alias);
+						break;
+					default:
+						setDefine(this.valid, id, state, alias);
+						break;
+				}
+				return state;
+			};
+			function setDefine(scope, ids, state, alias){
+				var variables, text, exist;
+				variables = scope[state+'s'] || scope.variables;
+				if (typeof ids == 'string'){
+					ids = [{"text": ids}];
+				}
+				for (var id, i = 0; i < ids.length; i++){
+					id = ids[i];
+					text = id.text;
+					if (variables.hasOwnProperty(text)){
+						exist = variables[text];
+						if (exist[0] == 'const'){
+							throw Error.create(1003, vars, new Error());
+						}
+						if (state == 'undefined' || state == 'unknow'){
+							continue;
+						}
+					}else if (state == 'undefined' || state.indexOf('undefined') != -1){
+						scope.undefines[text] = id.isToken ? id : text;
+					}
+					!variables[text] && (variables[text] = [undefined]);
+					variables[text][0] = state;
+					if (alias){
+						variables[text][1] = alias.replace(/\$/g, text);
+					}
+				}
+			};
+			Scope.prototype.state = function (target, level){
+				var state;
+				if (level == null) level = 0;
+				if (state = this.check(target, level, true)){
+					return state[0];
+				}
+			};
+			Scope.prototype.alias = function (target, level){
+				var state;
+				if (level == null) level = 0;
+				if (state = this.check(target, level, true)){
+					return state[1];
+				}
+			};
+			Scope.prototype.check = function (target, level, not_define){
+				var name, ref, scope, state, stop, _scope;
+				if (level == null) level = 0;
+				ref = checkTarget(target), target = ref[0], name = ref[1];
+				scope = this;
+				if (scope.variables.hasOwnProperty(name)){
+					return scope.variables[name];
+				}
+				while (scope.type == 'Let'){
+					scope = scope.upper;
+					if (scope.variables.hasOwnProperty(name)){
+						return scope.variables[name];
+					}
+				}
+				if (level !== 1){
+					if (target && !not_define){
+						state = checkScopeMap(target);
+						if (state && state != 'undefined' && state != 'unknow'){
+							return [this.define(state, target)];
+						}
+					}
+					if (level.isScope){
+						stop = level;
+						level = 0;
+					}
+					_scope = null;
+					while (scope = scope.upper){
+						if (scope == stop && scope != _scope && --level){
+							break;
+						}
+						_scope = scope;
+						if (scope.variables.hasOwnProperty(name)){
+							state = scope.variables[name];
+							this.variables[name] = [/undefined|defined|name/.test(state[0]) ? 'unknow' : state[0], state[1]];
+							return scope.variables[name];
+						}
+					}
+					if (state){
+						return [this.define(state, target)];
+					}
+				}
+			};
+			Scope.prototype.member = function (target){
+				var name, ref, cls;
+				ref = checkTarget(target), target = ref[0], name = ref[1];
+				if (cls = this.query('Class')){
+					if (cls.protos.hasOwnProperty(name)){
+						return 'proto';
+					}
+					if (cls.statics.hasOwnProperty(name)){
+						return 'static';
+					}
+				}
+			};
+			Scope.prototype.cachePush = function (name, something){
+				var cache;
+				cache = this.cache;
+				!cache[name] && (cache[name] = []);
+				cache[name].push(something);
+				return cache[name];
+			};
+			Scope.prototype.isScope = true;
+			Scope.init = function(ast, check_define, __scope){
+				var type;
+				if (!__scope){
+					__scope = new Scope(ast.is('Let', 'Class', 'Function', 'Root') || 'Root', ast);
+					ast.scope = __scope;
+				}
+				for (var node, i = 0; i < ast.length; i++){
+					node = ast[i];
+					if (type = node.is('Let', 'Class', 'Function', 'Root')){
+						node.scope = new Scope(type, node, __scope);
+						Scope.init(node, check_define, node.scope);
+					}else {
+						node.scope = __scope;
+						if (scope_map[node.type]){
+							if (type = checkScopeMap(node, scope_map[node.type])){
+								if (decl_types.indexOf(type) != -1){
+									__scope.define(type, node);
+								}
+							}
+						}
+						if (node.isSyntax){
+							Scope.init(node, check_define, __scope);
+						}
+					}
+				}
+				return ast.scope;
+			};
+			Scope.defineScope = function(patt){
+				var slices;
+				slices = SText.split(patt, '->', true);
+				compileScopeMap(slices.pop(), slices.reverse(), 0, scope_map);
+			};
+			Scope.test = function(node){
+				return !!scope_map[node.type];
+			};
+			function compileScopeMap(type, patt, index, __sub){
+				var names, test, top, ref, m, testIndex, sub, sub2;
+				names = patt[index];
+				if (names[0] == '<'){
+					names = names.substr(1).trim();
+					test = true;
+				}else if (/\<\-/.test(names)){
+					ref = names.split('<-'), top = ref[0], names = ref[1];
+					top = top.trim().split(' ');
+				}
+				names = names.trim().split(' ');
+				for (var name, i = 0; i < names.length; i++){
+					name = names[i];
+					if (m = name.match(/^(\w+)\[(\d+)\]$/)){
+						name = m[1];
+						testIndex = m[2];
+					}
+					sub = sub2 = null;
+					if (test){
+						__sub[name] = __sub[name] || {};
+						sub = __sub;
+						if (testIndex){
+							__sub[name].testIndex = true;
+							sub2 = __sub[name][testIndex] = __sub[name][testIndex] || {};
+						}else {
+							sub2 = __sub[name].subs = __sub[name].subs || {};
+						}
+					}else {
+						sub = __sub[name] = __sub[name] || {};
+						if (testIndex){
+							__sub[name].testIndex = true;
+							sub = __sub[name][testIndex] = __sub[name][testIndex] || {};
+						}
+					}
+					if (top){
+						__sub[name].tops = top;
+						top.default = type;
+					}
+					if (index < patt.length-1){
+						compileScopeMap(type, patt, index+1, sub);
+						if (sub2){
+							compileScopeMap(type, patt, index+1, sub2);
+						}
+					}else if (!top){
+						__sub[name].default = type;
+					}
+				}
+			};
+			function checkScopeMap(node, _map, _not_def){
+				var parent, map, index, ref;
+				if (!_map){
+					if (scope_map[node.type]){
+						return checkScopeMap(node, scope_map[node.type]);
+					}
+					return;
+				}
+				if (parent = node.parent){
+					if (parent.type == 'ArgusStam'){
+						parent = parent.parent;
+					}
+					if (parent && (map = _map[parent.type])){
+						if (map.testIndex){
+							index = node.index;
+							if (map[index]){
+								if (ref = checkScopeMap(parent, map[index], true) || map.default){
+									return ref;
+								}
+							}
+							return checkScopeMap(parent, map, true) || _map.default;
+						}
+						return checkScopeMap(parent, map);
+					}
+					if (_map.tops){
+						if (parent.scope && _map.tops.indexOf(parent.scope.valid.type) != -1){
+							return _map.tops.default;
+						}
+					}
+				}
+				if (_map.subs){
+					return checkScopeMap(node, _map.subs);
+				}
+				if (!_not_def && _map.default){
+					return _map.default;
+				}
+			};
+			function checkTarget(target){
+				var name;
+				if (target.isSyntax || target.isToken){
+					name = target.text;
+					if (target.isToken){
+						target = target.parent;
+					}
+				}else {
+					name = target;
+					target = null;
+				}
+				return [target, name];
+			};
+			return Scope;
+		})()
+		module.exports = Scope;
+	});
+	return module.exports;
+})('./core/scope.js', './core', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Card = (function(){
+			var not_semicolon, width_limit;
+			not_semicolon = /^(COMMENT|IfStam|WhileStam|DoWhileStam|WithStam|ForStam|SwitchStam|CaseStam|DefaultStam)$/;
+			width_limit = 80;
+			Card.prototype.isCard = true;
+			function Card(type){
+				this.type = type || '';
+				this.length = 0;
+				if (arguments.length > 1){
+					this.add.apply(this, Jsop.toArray(arguments, 1));
+				}
+			};
+			Card.prototype.add = function (){
+				var type;
+				for (var item, i = 0; i < arguments.length; i++){
+					item = arguments[i];
+					if (!item){
+						continue;
+					}
+					if (item.isToken){
+						if (!item.is('EOT')){
+							this[this.length++] = item;
+						}
+						continue;
+					}
+					type = typeof item;
+					if (item.isCard || type == 'string'){
+						this[this.length++] = item;
+						continue;
+					}
+					if (type == 'number'){
+						this[this.length++] = item+'';
+						continue;
+					}
+					if (isArray(item)){
+						this.add.apply(this, item);
+						continue;
+					}
+					throw Error.create(5004, isClass(item), new Error());
+				}
+				return this;
+			};
+			Card.prototype.insert = function (pos){
+				var args;
+				args = Jsop.toArray(arguments, 1);
+				for (var i = pos; i < this.length; i++){
+					args.push(this[i]);
+				}
+				this.length = pos;
+				this.add.apply(this, args);
+				return this;
+			};
+			Card.prototype.delete = function (a, b){
+				if (b == null) b = a;
+				Array.prototype.splice.call(this, a, b-a+1);
+				return this;
+			};
+			Card.prototype.__defineGetter__("text", function(){
+				return this.toScript();
+			});
+			Card.prototype.toScript = function (){
+				if (!this._formated){
+					format(this);
+				}
+				return toText(this);
+			};
+			Card.prototype.toList = function (){
+				var list;
+				list = [];
+				for (var item, i = 0; i < this.length; i++){
+					item = this[i];
+					if (!item) continue;
+					if (item.isCard){
+						list.push.apply(list, item.toList());
+					}else {
+						list.push(item);
+					}
+				}
+				return list;
+			};
+			function toText(list){
+				var texts = [];
+				for (var item, i = 0; i < list.length; i++){
+					item = list[i];
+					if (item.isToken){
+						if (item.is('EOT')){
+							continue;
+						}
+						texts.push(item.text);
+					}else if (item.isCard || isArray(item)){
+						texts.push(toText(item));
+					}else {
+						texts.push(item);
+					}
+				}
+				return texts.join('');
+			};
+			function countText(card){
+				var texts;
+				texts = [];
+				for (var item, i = 0; i < card.length; i++){
+					item = card[i];
+					if (!item){
+						continue;
+					}
+					if (item.isToken){
+						texts.push(item.text);
+					}else if (item.isCard){
+						texts.push(countText(item));
+					}else {
+						texts.push(item);
+					}
+				}
+				return texts.join('');
+			};
+			function countTextLen(card, limit){
+				var len;
+				len = 0;
+				for (var item, i = 0; i < card.length; i++){
+					item = card[i];
+					if (limit && len >= limit){
+						return len;
+					}
+					if (item.isToken){
+						len += item.text.length;
+					}else if (item.isCard || isArray(item)){
+						len += countTextLen(item, limit && limit-len);
+					}else {
+						len += item.length;
+					}
+				}
+				return len;
+			};
+			function format(card){
+				each(card);
+				if (card.type == 'Root'){
+					if (card.length){
+						lineFeed(card);
+					}
+				}
+				return card;
+			};
+			function each(card){
+				var parent;
+				parent = card.type;
+				for (var item, i = 0; i < card.length; i++){
+					item = card[i];
+					if (!item){
+						continue;
+					}
+					switch (item.type){
+						case 'COMMENT':
+							if (Tea.argv['--clear']){
+								card[i] = null;
+							}
+							break;
+						case 'ArrayExpr':
+							formatArray(item);
+							break;
+						case 'JsonExpr':
+							formatJson(item);
+							break;
+						case 'VarStam':case 'ConstStam':case 'LetStam':
+							formatVar(item);
+							break;
+						case 'Block':
+							if (item.length){
+								each(item);
+								lineFeed(item, parent);
+								indentLine(item, parent);
+								if (card.type == 'BlockNode'){
+									item.add('\n');
+								}else if (typeof card[i+1] == 'string' && /^\s*}/.test(card[i+1])){
+									item.add('\n');
+								}
+							}
+							break;
+						default:
+							if (item.isCard){
+								each(item);
+							}else if (item == ','){
+								card[i] = ', ';
+							}
+							break;
+					}
+				}
+				return card;
+			};
+			function lineFeed(card, parent){
+				for (var line, i = card.length - 1; i >= 0; i--){
+					line = card[i];
+					if (line){
+						if (!not_semicolon.test(line.type) && parent != 'Block'){
+							card.insert(i+1, ';');
+						}
+						if (i || parent && parent != 'Block'){
+							card.insert(i, '\n');
+						}
+					}
+				}
+			};
+			function indentLine(card, parent){
+				for (var item, i = 0; i < card.length; i++){
+					item = card[i];
+					if (item == '\n'){
+						card[i] = '\n\t';
+						continue;
+					}else if (i === 0 && parent){
+						card.insert(0, '\t');
+						continue;
+					}
+					if (item.isToken){
+						if (!item.is('STRING')){
+							card[i] = item.text.replace(/\n/g, '\n\t');
+						}
+						continue;
+					}
+					if (item.isCard){
+						indentLine(item);
+						continue;
+					}
+					if (typeof item == 'string'){
+						card[i] = item.replace(/\n/g, '\n\t');
+					}
+				}
+				return card;
+			};
+			function formatArray(card){
+				var comma;
+				comma = card[1];
+				if (comma && comma.type == 'CommaExpr'){
+					if (countTextLen(comma, width_limit) >= width_limit){
+						for (var i = 0; i < comma.length; i++){
+							if (comma[i].isCard){
+								each(comma[i]);
+							}else if (comma[i] == ', ' || comma[i] == ','){
+								comma[i] = ',\n';
+							}
+						}
+						comma.insert(0, '\n');
+						indentLine(comma);
+						return;
+					}
+				}
+				each(card);
+			};
+			function formatJson(card){
+				var comma;
+				comma = card[1];
+				if (comma && comma.type == 'CommaExpr'){
+					if (countTextLen(comma, width_limit) >= width_limit){
+						for (var i = 0; i < comma.length; i++){
+							if (comma[i].isCard){
+								each(comma[i]);
+							}else if (comma[i] == ', ' || comma[i] == ','){
+								comma[i] = ',\n';
+							}
+						}
+						comma.insert(0, '\n');
+						indentLine(comma);
+						return;
+					}
+				}
+				each(card);
+			};
+			function formatVar(card){
+				var comma, text;
+				comma = card[1];
+				if (comma && comma.type == 'CommaExpr'){
+					text = countText(comma);
+					if (/\=/.test(text) && text.length >= width_limit){
+						for (var i = 0; i < comma.length; i++){
+							if (comma[i].isCard){
+								each(comma[i]);
+							}else if (comma[i] == ', ' || comma[i] == ','){
+								comma[i] = ',\n';
+							}
+						}
+						indentLine(comma);
+						return;
+					}
+				}
+				each(card);
+			};
+			return Card;
+		})()
+		module.exports = Card;
+	});
+	return module.exports;
+})('./core/card.js', './core', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Pattern = require("./pattern.js")
+		var Grammar = require("./grammar.js")
+		function create(prepor){
+			return new Grammar(prepor);
+		}
+		module.exports.create = create
+		function pattern(text, src, prepor){
+			var patt, grm, node;
+			patt = Pattern.compile(text);
+			if (src){
+				grm = new Grammar(prepor);
+				node = grm.pattern(patt, src);
+				return node;
+			}
+			return patt;
+		}
+		module.exports.pattern = pattern
+		function parser(name, src, params, prepor){
+			var grm, node;
+			grm = new Grammar(prepor);
+			node = grm.parser(name, src, params, true);
+			if (node && !node.isSyntax && node.length == 1){
+				node = node[0];
+			}
+			return node;
+		}
+		module.exports.parser = parser
+		function define(name, patt, mode){
+			var debug;
+			if (mode == 'debug'){
+				mode = null;
+				debug = true;
+			}
+			if (!mode){
+				if (name.match(/\w+(Token|Expr|Decl|Patt|Stam)$/)){
+					mode = 'ret node';
+				}else {
+					mode = 'not check';
+				}
+			}
+			if (typeof patt == 'function'){
+				Grammar[name] = {"name": name, "mode": mode, "fn": patt, "debug": debug};
+			}else {
+				Grammar[name] = {"name": name, "mode": mode, "pattern": Pattern.compile(patt), "debug": debug};
+				if (debug){
+					print('| * '+name, Grammar[name].pattern);
+				}
+			}
+			return Grammar[name];
+		}
+		module.exports.define = define;
+	});
+	return module.exports;
+})('./core/grammar/index.js', './core/grammar', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Standard, versions
+		Standard = require("./standard.js")
+		exports.versions = (versions = [])
+		function create(version, prepor){
+			if (!(Standard.hasOwnProperty(version))){
+				throw Error.create(5007, version, new Error());
+			}
+			return new Standard(version, prepor);
+		}
+		module.exports.create = create
+		function define(name, map){
+			var std_obj;
+			if (versions.indexOf(name) == -1){
+				versions.push(name);
+				!Standard[name] && (Standard[name] = {});
+			}
+			std_obj = compile(map, Standard[name]);
+			return std_obj;
+		}
+		module.exports.define = define
+		function compile(map, std_obj){
+			var std, ref;
+			for (var names in map){
+				if (!map.hasOwnProperty(names)) continue;
+				var item = map[names];
+				std = _compile(item);
+				for (var ref = names.split(' '), name, i = 0; i < ref.length; i++){
+					name = ref[i];
+					if (!/^[A-Z]/.test(name)){
+						throw Error.create(5001, name, new Error());
+					}
+					std_obj[name] = std;
+				}
+			}
+			return std_obj;
+		}
+		module.exports.compile = compile
+		function _compile(data){
+			var stds;
+			stds = {};
+			stds.isStandard = true;
+			if (typeof data == 'string' || typeof data == 'function'){
+				stds['default'] = data;
+			}else if (isArray(data)){
+				stds = [];
+				stds.isStandard = 'list';
+				for (var i = 0; i < data.length; i++){
+					stds.push(_compile(data[i]));
+				}
+			}else {
+				for (var cond in data){
+					if (!data.hasOwnProperty(cond)) continue;
+					var val = data[cond];
+					if (typeof val == 'object'){
+						val = _compile(val);
+					}
+					stds[cond.replace(/\s*\n\s*/g, ' ')] = val;
+				}
+			}
+			return stds;
+		};
+	});
+	return module.exports;
+})('./core/standard/index.js', './core/standard', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Processor, Gatherer, Template, Source, bases
+		Processor = require("./prepor")
+		Gatherer = require("./gatherer")
+		Template = require("./template.js")
+		Source = require("../core/source.js")
+		bases = new Processor()
+		function create(something){
+			var prepor;
+			prepor = new Processor();
+			prepor.extend(bases);
+			if (something){
+				if (something.isSource){
+					gather(something, prepor);
+				}else {
+					prepor.extend(something);
+					prepor.parent = something;
+				}
+			}
+			return prepor;
+		}
+		module.exports.create = create
+		function gather(src, prepor){
+			!prepor && (prepor = new Processor());
+			for (var token, i = 0; i < src.length; i++){
+				token = src[i];
+				if (!token){
+					continue;
+				}
+				if (Gatherer[token.type]){
+					i = Gatherer[token.type](prepor, src, i) || i;
+				}
+			}
+			src.refresh(0);
+			return prepor;
+		}
+		module.exports.gather = gather
+		function concatModule(main, list){
+			return Template.concatModule(main, list);
+		}
+		module.exports.concatModule = concatModule
+		function load(files){
+			var src, prepor;
+			if (typeof files == 'string'){
+				files = [files];
+			}
+			for (var file, i = 0; i < files.length; i++){
+				file = files[i];
+				if (src = new Source(null, file)){
+					if (prepor = gather(src)){
+						extend(prepor);
+					}
+				}
+			}
+			return bases;
+		}
+		module.exports.load = load
+		function extend(prepor){
+			bases.extend(prepor);
+			return bases;
+		}
+		module.exports.extend = extend;
+	});
+	return module.exports;
+})('./preprocess/index.js', './preprocess', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Token, Node, Grammar, Scope, Standard, ref, names, values, ref0, mode, ref1, ref2
+		Token = require("../core/token.js")
+		Node = require("../core/node.js")
+		Grammar = require("../core/grammar")
+		Scope = require("../core/scope.js")
+		Standard = require("../core/standard")
+		for (var name in (ref = require("./token.js"))){
+			if (!ref.hasOwnProperty(name)) continue;
+			var value = ref[name];
+			names = name.split(' ').filter(function($){return $});
+			values = value.replace(/([^\n])\s*\n+\s*/g, '$1  ').split('  ').filter(function($){return $});
+			Token.define(names, values);
+		}
+		for (var name in (ref0 = require("./syntax"))){
+			if (!ref0.hasOwnProperty(name)) continue;
+			var value = ref0[name];
+			mode = null;
+			if (typeof value == 'string'){
+				value = value.replace(/\n\s*/g, ' ');
+			}
+			if (/:debug$/.test(name)){
+				mode = 'debug';
+				name = name.slice(0, -6);
+			}
+			Grammar.define(name, value, mode);
+		}
+		for (var name in (ref1 = require("./node.js"))){
+			if (!ref1.hasOwnProperty(name)) continue;
+			var value = ref1[name];
+			names = name.split(' ').filter(function($){return $});
+			values = value.replace(/\s*\n+\s*/g, '  ').split('  ').filter(function($){return $});
+			Node.define(names, values);
+		}
+		for (var ref2 = require("./scope.js"), value, i = 0; i < ref2.length; i++){
+			value = ref2[i];
+			Scope.defineScope(value);
+		}
+		Standard.define('es5', require("./standards/es5"));
+	});
+	return module.exports;
+})('./settings/index.js', './settings', false);
+(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Argv = (function(){
 		    var _conf_re, _desc, _config;
 		    _conf_re = /^\s*(\-\w)?(?:, *)?(\-\-[\w\-]+)?\ +(\<[^\>]+\>|\[[^\]]+\]|"[^"]+"|'[^']+'|\w+?\b)?\s*(.*)$/mg;
@@ -4069,10 +4082,11 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 })('./core/location.js', './core', false);
 (function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Pattern = (function(){
-			var Asset, Syntax, cache;
+			var Asset, Syntax, cache, check_loop;
 			Asset = require("./asset.js");
 			Syntax = require("../syntax.js");
 			cache = Jsop.data();
+			check_loop = {};
 			function Pattern(str){
 				var or_list, asset_list, patt;
 				this.length = 0;
@@ -4116,6 +4130,16 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			};
 			Pattern.prototype.parse = function (grm, src, params){
 				var handle, _params, res;
+				if (check_loop.index != src.index){
+					check_loop.count = {};
+					check_loop.index = src.index;
+					check_loop.times = 0;
+				}else {
+					if (check_loop.times > 500){
+						throw Error.create(4003, grm.stack('loop'), new Error());
+					}
+					check_loop.times++;
+				}
 				handle = grm.handle;
 				_params = handle.params;
 				handle.params = params;
@@ -4479,14 +4503,28 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				}
 				return ref;
 			};
-			Grammar.prototype.stack = function (){
-				var ref;
+			Grammar.prototype.stack = function (check){
+				var ref, text, list, m;
 				if (this.handle.subs){
 					ref = getSubsStack(this.handle);
 				}else {
 					ref = getUpStack(this.handle);
 				}
 				ref.className = 'GrammarStack';
+				if (check == 'loop'){
+					text = print.toText(ref);
+					list = text.replace(/^\s*\| \*.*$/mg, '').replace(/[\s\-\*\>]+/g, '-').split('-');
+					for (var i = 0; i < list.length; i++){
+						if (list[i]){
+							if (m = list.slice(i+1).join('-').match(new RegExp(list[i]+'.*?'+list[i], 'g'))){
+								if (m.length > 5){
+									return '∞ '+m[0];
+								}
+							}
+						}
+					}
+					return text;
+				}
 				return ref;
 			};
 			Grammar.prototype.error = function (msg, target){
@@ -4520,12 +4558,28 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				}
 				return res;
 			};
+			function errorResponse(err, src, grm){
+				if (err.message === '∆'){
+					err.message = 1100;
+				}
+				if (err.message == 1100 || err.message == 1101){
+					if (Error.code && Error.code[err.target.types[1]]){
+						err.message = Error.code[err.target.types[1]];
+					}else {
+						print(grm.stack());
+					}
+				}
+				throw Error.create(err.message, err.target, new Error());
+			};
 			function getSubsStack(handle){
 				var stack;
 				if (!handle.subs){
 					return handle.name;
 				}
 				stack = {"name": handle.name, "subs": []};
+				if (stack.name && !Grammar[stack.name]){
+					stack.name = '['+stack.name+']';
+				}
 				if (handle.error){
 					stack.name = '∆'+stack.name;
 				}
@@ -4541,6 +4595,9 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			function getUpStack(handle, __sub){
 				var stack;
 				stack = {"name": handle.name, "subs": []};
+				if (stack.name && !Grammar[stack.name]){
+					stack.name = '['+stack.name+']';
+				}
 				if (handle.error){
 					stack.name = '∆'+stack.name;
 				}
@@ -4551,19 +4608,6 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 					return getUpStack(handle.up, stack);
 				}
 				return stack;
-			};
-			function errorResponse(err, src, grm){
-				if (err.message === '∆'){
-					err.message = 1100;
-				}
-				if (err.message == 1100 || err.message == 1101){
-					if (Error.code && Error.code[err.target.types[1]]){
-						err.message = Error.code[err.target.types[1]];
-					}else {
-						print(grm.stack());
-					}
-				}
-				throw Error.create(err.message, err.target, new Error());
 			};
 			return Grammar;
 		})()
@@ -4660,13 +4704,6 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				}
 			};
 			function checkBlockNode(std, node){
-				// if ref:
-				// 	if ref.type == 'Root' || ref.type == 'Block':
-				// 		block = ref;
-				// 	else if ref[1] && ref[1].type == 'Block':
-				// 		block = ref[1];		
-				// 	if block:
-				// 		console.log('?????????', ref.type, loop)
 				var scope, blocks, card;
 				scope = node.scope;
 				if (scope.target != node){
@@ -4693,10 +4730,6 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				if (std.prepor && std.prepor.standards[name]){
 					ref = std.prepor.standards[name].parse(std, node);
 				}
-				// 	std_conds = std.prepor.get(name, 'statement', 'expression'):
-				// 	if std_conds.read:
-				// 		ref = std_conds.read(std, node);
-				// ref = checkPattern(std, ref, node, params);
 				if (!ref){
 					if (sub_std = std.standard[name]){
 						setHandle(std.handle, 'version', std.version);
@@ -4844,7 +4877,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 					delete this.macro[name];
 				}
 			};
-			Prepor.prototype.check = function (name, type, src){
+			Prepor.prototype.check = function (name, type, src, parser){
 				var mark, _type, tar;
 				mark = name.match(/^(#*)/)[1];
 				if (mark){
@@ -4855,8 +4888,12 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 						return false;
 					}
 					tar = this[_type][name];
-					if (_type == 'macro' && src){
-						return checkMarco(this, tar, src, mark);
+					if (src){
+						if (_type == 'macro'){
+							return checkMarco(this, tar, src, mark);
+						}else {
+							return tar.parse(parser, src);
+						}
 					}
 					return tar;
 				}
@@ -5067,11 +5104,11 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			"StamBlock": "Block | Statement@:BlockStam",
 			"Statement": "LabelStam | (\t\\{ → [JsonAssignExpr JsonExpr Block] | \\[ → ArrayAssignExpr | #SUGAR(statement) | [Declaration Keyword MethodDecl LinkStam Comma] )\\n (CLOSE → | &==[Expression] [SeleteLeft SeleteRight]@@SeleteStam | SeleteLeft@@SeleteStam | END∅∆1101)",
 			"Expression": "[ function → FunctionExpr, class → Class, Ternary ] (&==[Access] (Params@@CallExpr | (=@@AssignExpr | ASSIGN@@AssignPatt) AssignRight∆1107))?",
-			"Object": "CONST | [ \\@ → AtExpr, \\[ → ArrayExpr, \\( → CompelExpr, \\{ → JsonExpr, super → SuperExpr, require → RequireExpr ] | VariableExpr | #SUGAR(expression)",
+			"Object": "CONST | [\\@ → AtExpr, \\[ → ArrayExpr,\\( → CompelExpr,\\{ → JsonExpr, super → SuperExpr, require → RequireExpr] | VariableExpr | #SUGAR(expression)",
 			"CONST": "REGEXP | STRING | TAG",
 			"REGEXP": "[\\/ \\/=] → #CONCAT( \\/=\\\\|\\/...*\\/\\\\|\\/ [g i m y]*, , REGEXP CONST)",
 			"STRING": "QUOTE → #CONCAT( , , STRING CONST)",
-			"TAG": "#+ [IDENTIFIER KEYWORD]",
+			"TAG": "# → #CONCAT(#+ [IDENTIFIER KEYWORD], , TAG CONST)",
 			"Access": "Object (MemberExpr@~AccessExpr)*",
 			"Value": "[@ this]?@@ThisExpr → Object (MemberExpr@~AccessExpr | ParamsExpr@~CallExpr)* SlicePatt?@~SliceExpr",
 			"MemberExpr": "[ . → . [IDENTIFIER KEYWORD]∆1108, \\[ → \\\\[ CommaExpr \\\\], :: → :: [IDENTIFIER KEYWORD]?]",
@@ -5087,6 +5124,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			"Keyword": "[ return → ReturnStam, break → BreakStam, continue → ContinueStam, throw → ThrowStam, debugger → DebuggerStam, if → IfStam, while → WhileStam, do → DoWhileStam, with → WithStam, try → TryStam, switch → SwitchStam, for → ForStam, yield → YieldStam]",
 			"YieldStam": "yield Expression",
 			"ImportStam": "import!∆1",
+			"ExportDecl": "export∅ (default [MethodDecl Declaration Expression] | [MethodDecl Declaration ArgusStam])∆1011",
 			"Unary": "not Expression@@NotExpr | PREFIX Value@@PrefixExpr | new Value@@NewExpr | UNARY #Unary@@UnaryExpr | Value POSTFIX?@@PostfixExpr",
 			"ComputeLv0": "Unary (PREC0 Unary@~ComputeExpr)*",
 			"ComputeLv1": "ComputeLv0 (PREC1 ComputeLv0@~ComputeExpr)*",
@@ -5136,7 +5174,6 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			"ProtoDecl": "prototype∅ [MethodDecl ArgusStam]",
 			"PropertyDecl": "property∅ [MethodDecl ArgusStam]",
 			"ConstructorDecl": "constructor@:NameExpr ArgusExpr [{ :]→ Block∆1106",
-			"ExportDecl": "export∅ (default [MethodDecl Declaration Expression] | [MethodDecl Declaration ArgusStam])∆1011",
 			"If": "if ConditionExpr StamBlock∆1012@@IfPatt",
 			"Else": "else@@ElsePatt (if∅ ConditionExpr@@ElseIfPatt | ConditionExpr [{ :]→@@ElseIfPatt)? StamBlock∆1019",
 			"Try": "try StamBlock∆1016@@TryPatt",
@@ -5440,6 +5477,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			"4000": 'Grammar Module Error',
 			"4001": 'Unexpected syntax parser "%s"',
 			"4002": 'Unexpected parser "%s" in "%s" syntax pattern object',
+			"4003": 'Grammar pattern has nested loop',
 			"5000": 'Standard Module Error',
 			"5001": 'Substandard parse node name "%s"',
 			"5002": 'Standard Module not has "%s" method',
@@ -5711,11 +5749,14 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				return false;
 			};
 			function parseNodeAsset(src, grm){
-				var name, token;
+				var name, token, ref;
 				name = this.content;
 				token = src.current;
 				if (token.types.indexOf(name) != -1){
 					return token;
+				}
+				if (grm.prepor && (ref = grm.prepor.check(name, null, src, grm))){
+					return ref;
 				}
 				if (grm.parser(name)){
 					return grm.parser(name, src, this.param);
@@ -6111,6 +6152,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			return false;
 		}
 		function checkMarco(src, prepor){
+			var text;
 			for (var token, i = 0; i < src.length; i++){
 				token = src[i];
 				if (token && token.type == 'IDENTIFIER'){
@@ -6118,7 +6160,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 					prepor.check(token.text, 'macro', src);
 				}
 			}
-			return src.join();
+			text = src.join();
+			return text;
 		};
 	});
 	return module.exports;
@@ -6171,7 +6214,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			token = src[index];
 			b = src.indexOf('\n', index) || src.length-1;
 			argv = src.join(index+1, b).trim();
-			Argv.parse(argv.split(' '));
+			Tea.argv.parse(argv.split(' '));
 			src.delete(index, b);
 			// debug log
 			Tea.log('#argv        : '+argv, token.location);
@@ -6264,6 +6307,9 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				Tea.log('#script runed: '+output.substr(0, 20)+'...', token.location);
 			}catch (e) {
 				var token, a_b, block, output;
+				if (e.stacks){
+					throw Error.create(e, new Error());
+				}
 				throw Error.create(2004, e.message, token, new Error());
 			};
 		}
@@ -6338,13 +6384,13 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			is_def = tag.indexOf('def') != -1;
 			token = src[index];
 			the_file = token.fileName;
-			root_file = Argv.file;
+			root_file = Tea.argv.file;
 			exp = cond.replace(/((-{0,2})[\$a-zA-Z_][\w]*)\b/g, function($0, $1, $2){
 				var res;
 				if ($2){
-					res = Argv[$1];
+					res = Tea.argv[$1];
 				}else if (is_def){
-					return !!prepor.check($3);
+					return !!prepor.check($1);
 				}else {
 					switch ($1){
 						case '__main':
@@ -6358,8 +6404,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 						default:
 							if (global.hasOwnProperty($1)){
 								res = global[$1];
-							}else if (Argv.hasOwnProperty($1)){
-								res = Argv[$1];
+							}else if (Tea.argv.hasOwnProperty($1)){
+								res = Tea.argv[$1];
 							}else {
 								return $1;
 							}
@@ -6721,7 +6767,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				block.insert(start, cache.head);
 				cache.head = null;
 			}
-			if (!Argv['--safe']){
+			if (!Tea.argv['--safe']){
 				undefines = Jsop.toArray(scope.undefines);
 				if (undefines.length){
 					block.insert(start, this.pattern('#CARD(var)', undefines));
@@ -7317,11 +7363,16 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 })('./settings/standards/es5/at.js', './settings/standards/es5', false);
 (function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		function SUGAR(src, params){
-			var map, node;
+			var map, sugar, node;
 			if (!this.prepor){
 				return;
 			}
 			if (!(map = this.prepor[params[0]])){
+				if (sugar = this.prepor.check(params[0])){
+					if (node = sugar.parse(this, src)){
+						return node;
+					}
+				}
 				return;
 			}
 			for (var name in map){
@@ -7542,7 +7593,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 					case 'Cache':
 						return parseCacheAsset.apply(this, arguments);
 					case 'Argv':
-						return Argv[this.name];
+						return Tea.argv[this.name];
 					case 'Logic':
 						return parseLogicAsset.apply(this, arguments);
 				}
@@ -8183,53 +8234,34 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 	return module.exports;
 })('./core/standard/method.js', './core/standard', false);
 module.exports = (function(_filename, _dirname, main){var module  = Module.main(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		var cmd_help
 		require("./tea.js")
-		cmd_help = "* <r:TeaJS:> version <g:0.2.0:>\n\
-		-h, --help                           显示帮助\n\
-		-f, --file    <file path>            编译文件路径\n\
-		-p, --path    <project dir>          项目目录\n\
-		-o, --out     <output path>          输出文件 或 目标目录\n\
-		-e, --eval    <Tea script snippet>   编译一段字符串\n\
-		-d, --define  <file path>            宏定义文件路径，默认加载项目下的 __define.tea 文件\n\
-		-m, --map     [source output path]   生成 source map 文件\n\
-		-c, --concat                         合并文件\n\
-		-v, --verbose                        显示编译信息\n\
-		-s, --safe                           安全模式编译\n\
-		    --clear                          清理注释\n\
-		    --tab     <number>               设置 tab size\n\
-		    --token                          输出 token 解析\n\
-		    --ast                            输出 ast 解析\n\
-		    --nopp                           不进行预编译\n\
-		    --test                           编译后运行\n\
-		... 自定义参数，用于预编译时判断与读取(使用Argv['--name']读取)"
 		if (!module.parent){
 			(function(){
 				var files, ctx;
-				Argv.parse(process.argv, cmd_help);
-				if (Argv['--help']){
-					print(Argv.help());
+				Tea.argv.parse(process.argv);
+				if (Tea.argv['--help']){
+					print(Tea.argv.help());
 					Tea.exit();
 				}
-				if (Argv['--tab']){
-					Tea.tabsize(parseInt(Argv['--tab']));
+				if (Tea.argv['--tab']){
+					Tea.tabsize(parseInt(Tea.argv['--tab']));
 				}
-				if (Argv['--define']){
-					files = checkPath(Argv['--define'], Argv['--path']);
+				if (Tea.argv['--define']){
+					files = checkPath(Tea.argv['--define'], Tea.argv['--path']);
 					if (!files){
-						print('* <g:Cant find define file as <r:"'+Argv['--define']+'":>!!:>');
+						print('* <g:Cant find define file as <r:"'+Tea.argv['--define']+'":>!!:>');
 						Tea.exit();
 					}
 					Tea.prep.load(files);
 				}
-				if (Argv['--eval'] && Argv['--eval'].length){
-					ctx = Tea.context(null, Argv['--eval']);
+				if (Tea.argv['--eval'] && Tea.argv['--eval'].length){
+					ctx = Tea.context(null, Tea.argv['--eval']);
 					nextStep(ctx);
 					return;
 				}
-				if (Argv['--file'] || Argv['--path']){
-					checkDefine(Argv['--path'] || Fp.dirName(Argv['--file']));
-					files = checkPath(Argv['--file'], Argv['--path']);
+				if (Tea.argv['--file'] || Tea.argv['--path']){
+					checkDefine(Tea.argv['--path'] || Fp.dirName(Tea.argv['--file']));
+					files = checkPath(Tea.argv['--file'], Tea.argv['--path']);
 					for (var file, i = 0; i < files.length; i++){
 						file = files[i];
 						ctx = Tea.context(file);
@@ -8237,10 +8269,10 @@ module.exports = (function(_filename, _dirname, main){var module  = Module.main(
 					}
 					return;
 				}
-				Argv.pipe(function(chunk){
+				Tea.argv.pipe(function(chunk){
 					if (!chunk){
 						print('\n* Are you <g:NongShaLei??????:>\n');
-						print(Argv.help());
+						print(Tea.argv.help());
 						Tea.exit();
 					}
 					ctx = Tea.context(null, chunk);
@@ -8251,25 +8283,25 @@ module.exports = (function(_filename, _dirname, main){var module  = Module.main(
 			function nextStep(ctx){
 				var out;
 				Tea.log('* <g:Load:>  : '+(ctx.fileName || 'by stdin'));
-				if (Argv['--token']){
+				if (Tea.argv['--token']){
 					print(ctx.fileName);
 					print(ctx.source);
 				}
-				if (Argv['--ast']){
+				if (Tea.argv['--ast']){
 					print(ctx.fileName);
 					print(ctx.AST);
 				}
-				if (Argv['--ast'] || Argv['--token']){
+				if (Tea.argv['--ast'] || Tea.argv['--token']){
 					return;
 				}
-				if (Argv['--out']){
-					out = checkOut(Argv['--out'], Argv['--path'], ctx.fileName);
-					ctx.output(out, Argv['--map']);
+				if (Tea.argv['--out']){
+					out = checkOut(Tea.argv['--out'], Tea.argv['--path'], ctx.fileName);
+					ctx.output(out, Tea.argv['--map']);
 					Tea.log('* <g:Output:>: '+out);
 				}
-				if (Argv['--test']){
+				if (Tea.argv['--test']){
 					runTest(ctx);
-				}else if (!Argv['--out']){
+				}else if (!Tea.argv['--out']){
 					console.log(ctx.output());
 				}
 			};
@@ -8349,7 +8381,7 @@ module.exports = (function(_filename, _dirname, main){var module  = Module.main(
 				return out;
 			};
 			function checkExt(){
-				switch (Argv['--std']){
+				switch (Tea.argv['--std']){
 					case 'es5':case 'es6':
 					default:
 						return '.js';

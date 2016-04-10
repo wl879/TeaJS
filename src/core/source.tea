@@ -79,10 +79,10 @@ class Source:
 		if indent = @.lineIndent(pos):
 			indent = SText.copy(' ', indent);
 
-		for token => value:
+		for i, token => value:
 			if !token || token.type == 'EOT':
 				continue;
-			if indent && token.indent >= 0:
+			if i && indent && token.indent >= 0:
 				if token.is('BLANK'):
 					token.text += indent;
 					token.indent = token.text.length;

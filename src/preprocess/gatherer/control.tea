@@ -40,6 +40,8 @@ exports['#script']  = function(prepor, src, index):
 		// debug log
 		Tea.log('#script runed: '+output.substr(0, 20)+'...', token.location)
 	catch e:
+		if e.stacks:
+			Err e;
 		Err 2004, e.message, token;
 
 exports['#elif']    = 
@@ -101,14 +103,14 @@ function evalCondition(tag, cond, prepor, src, index):
 	is_def    = tag.indexOf('def') != -1;
 	token     = src[index];
 	the_file  = token.fileName;
-	root_file = Argv.file;
+	root_file = Tea.argv.file;
 	exp       = cond.replace(/((-{0,2})[\$a-zA-Z_][\w]*)\b/g,
 					function($0, $1, $2):
 						var res;
 						if $2:
-							res = Argv[$1];
+							res = Tea.argv[$1];
 						else if is_def:
-							return !!prepor.check($3);
+							return !!prepor.check($1);
 						else:
 							switch $1:
 								case '__main':
@@ -122,8 +124,8 @@ function evalCondition(tag, cond, prepor, src, index):
 								default:
 									if $1 in global:
 										res = global[$1];
-									else if $1 in Argv:
-										res = Argv[$1];
+									else if $1 in Tea.argv:
+										res = Tea.argv[$1];
 									else:
 										return $1;
 						return typeof res == 'string' ? '"'+res.replace(/\"/g, '\\"')+'"' : res;
