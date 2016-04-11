@@ -1,37 +1,19 @@
+// need SText module 
 var SText;
 SText = require("../stext");
 var print = (function(){
-	function print(){
-		if (this.constructor != print){
-			if (print.stdout.apply(this, arguments)){
-				print_write('\n');
-			}
-		}
-	}
 	/*
-			black='\033[30m' red='\033[31m' green='\033[32m' orange='\033[33m'
-			blue='\033[34m' purple='\033[35m' cyan='\033[36m' lightgrey='\033[37m'
-		 	darkgrey='\033[90m' lightred='\033[91m' lightgreen='\033[92m' yellow='\033[93m'
-			lightcyan='\033[94m' pink='\033[95m' lightblue='\033[96m'
-		*/
+	        black='\033[30m' red='\033[31m' green='\033[32m' orange='\033[33m'
+	        blue='\033[34m' purple='\033[35m' cyan='\033[36m' lightgrey='\033[37m'
+	         darkgrey='\033[90m' lightred='\033[91m' lightgreen='\033[92m' yellow='\033[93m'
+	        lightcyan='\033[94m' pink='\033[95m' lightblue='\033[96m'
+	    */
 	/*
-			clear terminal '\033c'
-		 */
-	var color_map,
-		color_patt,
-		color_code,
-		set_patt,
-		print_ers,
-		print_history,
-		print_content,
-		print_scope,
-		print_state,
-		stdout_write,
-		print_write,
-		stdout_width,
-		print_maxwidth,
-		print_indent;
-	color_map = {"r": '\033[91m',
+	        clear terminal '\033c'
+	     */
+	var color_map, color_patt, color_code, set_patt, print_ers, print_history, print_content, print_scope, print_state, stdout_width, stdout_write, print_write, print_maxwidth, print_indent;
+	color_map = {
+		"r": '\033[91m',
 		"b": '\033[96m',
 		"g": '\033[92m',
 		"c": '\033[36m',
@@ -45,15 +27,29 @@ var print = (function(){
 	print_content = [];
 	print_scope = {};
 	print_state = false;
-	stdout_write = process.stdout.write;
-	print_write = function(){
-		var text;
-		text = Array.prototype.join.call(arguments, ' ');
-		print_content.push(text);
-		stdout_write.call(process.stdout, text);
+	function print(){
+		if (this.constructor != print){
+			if (print.stdout.apply(this, arguments)){
+				print_write('\n');
+			}
+		}
 	};
-	// process.stdout.write  = print_write;
-	stdout_width = process.stdout.columns || 0;
+	if (typeof process != 'undefined'){
+		stdout_width = process.stdout.columns || 0;
+		stdout_write = process.stdout.write;
+		print_write = function(){
+			var text;
+			text = Array.prototype.join.call(arguments, ' ');
+			print_content.push(text);
+			stdout_write.call(process.stdout, text);
+		};
+		process.stdout.write = print_write;
+	}else {
+		stdout_width = 0;
+		print_write = function(){
+			console.log.apply(console, arguments);
+		};
+	}
 	print_maxwidth = 120;
 	print_indent = '';
 	print.isTerminal = !!stdout_width;
@@ -122,8 +118,8 @@ var print = (function(){
 	print.toText = function(){
 		var texts, type, text;
 		texts = [];
-		for (var _i=0, arg; _i < arguments.length; _i++){
-			arg = arguments[_i];
+		for (var arg, i = 0; i < arguments.length; i++){
+			arg = arguments[i];
 			if (!arg){
 				texts.push(arg+'');
 				continue;
@@ -160,7 +156,7 @@ var print = (function(){
 			return list;
 		}
 		stacks = err.stack.split('\n');
-		for (var i=1; i < stacks.length; i++){
+		for (var i = 1; i < stacks.length; i++){
 			if (ref = stackInfo(stacks[i])){
 				list.push(ref);
 			}
@@ -178,6 +174,7 @@ var print = (function(){
 		return text;
 	};
 	print.fragment = function(text, code, line, col, file){
+		var ref;
 		if (arguments.length == 1 && typeof text == 'object'){
 			file = text.fileName || text.file;
 			col = text.columnNumber || text.column || text.col;
@@ -193,11 +190,9 @@ var print = (function(){
 		}
 		if (/\n/.test(text)){
 			if (arguments.length == 4){
-				var _ref;
-				_ref = SText.indexLine(text, line), text = _ref[0], line = _ref[1], col = _ref[2];
+				ref = SText.indexLine(text, line), text = ref[0], line = ref[1], col = ref[2];
 			}else if (!line && code){
-				var _ref;
-				_ref = SText.indexLine(text, text.indexOf(code)), text = _ref[0], line = _ref[1], col = _ref[2];
+				ref = SText.indexLine(text, text.indexOf(code)), text = ref[0], line = ref[1], col = ref[2];
 			}else {
 				text = text.split('\n')[line-1];
 			}
@@ -213,8 +208,8 @@ var print = (function(){
 		}
 	};
 	function formatObject(obj, _cache){
-		if (_cache == null) _cache = [obj];
 		var texts, is_arr, text;
+		if (_cache == null) _cache = [obj];
 		texts = [];
 		is_arr = Array.isArray(obj);
 		for (var key in obj){
@@ -249,11 +244,11 @@ var print = (function(){
 			return '['+text+']';
 		}
 		return '{'+text+'}';
-	}
+	};
 	function formatDebug(text){
 		var m, stacks, the, line_text;
 		if (m = text.match(/<(debug|code|fragment|stack)>/)){
-			if (!stacks) stacks = print.stacks();
+			!stacks && (stacks = print.stacks());
 			the = stacks[0];
 			switch (m[1]){
 				case 'debug':
@@ -272,13 +267,13 @@ var print = (function(){
 			}
 		}
 		return text;
-	}
+	};
 	function formatFragment(text, code, line, col, file){
+		var str;
 		if (text == null) text = '';
 		if (code == null) code = '';
 		if (line == null) line = 0;
 		if (col == null) col = 0;
-		var str;
 		text = text.replace(/\n+$/g, '');
 		str = '  '+line+' | '+text+'\\n\n';
 		str += str.substr(0, str.length-3-text.length+col).replace(/[^\s]/g, ' ');
@@ -287,18 +282,18 @@ var print = (function(){
 			str = file+':'+line+':'+col+'\n'+str;
 		}
 		return str;
-	}
+	};
 	function formatFill(text, _width){
 		var ls, ws, ds, ms, ts, ss, W, texts, sw;
 		ls = text.split('\n');
 		ws = [];
 		ds = [];
-		for (var _i=0, l; _i < ls.length; _i++){
-			l = ls[_i];
+		for (var l, j = 0; j < ls.length; j++){
+			l = ls[j];
 			ms = [];
 			ts = [];
 			ss = SText.split(l, /<(\~|[^\\w\\s]{2}|\d+)?>/, false);
-			for (var i=0; i < ss.length; i++){
+			for (var i = 0; i < ss.length; i++){
 				if (i%2){
 					ms.push(ss[i]);
 				}else {
@@ -311,19 +306,19 @@ var print = (function(){
 			ds.push([ts, ms]);
 		}
 		W = Math.max(_width, ds.length == 1 || /<~>/.test(text) ? stdout_width-5 : 0);
-		for (var i=0; i < ws.length; i++){
+		for (var i = 0; i < ws.length; i++){
 			W -= ws[i] || 0;
 		}
 		if (W < 0){
 			W = 0;
 		}
 		texts = [];
-		for (var _i=0, d; _i < ds.length; _i++){
-			d = ds[_i];
+		for (var d, j = 0; j < ds.length; j++){
+			d = ds[j];
 			ts = d[0];
 			ms = d[1];
 			sw = Math.floor(W/ms.length);
-			for (var i=0; i < ts.length; i++){
+			for (var i = 0; i < ts.length; i++){
 				texts.push(ts[i]);
 				if (ms[i]){
 					if (/<(\d+)>/.test(ms[i])){
@@ -337,7 +332,7 @@ var print = (function(){
 		}
 		texts.pop();
 		return texts.join('');
-	}
+	};
 	function formatColor(text){
 		var texts, tmp;
 		texts = [];
@@ -357,7 +352,7 @@ var print = (function(){
 		}
 		text = texts.join('');
 		return text;
-	}
+	};
 	function formatSet(text, _width){
 		var texts, tmp, temp;
 		texts = [];
@@ -389,11 +384,11 @@ var print = (function(){
 		}
 		text = texts.join('');
 		return text;
-	}
+	};
 	function formatAlgin(text, type, _width){
 		var lines, f;
 		lines = formatSet(text, _width).split('\n');
-		for (var i=0, line; i < lines.length; i++){
+		for (var line, i = 0; i < lines.length; i++){
 			line = lines[i];
 			switch (type){
 				case 'ac':
@@ -413,19 +408,19 @@ var print = (function(){
 			}
 		}
 		return lines.join('\n');
-	}
+	};
 	function formatBorder(text, type, _width){
 		var width, lines;
 		text = formatSet(text, _width);
 		text = SText.spaceTab(text);
 		width = Math.max(_width-4, countWidth(text));
 		lines = text.split('\n');
-		for (var i=0, line; i < lines.length; i++){
+		for (var line, i = 0; i < lines.length; i++){
 			line = lines[i];
 			lines[i] = '| '+line+SText.copy(' ', width-countWidth(line))+' |';
 		}
 		return SText.copy('-', width+4)+'\n'+lines.join('\n')+'\n'+SText.copy('-', width+4);
-	}
+	};
 	function formatMatch(text, re){
 		var m, _a, a, ab, b, s1, s2, s3;
 		if (m = text.match(re)){
@@ -441,32 +436,32 @@ var print = (function(){
 			s3 = text.substr(b+2);
 			return [s1, m[2], s2, s3];
 		}
-	}
+	};
 	function changeVariable(name, value){
 		var data, _not_refresh;
 		if (typeof name == 'object'){
 			data = name, _not_refresh = value;
-			for (name in data){
-				if (!data.hasOwnProperty(name)) continue;
-				var value = data[name];
-				print_scope[name] = value;
+			for (var i in data){
+				if (!data.hasOwnProperty(i)) continue;
+				var value = data[i];
+				print_scope[i] = value;
 			}
 		}else {
 			print_scope[name] = value;
 		}
 		print_state = true;
-	}
+	};
 	function countWidth(text){
 		return SText.width(clearColor(text));
-	}
+	};
 	function clearColor(text){
 		return text.replace(color_code, '');
-	}
+	};
 	function className(obj){
 		if (obj && obj.constructor && obj.constructor.toString){
 			return funcName(obj.constructor);
 		}
-	}
+	};
 	function funcName(fn, tostr){
 		var m;
 		if (fn){
@@ -479,7 +474,7 @@ var print = (function(){
 				}
 			}
 		}
-	}
+	};
 	function stackInfo(str){
 		var m, f, info;
 		if (m = str.match(/at (.*?) \((.*?)\)$/)){
@@ -490,7 +485,8 @@ var print = (function(){
 			if (__filename == f[0]){
 				return;
 			}
-			info = {"target": m[1],
+			info = {
+				"target": m[1],
 				"fileName": f[0],
 				"lineNumber": parseInt(f[1]),
 				"columnNumber": parseInt(f[2]),
@@ -510,12 +506,12 @@ var print = (function(){
 				}};
 			return info;
 		}
-	}
+	};
 	function printStacks(stacks){
 		var texts;
 		texts = [];
-		for (var _i=0, stack; _i < stacks.length; _i++){
-			stack = stacks[_i];
+		for (var stack, i = 0; i < stacks.length; i++){
+			stack = stacks[i];
 			if (typeof stack == 'string'){
 				texts.push(stack);
 			}else {
@@ -523,11 +519,8 @@ var print = (function(){
 			}
 		}
 		return texts.join('\n');
-	}
+	};
 	print.register('Stacks', printStacks);
 	return print;
 })();
 module.exports = print;
-if (require.main == module){
-	print(process.argv.slice(process.argv.indexOf(__filename)+1).join(' '));
-}

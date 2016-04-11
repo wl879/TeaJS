@@ -6,29 +6,27 @@ export default class Asset:
 
 	cache       = Jsop.data();
 	conf_pack   = {
-				  "@@=" : "rename pattern"
-				  "@@"  : "pattern name"
-				  "@="  : "rename response"
-				  "@?"  : "check response"
-				  "@~"  : "packing matched"
-				  "@:"  : "response name"
-				  "@!"  : "check empty"
-				  };
+		"@@=" : "rename pattern"
+		"@@"  : "pattern name"
+		"@="  : "rename response"
+		"@?"  : "check response"
+		"@~"  : "packing matched"
+		"@:"  : "response name"
+		"@!"  : "check empty" };
 	conf_set    = {
-				  "\\n" : "lf"
-				  "∆"  : "error"
-				  "∅"  : "ig"
-				  "→"  : "test"
-				  "+?" : "smallest mode"
-				  "*?" : "smallest mode"
-				  "+"  : "mode"
-				  "*"  : "mode"
-				  "?"  : "mode"
-				  "!"  : "mode"
-				};
-	logic_symbol  = /^&(==|===|!=|!==)\[(.*?)\]$/;
-	conf_re     = new RegExp('(?:('+SText.re(Object.keys(conf_set))+'|∆(\\d*))|'+
-								'('+SText.re(Object.keys(conf_pack))+')([A-Za-z]{3,}))$');
+		"\\n" : "lf"
+		"∆"  : "error"
+		"∅"  : "ig"
+		"→"  : "test"
+		"+?" : "smallest mode"
+		"*?" : "smallest mode"
+		"+"  : "mode"
+		"*"  : "mode"
+		"?"  : "mode"
+		"!"  : "mode" };
+	conf_re     = new RegExp(
+		'(?:('+SText.re(Object.keys(conf_set))+'|∆(\\d*))|'+
+		   '('+SText.re(Object.keys(conf_pack))+')([A-Za-z]{3,}))$');
 
 	constructor(str):
 		@.config  = { mode : '' };
@@ -43,8 +41,8 @@ export default class Asset:
 				@.content = str;
 			else:
 				checkPairAsset  (@, str) ||
+				checkSetAsset   (@, str) ||
 				checkMethodAsset(@, str) ||
-				checkLogicAsset (@, str) ||
 				checkSubAsset   (@, str) ||
 				checkNodeAsset  (@, str) ||
 				checkCodeAsset  (@, str);
@@ -57,12 +55,12 @@ export default class Asset:
 				return parseCodeAsset.call(@, src, grm);
 			case 'Pair Test':
 				return parsePairAsset.call(@, src, grm);
+			case 'Set Test':
+				return parseSetAsset.call(@, src, grm);
 			case 'Method Test':
 				return parseMethodAsset.call(@, src, grm);
 			case 'Node Test':
 				return parseNodeAsset.call(@, src, grm);
-			case 'Logic':
-				return parseLogicAsset.call(@, src, grm);
 			case 'Sub':
 				return;
 
@@ -119,32 +117,39 @@ export default class Asset:
 			];
 			return true;
 
-	function checkMethodAsset(self, str):
+	function checkSetAsset(self, str):
 		if m = str.match(/^\[(.*?)\]$/):
-			self.type    = 'Method Test';
-			self.content = /→/.test(m[1]) ? 'ROUTE' : 'IS';
-			self.param   = SText.split( m[1], ',', 'params', true);
+			str = m[1];
+			if /[^\\],/.test(str):
+				list = SText.split( str, ',', 'params', true);
+			else:
+				list = SText.split( str, ' ', true, true);
+
+			for i <- list:
+				key  = i;
+				patt = list[i];
+				if patt.indexOf('→') > 0:
+					temp = patt.split('→');
+					key  = temp[0].trim();
+					patt = temp[1].trim();
+					list.splice(i, 1);
+					list.__HasKey__ = true;
+
+				list[key] = { patt:patt };
+				if /^[A-Z][A-Za-z]+$/.test(patt):
+					list[key].__TestNode__ = true;
+				else if /[a-z]+/i.test(patt) && /\W+/.test(patt):
+					list[key].__TestPatt__ = true;
+
+			self.type = 'Set Test';
+			self.content = list;
 			return true;
 
+	function checkMethodAsset(self, str):
 		if m = str.match(/^#(\w+)(?:\((.*?)\))?$/):
 			self.type    = 'Method Test';
 			self.content = m[1];
 			self.param   = m[2] ? SText.split( m[2], ',', 'params', true) : [];
-			return true;
-
-		if m = str.match(/^\{(\w+)\}$/):
-			self.type        = 'Method Test';
-			self.content     = 'ISPARAM';
-			self.param       = [ m[1] ];
-			self.config.test = true;
-			return true;
-
-	function checkLogicAsset(self, str):
-		if m = str.match( logic_symbol ):
-			self.type        = 'Logic';
-			self.content     = m[1];
-			self.param       = SText.split( m[2], ',', 'trim', true);
-			self.config.test = true;
 			return true;
 
 	function checkSubAsset(self, str):
@@ -184,6 +189,31 @@ export default class Asset:
 
 	// parse asset
 
+	function parseSetAsset(src, grm):
+		token   = src.current;
+		text    = token.text;
+		types   = token.types;
+		content = @.content;
+		if content.__HasKey__:
+			if types[0] != 'NUMBER' && text in content:
+				content = [content[text]];
+			else:
+				for type => types:
+					if type in content:
+						content = [content[type]];
+						break;
+		
+		for i, item -> content:
+			patt = item.patt;
+			if token.text == patt || types.indexOf(patt) != -1:
+				return token;
+			if item.__TestNode__:
+				if ref = grm.parser(patt, src, null , true):
+					return ref;
+			else if item.__TestPatt__:
+				if ref = grm.pattern(patt, src):
+					return ref;
+
 	function parsePairAsset(src, grm):
 		[s1, s2] = @.content;
 		if ab = src.indexPair(s1, s2, src.index, true):
@@ -210,25 +240,6 @@ export default class Asset:
 			return list;
 		return false;
 
-	function parseLogicAsset(src, grm):
-		switch type = @.content:
-			case "==", "===", "!=", "!==":
-				last = grm.handle.cache;
-				while isArray(last):
-					last = last[-1];
-				if last && last.is:
-					params = @.param;
-					switch type:
-						case "==":
-							return !!last.is.apply(last, params);
-						case "===":
-							return params.indexOf(last.type) != -1 || params.indexOf(last.text) != -1;
-						case "!=":
-							return !last.is.apply(last, params);
-						case "!==":
-							return params.indexOf(last.type) == -1;
-		return false;
-
 	function parseNodeAsset(src, grm):
 		name  = @.content;
 		token = src.current;
@@ -245,7 +256,7 @@ export default class Asset:
 	function parseMethodAsset(src, grm):
 		name =  @.content;
 		if name in Method:
-			return Method[name].call(grm, src, @.param);
+			return Method[name].call(grm, src, @.param, @.config);
 		if grm.parser(name):
 			return grm.parser(name, src, @.param);
 		Err 4002, name, grm.handle.name;

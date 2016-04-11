@@ -7,12 +7,12 @@ class SourceMap:
 	BASE64_CHARS         = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 	
 	constructor():
-		@.version = 3;
-		@.file = '';
+		@.version    = 3;
+		@.file       = '';
 		@.sourceRoot = '';
-		@.names = [];
-		@._sources = [];
-		@._mappings = [];
+		@.names      = [];
+		@._sources   = [];
+		@._mappings  = [];
 
 	parse( card ):
 		list          = card.toList();
@@ -59,6 +59,8 @@ class SourceMap:
 		return i;
 
 	get sources:
+		if !Fp:
+			return @._sources;
 		var ss = [];
 		var dir = Fp.dirName( @.file );
 		for file => @._sources:

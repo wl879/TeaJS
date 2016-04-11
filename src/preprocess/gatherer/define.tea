@@ -21,7 +21,7 @@ exports['#undef'] = function(prepor, src, index):
 	// debug log
 	Tea.log('#undef marco : '+names.join(','), token.location);
 
-exports['#expr'] = exports['#stam'] = function (prepor, src, index):
+exports['#expr'] = exports['#stam'] = exports['#sugar'] = function (prepor, src, index):
 
 	token = src[index];
 	type  = token.text.substr(1);

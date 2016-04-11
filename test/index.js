@@ -48,12 +48,13 @@ for (var name in source_file){
 	var file = source_file[name];
 	runTest(file);
 }
+// runTest(source_file['try'])
 function runTest(file, text){
 	var ctx;
 	print("<-->");
 	console.log('[Test source file] '+file);
 	ctx = Tea.context(file, text);
-	// print ctx.source;
+	print(ctx.source);
 	print(ctx.AST);
 	// print ctx.CAST;
 	print.bd(ctx.output());

@@ -1,5 +1,5 @@
 module.exports =  {
-		Object          : 'CONST  IDENTIFIER  NUMBER  STRING  REGEXP  COMMENT  JsonExpr  ArrayExpr'
+		Object          : 'CONST  IDENTIFIER  NUMBER  STRING  REGEXP  COMMENT  JsonExpr  ArrayExpr  ArrowExpr  FunctionExpr'
 
 		Variable        : 'VariableExpr'
 
@@ -19,7 +19,7 @@ module.exports =  {
 
 		Comma           : 'CommaExpr ArgusExpr ArgusStam ParamsExpr JsonExpr ArrayExpr JsonPatt ArrayExpr'
 
-		Expression      : 'Binary  Ternary  FunctionExpr  ClassExpr  CommaExpr'
+		Expression      : 'Binary  Ternary  ClassExpr  CommaExpr'
 		
 		// Statement
      	IfStam          : 'IfPatt  ElseIfPatt  ElsePatt'

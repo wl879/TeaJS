@@ -134,7 +134,7 @@ module.exports = {
 		`@0 == [GetterDecl SetterDecl]`                      : '@0'
 		`@0 == [FunctionDecl MethodDecl ClassDecl]`          : '#LIST(`@[0]`, `module.exports.@[0.name] = @[0.name]`)'
 		`@0 == VarStam`					                     : "#LIST(`@[0]`, #EACH( @[0.0], `module.exports.@[0] = #VALUE(@[0])` ))"
-		`@0 == ArgusStam`					             	 : "#EACH(@0, `exports.@[0] = #VALUE(@)` )"
+		`@0 == ArgusStam`					             	 : "#EACH(@0, `module.exports.@[0] = #VALUE(@)` )"
 		default								                 : {error:1103}
 	}
 	"MemberExpr" : {

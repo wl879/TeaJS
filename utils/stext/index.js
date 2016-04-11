@@ -1,3 +1,4 @@
+// module.exports = SText;
 var pair, pair_re, sep_cache, tabsize;
 module.exports = SText;
 pair = {'(': ')', '[': ']', '{': '}', '\'': '\'', '\"': '\"', '`': '`'};
@@ -25,7 +26,7 @@ function SText(something, qq){
 	}
 	return text;
 };
-exports.tabsize = (tabsize = '    ');
+module.exports.tabsize = (tabsize = '    ');
 function format(text, qq){
 	var i;
 	if (!text){

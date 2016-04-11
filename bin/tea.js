@@ -1,14 +1,12 @@
 #!/usr/bin/env node
-var Module = (function(){_cache = {};_main  = new Module();function Module(filename, dirname){this.id = filename;this.filename = filename;this.dirname = dirname;this.exports = {};this.loaded = false;this.children = [];this.parent = null;};Module.prototype.require = function(file){var id = resolve(this.dirname, file);var mod = _cache[id];if (!mod && !/.js/.test(id)){if(mod = _cache[id+'.js'])id = id+'.js';}if (!mod){if(mod = _cache[id+'/index.js'])id = id+'/index.js';}if (mod){this.children.push(id);return mod.loaded ? mod.exports : mod.load(this);}this.children.push(file);return module.require(file);};Module.prototype.load = function(parent){this.loaded = true;if(parent) this.parent = parent;this.creater();module.constructor._cache[this.id] = this;return this.exports;};Module.prototype.register = function(creater){var id = this.id;if (!_cache[id]){_cache[id] = this;this.creater = creater;}};Module.makeRequire = function(module){function require(path){return module.require(path);};require.main = _main;require.resolve = function(path){return resolve(module.dirname, path)};require.extensions = null;require.cache = null;return require;};Module.main = function(filename, dirname){_main.id = '.';_main.filename = filename;_main.dirname = dirname;_main.parent  = module.parent;return _main;};function resolve(from, to){if(/^(\~|\/)/.test(to)) return to;if (from && from != '.') to = from + '/' + to;var m = null;while( m = to.match(/\/[^\/]+?\/\.\.\/|\/\.\//) ){to = to.substr(0, m.index) + to.substr(m.index+m[0].length-1);}return to;};return Module;})();
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		var id_index
+var Module = (function(){_cache = {};_main  = new Module();function Module(filename, dirname){this.id = filename;this.filename = filename;this.dirname = dirname;this.exports = {};this.loaded = false;this.children = [];this.parent = null;};Module.prototype.require = function(file){var id = resolve(this.dirname, file);var mod = _cache[id];if (!mod && !/.js/.test(id)){if(mod = _cache[id+'.js'])id = id+'.js';}if (!mod){if(mod = _cache[id+'/index.js'])id = id+'/index.js';}if (mod){this.children.push(id);return mod.loaded ? mod.exports : mod.load(this);}if(typeof module != 'undefined'){this.children.push(file);return module.require(file);}};Module.prototype.load = function(parent){this.loaded = true;if(parent) this.parent = parent;this.creater();if(typeof module != 'undefined'){module.constructor._cache[this.id] = this;}return this.exports;};Module.prototype.register = function(creater){var id = this.id;if (!_cache[id]){_cache[id] = this;this.creater = creater;}};Module.makeRequire = function(_module){function require(path){return _module.require(path);};require.main = _main;require.resolve = function(path){return resolve(_module.dirname, path)};require.extensions = null;require.cache = null;return require;};Module.main = function(filename, dirname){_main.id = '.';_main.filename = filename;_main.dirname = dirname;if(typeof module != 'undefined'){_main.parent  = module.parent;_main.__defineGetter__('exports', function(){ return module.exports;});_main.__defineSetter__('exports', function(value){ return module.exports = value;});}return _main;};function resolve(from, to){if(/^(\~|\/)/.test(to)) return to;if (from && from != '.') to = from + '/' + to;var m = null;while( m = to.match(/\/[^\/]+?\/\.\.\/|\/\.\//) ){to = to.substr(0, m.index) + to.substr(m.index+m[0].length-1);}return to;};return Module;})();
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		if (typeof global == 'undefined'){
 			if (typeof window == 'undefined'){
 				throw 'Tea script run environment error!';
 			}
 			window.global = window;
 		}
-		id_index = 0
 		global.SText = require("../utils/stext")
 		global.Jsop = require("../utils/jsop")
 		global.print = require("../utils/print")
@@ -17,21 +15,17 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		global.isJson = Jsop.isJson
 		global.isClass = Jsop.isClass
 		global.ID = function(){
-			return parseInt((Date.now()+'').substr(-8)+(id_index++)+Math.round(Math.random()*100))+'';
+			!ID.index && (ID.index = 0);
+			return parseInt((Date.now()+'').substr(-8)+(ID.index++)+Math.round(Math.random()*100))+'';
 		}
-		global.__checkGlobal = function(){
-			var def = 'global process GLOBAL root console Path Tea Fp'.split(' ');
-			for (var name in global){
-				if (!global.hasOwnProperty(name)) continue;
-				if (def.indexOf(name) >= 0){
-					continue;
-				}
-				if (typeof global[name] == 'function'){
-					continue;
-				}
-				print('[Global scope pollution]', name, global[name]);
-			}
-		}
+		// global.__checkGlobal = function():
+		// 	var def = 'global process GLOBAL root console Path Tea Fp'.split(' ');
+		// 	for name in global:
+		// 		if def.indexOf(name) >= 0:
+		// 			continue;
+		// 		if typeof global[name] == 'function':
+		// 			continue;
+		// 		print('[Global scope pollution]', name, global[name]);
 		var Tea = (function(){
 			var Helper, Token, Source, SourceMap, Syntax, Scope, Card, Grammar, Standard, Preprocess;
 			Helper = require("./helper");
@@ -46,8 +40,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			Preprocess = require("./preprocess");
 			require("./settings");
 			function Tea(file, text, prepor, std, outfile, map){
-				this.fileName = file;
-				this.dirName = Fp.dirName(this.fileName);
+				this.fileName = file || '';
 				this.std = std || Tea.argv['--std'] || 'es5';
 				this.outfile = outfile;
 				this.outmap = map;
@@ -71,10 +64,9 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				return this._ast;
 			});
 			Tea.prototype.__defineGetter__("CAST", function(){
-				var std, dirname, main, list, requires;
+				var std, main, list, requires;
 				if (!this._cast){
 					std = this.std;
-					dirname = this.dirName;
 					main = Tea.CAST(this.AST, std, this.prepor);
 					this._cast = main;
 					if (Tea.argv['--concat'] && (list = main.scope.cache.require) && list.length){
@@ -108,7 +100,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				map.parse(this.CAST);
 				if (file){
 					map.file = file;
-					SText.writeFile(map.text, Fp.resolve(this.dirName, file), 'UTF-8');
+					SText.writeFile(map.text, Fp.resolve(Fp.dirName(this.fileName), file), 'UTF-8');
 				}
 				return map;
 			};
@@ -118,7 +110,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				!file && (file = this.outfile);
 				!map && (map = this.outmap);
 				if (file){
-					file = Fp.resolve(this.dirName, file);
+					file = Fp.resolve(Fp.dirName(this.fileName), file);
 				}
 				if (map){
 					map = Fp.resolve(Fp.dirName(file), typeof map == 'string' ? map : file+'.map');
@@ -133,12 +125,11 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				return script;
 			};
 			// static
-			Tea.argv = require("../utils/argv").create();
 			Tea.filename = __filename;
-			Tea.dirname = __dirname;
 			Tea.prep = Preprocess;
 			Tea.version = "0.2.0";
-			Tea.argv.set("* <r:TeaJS:> version <g:0.2.0:>\n\
+			Tea.inNode = typeof process != 'undefined';
+			Tea.argv = require("../utils/argv").create(null, "* <r:TeaJS:> version <g:0.2.0:>\n\
 			-h, --help                           显示帮助\n\
 			-f, --file    <file path>            编译文件路径\n\
 			-p, --path    <project dir>          项目目录\n\
@@ -279,8 +270,9 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		global.Tea = Tea;
 	});
 	return module.exports;
-})('./tea.js', '.', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./tea.js', '.');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		// module.exports = SText;
 		var pair, pair_re, sep_cache, tabsize;
 		module.exports = SText;
 		pair = {'(': ')', '[': ']', '{': '}', '\'': '\'', '\"': '\"', '`': '`'};
@@ -308,7 +300,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		    }
 		    return text;
 		};
-		exports.tabsize = (tabsize = '    ');
+		module.exports.tabsize = (tabsize = '    ');
 		function format(text, qq){
 		    var i;
 		    if (!text){
@@ -692,8 +684,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};;
 	});
 	return module.exports;
-})('../utils/stext/index.js', '../utils/stext', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('../utils/stext/index.js', '../utils/stext');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		// javascript object parser
 		var SText, ArrPro;
 		module.exports = jsop;
@@ -875,18 +867,12 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports.funcName = funcName;;
 	});
 	return module.exports;
-})('../utils/jsop/index.js', '../utils/jsop', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('../utils/jsop/index.js', '../utils/jsop');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		// need SText module 
 		var SText;
 		SText = require("../stext");
 		var print = (function(){
-		    function print(){
-		        if (this.constructor != print){
-		            if (print.stdout.apply(this, arguments)){
-		                print_write('\n');
-		            }
-		        }
-		    }
 		    /*
 		            black='\033[30m' red='\033[31m' green='\033[32m' orange='\033[33m'
 		            blue='\033[34m' purple='\033[35m' cyan='\033[36m' lightgrey='\033[37m'
@@ -896,21 +882,9 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		    /*
 		            clear terminal '\033c'
 		         */
-		    var color_map,
-		        color_patt,
-		        color_code,
-		        set_patt,
-		        print_ers,
-		        print_history,
-		        print_content,
-		        print_scope,
-		        print_state,
-		        stdout_write,
-		        print_write,
-		        stdout_width,
-		        print_maxwidth,
-		        print_indent;
-		    color_map = {"r": '\033[91m',
+		    var color_map, color_patt, color_code, set_patt, print_ers, print_history, print_content, print_scope, print_state, stdout_width, stdout_write, print_write, print_maxwidth, print_indent;
+		    color_map = {
+		        "r": '\033[91m',
 		        "b": '\033[96m',
 		        "g": '\033[92m',
 		        "c": '\033[36m',
@@ -924,15 +898,29 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		    print_content = [];
 		    print_scope = {};
 		    print_state = false;
-		    stdout_write = process.stdout.write;
-		    print_write = function(){
-		        var text;
-		        text = Array.prototype.join.call(arguments, ' ');
-		        print_content.push(text);
-		        stdout_write.call(process.stdout, text);
+		    function print(){
+		        if (this.constructor != print){
+		            if (print.stdout.apply(this, arguments)){
+		                print_write('\n');
+		            }
+		        }
 		    };
-		    // process.stdout.write  = print_write;
-		    stdout_width = process.stdout.columns || 0;
+		    if (typeof process != 'undefined'){
+		        stdout_width = process.stdout.columns || 0;
+		        stdout_write = process.stdout.write;
+		        print_write = function(){
+		            var text;
+		            text = Array.prototype.join.call(arguments, ' ');
+		            print_content.push(text);
+		            stdout_write.call(process.stdout, text);
+		        };
+		        process.stdout.write = print_write;
+		    }else {
+		        stdout_width = 0;
+		        print_write = function(){
+		            console.log.apply(console, arguments);
+		        };
+		    }
 		    print_maxwidth = 120;
 		    print_indent = '';
 		    print.isTerminal = !!stdout_width;
@@ -1001,8 +989,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		    print.toText = function(){
 		        var texts, type, text;
 		        texts = [];
-		        for (var _i=0, arg; _i < arguments.length; _i++){
-		            arg = arguments[_i];
+		        for (var arg, i = 0; i < arguments.length; i++){
+		            arg = arguments[i];
 		            if (!arg){
 		                texts.push(arg+'');
 		                continue;
@@ -1039,7 +1027,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		            return list;
 		        }
 		        stacks = err.stack.split('\n');
-		        for (var i=1; i < stacks.length; i++){
+		        for (var i = 1; i < stacks.length; i++){
 		            if (ref = stackInfo(stacks[i])){
 		                list.push(ref);
 		            }
@@ -1057,6 +1045,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		        return text;
 		    };
 		    print.fragment = function(text, code, line, col, file){
+		        var ref;
 		        if (arguments.length == 1 && typeof text == 'object'){
 		            file = text.fileName || text.file;
 		            col = text.columnNumber || text.column || text.col;
@@ -1072,11 +1061,9 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		        }
 		        if (/\n/.test(text)){
 		            if (arguments.length == 4){
-		                var _ref;
-		                _ref = SText.indexLine(text, line), text = _ref[0], line = _ref[1], col = _ref[2];
+		                ref = SText.indexLine(text, line), text = ref[0], line = ref[1], col = ref[2];
 		            }else if (!line && code){
-		                var _ref;
-		                _ref = SText.indexLine(text, text.indexOf(code)), text = _ref[0], line = _ref[1], col = _ref[2];
+		                ref = SText.indexLine(text, text.indexOf(code)), text = ref[0], line = ref[1], col = ref[2];
 		            }else {
 		                text = text.split('\n')[line-1];
 		            }
@@ -1092,8 +1079,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		        }
 		    };
 		    function formatObject(obj, _cache){
-		        if (_cache == null) _cache = [obj];
 		        var texts, is_arr, text;
+		        if (_cache == null) _cache = [obj];
 		        texts = [];
 		        is_arr = Array.isArray(obj);
 		        for (var key in obj){
@@ -1128,11 +1115,11 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		            return '['+text+']';
 		        }
 		        return '{'+text+'}';
-		    }
+		    };
 		    function formatDebug(text){
 		        var m, stacks, the, line_text;
 		        if (m = text.match(/<(debug|code|fragment|stack)>/)){
-		            if (!stacks) stacks = print.stacks();
+		            !stacks && (stacks = print.stacks());
 		            the = stacks[0];
 		            switch (m[1]){
 		                case 'debug':
@@ -1151,13 +1138,13 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		            }
 		        }
 		        return text;
-		    }
+		    };
 		    function formatFragment(text, code, line, col, file){
+		        var str;
 		        if (text == null) text = '';
 		        if (code == null) code = '';
 		        if (line == null) line = 0;
 		        if (col == null) col = 0;
-		        var str;
 		        text = text.replace(/\n+$/g, '');
 		        str = '  '+line+' | '+text+'\\n\n';
 		        str += str.substr(0, str.length-3-text.length+col).replace(/[^\s]/g, ' ');
@@ -1166,18 +1153,18 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		            str = file+':'+line+':'+col+'\n'+str;
 		        }
 		        return str;
-		    }
+		    };
 		    function formatFill(text, _width){
 		        var ls, ws, ds, ms, ts, ss, W, texts, sw;
 		        ls = text.split('\n');
 		        ws = [];
 		        ds = [];
-		        for (var _i=0, l; _i < ls.length; _i++){
-		            l = ls[_i];
+		        for (var l, j = 0; j < ls.length; j++){
+		            l = ls[j];
 		            ms = [];
 		            ts = [];
 		            ss = SText.split(l, /<(\~|[^\\w\\s]{2}|\d+)?>/, false);
-		            for (var i=0; i < ss.length; i++){
+		            for (var i = 0; i < ss.length; i++){
 		                if (i%2){
 		                    ms.push(ss[i]);
 		                }else {
@@ -1190,19 +1177,19 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		            ds.push([ts, ms]);
 		        }
 		        W = Math.max(_width, ds.length == 1 || /<~>/.test(text) ? stdout_width-5 : 0);
-		        for (var i=0; i < ws.length; i++){
+		        for (var i = 0; i < ws.length; i++){
 		            W -= ws[i] || 0;
 		        }
 		        if (W < 0){
 		            W = 0;
 		        }
 		        texts = [];
-		        for (var _i=0, d; _i < ds.length; _i++){
-		            d = ds[_i];
+		        for (var d, j = 0; j < ds.length; j++){
+		            d = ds[j];
 		            ts = d[0];
 		            ms = d[1];
 		            sw = Math.floor(W/ms.length);
-		            for (var i=0; i < ts.length; i++){
+		            for (var i = 0; i < ts.length; i++){
 		                texts.push(ts[i]);
 		                if (ms[i]){
 		                    if (/<(\d+)>/.test(ms[i])){
@@ -1216,7 +1203,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		        }
 		        texts.pop();
 		        return texts.join('');
-		    }
+		    };
 		    function formatColor(text){
 		        var texts, tmp;
 		        texts = [];
@@ -1236,7 +1223,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		        }
 		        text = texts.join('');
 		        return text;
-		    }
+		    };
 		    function formatSet(text, _width){
 		        var texts, tmp, temp;
 		        texts = [];
@@ -1268,11 +1255,11 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		        }
 		        text = texts.join('');
 		        return text;
-		    }
+		    };
 		    function formatAlgin(text, type, _width){
 		        var lines, f;
 		        lines = formatSet(text, _width).split('\n');
-		        for (var i=0, line; i < lines.length; i++){
+		        for (var line, i = 0; i < lines.length; i++){
 		            line = lines[i];
 		            switch (type){
 		                case 'ac':
@@ -1292,19 +1279,19 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		            }
 		        }
 		        return lines.join('\n');
-		    }
+		    };
 		    function formatBorder(text, type, _width){
 		        var width, lines;
 		        text = formatSet(text, _width);
 		        text = SText.spaceTab(text);
 		        width = Math.max(_width-4, countWidth(text));
 		        lines = text.split('\n');
-		        for (var i=0, line; i < lines.length; i++){
+		        for (var line, i = 0; i < lines.length; i++){
 		            line = lines[i];
 		            lines[i] = '| '+line+SText.copy(' ', width-countWidth(line))+' |';
 		        }
 		        return SText.copy('-', width+4)+'\n'+lines.join('\n')+'\n'+SText.copy('-', width+4);
-		    }
+		    };
 		    function formatMatch(text, re){
 		        var m, _a, a, ab, b, s1, s2, s3;
 		        if (m = text.match(re)){
@@ -1320,32 +1307,32 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		            s3 = text.substr(b+2);
 		            return [s1, m[2], s2, s3];
 		        }
-		    }
+		    };
 		    function changeVariable(name, value){
 		        var data, _not_refresh;
 		        if (typeof name == 'object'){
 		            data = name, _not_refresh = value;
-		            for (name in data){
-		                if (!data.hasOwnProperty(name)) continue;
-		                var value = data[name];
-		                print_scope[name] = value;
+		            for (var i in data){
+		                if (!data.hasOwnProperty(i)) continue;
+		                var value = data[i];
+		                print_scope[i] = value;
 		            }
 		        }else {
 		            print_scope[name] = value;
 		        }
 		        print_state = true;
-		    }
+		    };
 		    function countWidth(text){
 		        return SText.width(clearColor(text));
-		    }
+		    };
 		    function clearColor(text){
 		        return text.replace(color_code, '');
-		    }
+		    };
 		    function className(obj){
 		        if (obj && obj.constructor && obj.constructor.toString){
 		            return funcName(obj.constructor);
 		        }
-		    }
+		    };
 		    function funcName(fn, tostr){
 		        var m;
 		        if (fn){
@@ -1358,7 +1345,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		                }
 		            }
 		        }
-		    }
+		    };
 		    function stackInfo(str){
 		        var m, f, info;
 		        if (m = str.match(/at (.*?) \((.*?)\)$/)){
@@ -1369,7 +1356,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		            if (__filename == f[0]){
 		                return;
 		            }
-		            info = {"target": m[1],
+		            info = {
+		                "target": m[1],
 		                "fileName": f[0],
 		                "lineNumber": parseInt(f[1]),
 		                "columnNumber": parseInt(f[2]),
@@ -1389,12 +1377,12 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		                }};
 		            return info;
 		        }
-		    }
+		    };
 		    function printStacks(stacks){
 		        var texts;
 		        texts = [];
-		        for (var _i=0, stack; _i < stacks.length; _i++){
-		            stack = stacks[_i];
+		        for (var stack, i = 0; i < stacks.length; i++){
+		            stack = stacks[i];
 		            if (typeof stack == 'string'){
 		                texts.push(stack);
 		            }else {
@@ -1402,30 +1390,23 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		            }
 		        }
 		        return texts.join('\n');
-		    }
+		    };
 		    print.register('Stacks', printStacks);
 		    return print;
 		})();
-		module.exports = print;
-		if (require.main == module){
-		    print(process.argv.slice(process.argv.indexOf(__filename)+1).join(' '));
-		};
+		module.exports = print;;
 	});
 	return module.exports;
-})('../utils/print/index.js', '../utils/print', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
-		var Fs, Path, dirName, fileName, baseName, extName, join;
+})('../utils/print/index.js', '../utils/print');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+		var Fs, Path, dirName, baseName, extName, name, join;
 		Fs = require("fs");
 		Path = require("path");
-		exports.dirName = (dirName = Path.dirname);
-		exports.fileName = (fileName = Path.filename);
-		exports.baseName = (baseName = Path.basename);
-		exports.extName = (extName = Path.extname);
-		exports.join = (join = Path.join);
-		function name(to){
-		    return Path.parse(to).name;
-		};
-		module.exports.name = name;
+		module.exports.dirName = (dirName = Path && Path.dirname);
+		module.exports.baseName = (baseName = Path && Path.basename);
+		module.exports.extName = (extName = Path && Path.extname);
+		module.exports.name = (name = Path && function(to){return Path.parse(to).name});
+		module.exports.join = (join = Path && Path.join);
 		function relative(from, to){
 		    if (from){
 		        to = Path.relative(from, to);
@@ -1682,18 +1663,22 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		        }
 		    }
 		    return list;
-		};;
+		};
+		if (!Path || !Fs){
+		    console.error('Fp module load fail!');
+		    module.exports = null;
+		};
 	});
 	return module.exports;
-})('../utils/fp/index.js', '../utils/fp', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('../utils/fp/index.js', '../utils/fp');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		require("./printer.js")
 		require("./error.js")
 		exports.log = require("./log.js");
 	});
 	return module.exports;
-})('./helper/index.js', './helper', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./helper/index.js', './helper');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Node
 		Node = require("./node.js")
 		var Token = (function(){
@@ -1880,8 +1865,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Token;
 	});
 	return module.exports;
-})('./core/token.js', './core', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/token.js', './core');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Source = (function(){
 			var Token, Location, re_cache;
 			Token = require("./token.js");
@@ -2248,8 +2233,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Source;
 	});
 	return module.exports;
-})('./core/source.js', './core', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/source.js', './core');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var SourceMap = (function(){
 			var VLQ_SHIFT, VLQ_CONTINUATION_BIT, VLQ_VALUE_MASK, BASE64_CHARS;
 			VLQ_SHIFT = 5;
@@ -2311,6 +2296,9 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				return i;
 			};
 			SourceMap.prototype.__defineGetter__("sources", function(){
+				if (!Fp){
+					return this._sources;
+				}
 				var ss = [];
 				var dir = Fp.dirName(this.file);
 				for (var file, i = 0; i < this._sources.length; i++){
@@ -2372,8 +2360,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = SourceMap;
 	});
 	return module.exports;
-})('./core/sourcemap.js', './core', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/sourcemap.js', './core');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Node
 		Node = require("./node.js")
 		var Syntax = (function(){
@@ -2442,8 +2430,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Syntax;
 	});
 	return module.exports;
-})('./core/syntax.js', './core', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/syntax.js', './core');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Scope = (function(){
 			var scope_map, decl_types;
 			scope_map = {};
@@ -2789,8 +2777,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Scope;
 	});
 	return module.exports;
-})('./core/scope.js', './core', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/scope.js', './core');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Card = (function(){
 			var not_semicolon, width_limit;
 			not_semicolon = /^(COMMENT|IfStam|WhileStam|DoWhileStam|WithStam|ForStam|SwitchStam|CaseStam|DefaultStam)$/;
@@ -3080,8 +3068,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Card;
 	});
 	return module.exports;
-})('./core/card.js', './core', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/card.js', './core');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Pattern = require("./pattern.js")
 		var Grammar = require("./grammar.js")
 		function create(prepor){
@@ -3135,11 +3123,11 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports.define = define;
 	});
 	return module.exports;
-})('./core/grammar/index.js', './core/grammar', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/grammar/index.js', './core/grammar');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Standard, versions
 		Standard = require("./standard.js")
-		exports.versions = (versions = [])
+		module.exports.versions = (versions = [])
 		function create(version, prepor){
 			if (!(Standard.hasOwnProperty(version))){
 				throw Error.create(5007, version, new Error());
@@ -3200,8 +3188,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./core/standard/index.js', './core/standard', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/standard/index.js', './core/standard');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Processor, Gatherer, Template, Source, bases
 		Processor = require("./prepor")
 		Gatherer = require("./gatherer")
@@ -3265,8 +3253,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports.extend = extend;
 	});
 	return module.exports;
-})('./preprocess/index.js', './preprocess', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./preprocess/index.js', './preprocess');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Token, Node, Grammar, Scope, Standard, ref, names, values, ref0, mode, ref1, ref2
 		Token = require("../core/token.js")
 		Node = require("../core/node.js")
@@ -3307,8 +3295,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		Standard.define('es5', require("./standards/es5"));
 	});
 	return module.exports;
-})('./settings/index.js', './settings', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/index.js', './settings');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Argv = (function(){
 		    var _conf_re, _desc, _config;
 		    _conf_re = /^\s*(\-\w)?(?:, *)?(\-\-[\w\-]+)?\ +(\<[^\>]+\>|\[[^\]]+\]|"[^"]+"|'[^']+'|\w+?\b)?\s*(.*)$/mg;
@@ -3504,8 +3492,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Argv;;
 	});
 	return module.exports;
-})('../utils/argv/index.js', '../utils/argv', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('../utils/argv/index.js', '../utils/argv');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		print.register('Token', tokenPrinter)
 		print.register('Source', sourcePrinter)
 		print.register('Location', locationPrinter)
@@ -3521,7 +3509,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			return printer('Location', print.fragment(text, code, pos, file));
 		}
 		function tokenPrinter(token){
-			return "(<g:"+(token.type.slice(0,3))+":> '"+(SText(token.text))+"')";
+			return "(<g:"+(token.types.join(' ').replace(/\b(\w{3})\w+\b/g, '$1'))+":> '"+(SText(token.text))+"')";
 		}
 		function sourcePrinter(src){
 			var texts;
@@ -3538,7 +3526,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			return printer('Source', texts.join(' '));
 		}
 		function assetPrinter(asset, __level){
-			var texts, conf, text;
+			var texts, conf, temp, text;
 			if (__level == null) __level = 0;
 			texts = [asset.type];
 			conf = asset.config;
@@ -3563,6 +3551,16 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 					break;
 				case 'Pair Test':
 					texts[0] += ': "'+asset.content[0]+'" ... "'+asset.content[1]+'"';
+					break;
+				case 'Set Test':
+					temp = [];
+					for (var key in asset.content){
+						if (!asset.content.hasOwnProperty(key)) continue;
+						if (key[0] != '_'){
+							temp.push(key+'→'+asset.content[key].patt);
+						}
+					}
+					texts[0] += ': ['+temp.join(',')+']';
 					break;
 			}
 			text = '['+texts.join(' ')+']';
@@ -3720,8 +3718,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./helper/printer.js', './helper', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./helper/printer.js', './helper');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Code
 		Code = require("./code.js")
 		Error.create = function(){
@@ -3827,8 +3825,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./helper/error.js', './helper', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./helper/error.js', './helper');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		module.exports = function(msg, loc){
 			if (loc){
 				msg += ' <60> '+loc.fileName+':'+loc.lineNumber;
@@ -3837,8 +3835,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./helper/log.js', './helper', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./helper/log.js', './helper');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Node = (function(){
 			var array;
 			array = Array.prototype;
@@ -3989,8 +3987,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Node;
 	});
 	return module.exports;
-})('./core/node.js', './core', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/node.js', './core');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Location = (function(){
 			var file_cache = [], source_cache = [];
 			function Location(file, source, code, start, end, line, column){
@@ -4079,8 +4077,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Location;
 	});
 	return module.exports;
-})('./core/location.js', './core', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/location.js', './core');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Pattern = (function(){
 			var Asset, Syntax, cache, check_loop;
 			Asset = require("./asset.js");
@@ -4426,8 +4424,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Pattern;
 	});
 	return module.exports;
-})('./core/grammar/pattern.js', './core/grammar', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/grammar/pattern.js', './core/grammar');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Grammar = (function(){
 			function Grammar(prepor){
 				this.prepor = prepor;
@@ -4492,9 +4490,11 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 					if (ref.error){
 						return errorResponse(ref.error, src, this);
 					}
+					if (packname){
+						ref = packResponse(ref, packname, 'ret node', this.handle);
+					}
 				}
 				if (packname){
-					ref = packResponse(ref, packname, null, this.handle);
 					if (_handle != this.handle){
 						!_handle.subs && (_handle.subs = []);
 						_handle.subs.push(this.handle);
@@ -4513,12 +4513,12 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				ref.className = 'GrammarStack';
 				if (check == 'loop'){
 					text = print.toText(ref);
-					list = text.replace(/^\s*\| \*.*$/mg, '').replace(/[\s\-\*\>]+/g, '-').split('-');
+					list = text.replace(/^\s*\| \*.*$/mg, '').replace(/[\s\-\*\>]+/g, '-').replace(/(\[|\]|\(|\))/g, '\\$1').split('-');
 					for (var i = 0; i < list.length; i++){
 						if (list[i]){
 							if (m = list.slice(i+1).join('-').match(new RegExp(list[i]+'.*?'+list[i], 'g'))){
 								if (m.length > 5){
-									return '∞ '+m[0];
+									return list[i]+' ∞ '+m[0];
 								}
 							}
 						}
@@ -4549,6 +4549,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 							return res;
 						}
 						if (res.length == 1){
+							console.log('xxxxxxxxxxxxxxxxx');
 							return res[0];
 						}
 						if (res.length > 1){
@@ -4614,8 +4615,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Grammar;
 	});
 	return module.exports;
-})('./core/grammar/grammar.js', './core/grammar', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/grammar/grammar.js', './core/grammar');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Standard = (function(){
 			var base;
 			function Standard(version, prepor){
@@ -4821,8 +4822,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Standard;
 	});
 	return module.exports;
-})('./core/standard/standard.js', './core/standard', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/standard/standard.js', './core/standard');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Prepor = (function(){
 			var Macro, Sugar, Grammar, Template;
 			Macro = require("./macro.js");
@@ -4831,8 +4832,9 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			Template = require("../template.js");
 			function Prepor(){
 				this.standards = {};
-				this.expression = {};
-				this.statement = {};
+				this.expr = {};
+				this.stam = {};
+				this.sugar = {};
 				this.macro = {};
 				this.map = {};
 			};
@@ -4855,13 +4857,9 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			};
 			Prepor.prototype.add = function (type, name, args, body, location){
 				switch (type){
-					case 'expr':
-						this.map[name] = 'expression';
-						this.standards[name] = this.expression[name] = new Sugar(name, args, body, location);
-						break;
-					case 'stam':
-						this.map[name] = 'statement';
-						this.standards[name] = this.statement[name] = new Sugar(name, args, body, location);
+					case 'sugar':case 'expr':case 'stam':
+						this.map[name] = type;
+						this.standards[name] = this[type][name] = new Sugar(type, name, args, body, location);
 						break;
 					case 'macro':
 						this.map[name] = 'macro';
@@ -4940,8 +4938,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Prepor;
 	});
 	return module.exports;
-})('./preprocess/prepor/index.js', './preprocess/prepor', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./preprocess/prepor/index.js', './preprocess/prepor');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var modules
 		modules = [
 			require("./const.js"),
@@ -4957,8 +4955,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./preprocess/gatherer/index.js', './preprocess/gatherer', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./preprocess/gatherer/index.js', './preprocess/gatherer');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Card, Syntax, Token, Grammar, Standard, readFile, writeFile
 		Card = require("../core/card.js")
 		Syntax = require("../core/syntax.js")
@@ -5019,8 +5017,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		}
 		module.exports.runScript = runScript
 		function concatModule(main, list){
-			var dirname, root;
-			dirname = main.dirName;
+			var dir, root;
+			dir = Fp.dirName(main.fileName);
 			root = new Card('Root');
 			if (main.CAST[0].type == 'COMMENT' && /\#\!/.test(main.CAST[0].text)){
 				root.add(main.CAST[0]);
@@ -5028,15 +5026,15 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			root.add(createModuleTmp());
 			for (var ctx, i = 0; i < list.length; i++){
 				ctx = list[i];
-				root.add(createModuleCard(Fp.relative(dirname, ctx.fileName), ctx.CAST, false));
+				root.add(createModuleCard(Fp.relative(dir, ctx.fileName), ctx.CAST, false));
 			}
-			root.add(createModuleCard(Fp.relative(dirname, main.fileName), main.CAST, true));
+			root.add(createModuleCard(Fp.relative(dir, main.fileName), main.CAST, true));
 			return root;
 		}
 		module.exports.concatModule = concatModule
 		function createModuleTmp(){
 			var tmp;
-			tmp = "var Module = (function(){_cache = {};_main  = new Module();function Module(filename, dirname){this.id = filename;this.filename = filename;this.dirname = dirname;this.exports = {};this.loaded = false;this.children = [];this.parent = null;};Module.prototype.require = function(file){var id = resolve(this.dirname, file);var mod = _cache[id];if (!mod && !/\.js/.test(id)){if(mod = _cache[id+'.js'])id = id+'.js';}if (!mod){if(mod = _cache[id+'/index.js'])id = id+'/index.js';}if (mod){this.children.push(id);return mod.loaded ? mod.exports : mod.load(this);}this.children.push(file);return module.require(file);};Module.prototype.load = function(parent){this.loaded = true;if(parent) this.parent = parent;this.creater();module.constructor._cache[this.id] = this;return this.exports;};Module.prototype.register = function(creater){var id = this.id;if (!_cache[id]){_cache[id] = this;this.creater = creater;}};Module.makeRequire = function(module){function require(path){return module.require(path);};require.main = _main;require.resolve = function(path){return resolve(module.dirname, path)};require.extensions = null;require.cache = null;return require;};Module.main = function(filename, dirname){_main.id = '.';_main.filename = filename;_main.dirname = dirname;_main.parent  = module.parent;return _main;};function resolve(from, to){if(/^(\\~|\\/)/.test(to)) return to;if (from && from != '.') to = from + '/' + to;var m = null;while( m = to.match(/\\/[^\\/]+?\\/\\.\\.\\/|\\/\\.\\//) ){to = to.substr(0, m.index) + to.substr(m.index+m[0].length-1);}return to;};return Module;})()";
+			tmp = "var Module = (function(){_cache = {};_main  = new Module();function Module(filename, dirname){this.id = filename;this.filename = filename;this.dirname = dirname;this.exports = {};this.loaded = false;this.children = [];this.parent = null;};Module.prototype.require = function(file){var id = resolve(this.dirname, file);var mod = _cache[id];if (!mod && !/\.js/.test(id)){if(mod = _cache[id+'.js'])id = id+'.js';}if (!mod){if(mod = _cache[id+'/index.js'])id = id+'/index.js';}if (mod){this.children.push(id);return mod.loaded ? mod.exports : mod.load(this);}if(typeof module != 'undefined'){this.children.push(file);return module.require(file);}};Module.prototype.load = function(parent){this.loaded = true;if(parent) this.parent = parent;this.creater();if(typeof module != 'undefined'){module.constructor._cache[this.id] = this;}return this.exports;};Module.prototype.register = function(creater){var id = this.id;if (!_cache[id]){_cache[id] = this;this.creater = creater;}};Module.makeRequire = function(_module){function require(path){return _module.require(path);};require.main = _main;require.resolve = function(path){return resolve(_module.dirname, path)};require.extensions = null;require.cache = null;return require;};Module.main = function(filename, dirname){_main.id = '.';_main.filename = filename;_main.dirname = dirname;if(typeof module != 'undefined'){_main.parent  = module.parent;_main.__defineGetter__('exports', function(){ return module.exports;});_main.__defineSetter__('exports', function(value){ return module.exports = value;});}return _main;};function resolve(from, to){if(/^(\\~|\\/)/.test(to)) return to;if (from && from != '.') to = from + '/' + to;var m = null;while( m = to.match(/\\/[^\\/]+?\\/\\.\\.\\/|\\/\\.\\//) ){to = to.substr(0, m.index) + to.substr(m.index+m[0].length-1);}return to;};return Module;})()";
 			return new Card('Module', tmp);
 		}
 		function createModuleCard(file, block, main){
@@ -5052,13 +5050,13 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			}
 			block = new Card('Block', block);
 			mod = new Card('Module');
-			mod.add(main ? "module.exports = " : "", "(function(_filename, _dirname, main){var module  = "+(main ? 'Module.main(_filename, _dirname)' : 'new Module(_filename, _dirname)')+";var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){", block, "	});", main ? "\n	return module.load();" : "\n	return module.exports;", "\n})", "('"+file+"', '"+(Fp.dirName(file))+"', "+main+")");
+			mod.add("(function(__filename, __dirname){var module  = "+(main ? 'Module.main(__filename, __dirname)' : 'new Module(__filename, __dirname)')+";var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){", block, "	});", main ? "\n	return module.load();" : "\n	return module.exports;", "\n})", "('"+file+"', '"+(Fp.dirName(file))+"')");
 			return mod;
 		};
 	});
 	return module.exports;
-})('./preprocess/template.js', './preprocess', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./preprocess/template.js', './preprocess');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		module.exports = {
 			"EOT": "\4",
 			"LF": "\n",
@@ -5095,31 +5093,31 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			"END": "LF  EOT  BLOCKBREAK"};
 	});
 	return module.exports;
-})('./settings/token.js', './settings', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/token.js', './settings');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		module.exports = {
 			"COMMENT": require("./comment.js"),
 			"Root": require("./root.js"),
 			"Block": require("./block.js"),
 			"StamBlock": "Block | Statement@:BlockStam",
-			"Statement": "LabelStam | (\t\\{ → [JsonAssignExpr JsonExpr Block] | \\[ → ArrayAssignExpr | #SUGAR(statement) | [Declaration Keyword MethodDecl LinkStam Comma] )\\n (CLOSE → | &==[Expression] [SeleteLeft SeleteRight]@@SeleteStam | SeleteLeft@@SeleteStam | END∅∆1101)",
-			"Expression": "[ function → FunctionExpr, class → Class, Ternary ] (&==[Access] (Params@@CallExpr | (=@@AssignExpr | ASSIGN@@AssignPatt) AssignRight∆1107))?",
-			"Object": "CONST | [\\@ → AtExpr, \\[ → ArrayExpr,\\( → CompelExpr,\\{ → JsonExpr, super → SuperExpr, require → RequireExpr] | VariableExpr | #SUGAR(expression)",
+			"Statement": "LabelStam | (\t\\{ → [JsonAssignExpr JsonExpr Block] | \\[ → ArrayAssignExpr | #SUGAR(stam) | [Declaration Keyword MethodDecl LinkStam Comma] )\\n (CLOSE → | #CHECK(last, ==, Expression) [SeleteLeft SeleteRight]@@SeleteStam | SeleteLeft@@SeleteStam | END∅∆1101)",
+			"Expression": "[class → Class, Ternary] (#CHECK(last, ==, Access) (Params@@CallExpr | (=@@AssignExpr | ASSIGN@@AssignPatt) Expression∆1107))?",
+			"Object": "CONST | ArrowExpr | [\\@ → AtExpr, \\[ → ArrayExpr,\\( → CompelExpr,\\{ → JsonExpr, super → SuperExpr, require → RequireExpr, function → FunctionExpr, VariableExpr, #SUGAR(expr)]",
+			"Access": "Object (MemberExpr@~AccessExpr)*",
+			"Value": "[@ this]?@@ThisExpr → Object (MemberExpr@~AccessExpr | ParamsExpr@~CallExpr)* SlicePatt?@~SliceExpr",
 			"CONST": "REGEXP | STRING | TAG",
 			"REGEXP": "[\\/ \\/=] → #CONCAT( \\/=\\\\|\\/...*\\/\\\\|\\/ [g i m y]*, , REGEXP CONST)",
 			"STRING": "QUOTE → #CONCAT( , , STRING CONST)",
 			"TAG": "# → #CONCAT(#+ [IDENTIFIER KEYWORD], , TAG CONST)",
-			"Access": "Object (MemberExpr@~AccessExpr)*",
-			"Value": "[@ this]?@@ThisExpr → Object (MemberExpr@~AccessExpr | ParamsExpr@~CallExpr)* SlicePatt?@~SliceExpr",
 			"MemberExpr": "[ . → . [IDENTIFIER KEYWORD]∆1108, \\[ → \\\\[ CommaExpr \\\\], :: → :: [IDENTIFIER KEYWORD]?]",
 			"AtExpr": "@ [IDENTIFIER KEYWORD]?",
 			"SuperExpr": "super (MemberExpr*)@:SuperMember Params?",
-			"SlicePatt": "[∅ ]∅ | [∅ (Compute? : Compute?) ]∆1109∅",
+			"SlicePatt": "\\[∅ \\]∅ | \\[∅ (Compute? : Compute?) \\]∆1109∅",
 			"JsonExpr": "\\{∅ ( \\}∅ | JsonItem (,?∅ JsonItem)* ,*∅ \\}∆1123∅)",
-			"JsonItem": "set→ SetterDecl | get→ GetterDecl | IDENTIFIER→ [+1, \\(]→ MethodDecl | ([NameExpr NUMBER STRING] : Expression)@:AssignExpr",
-			"ArrayExpr": "[∅ ]∅ | [∅ Expression (,?∅ Expression)* ,*∅ ]∆1124∅",
+			"JsonItem": "set→ SetterDecl | get→ GetterDecl | IDENTIFIER→ #IS(+1, \\() → MethodDecl | ([NameExpr NUMBER STRING] : Expression)@:AssignExpr",
+			"ArrayExpr": "\\[∅ \\]∅ | \\[∅ Expression (,?∅ Expression)* ,*∅ \\]∆1124∅",
 			"VariableExpr": "IDENTIFIER",
-			"NameExpr": "IDENTIFIER | KEYWORD {id}!∆1006",
+			"NameExpr": "IDENTIFIER | KEYWORD #ARGU(id)!∆1006",
 			"Declaration": "[ var → VarStam, let → LetStam, const → ConstStam, function → FunctionDecl, class → Class, import → ImportStam, export → ExportDecl, static → StaticDecl, get → GetterDecl, set → SetterDecl, prototype → ProtoDecl, property → PropertyDecl, constructor → ConstructorDecl]",
 			"Keyword": "[ return → ReturnStam, break → BreakStam, continue → ContinueStam, throw → ThrowStam, debugger → DebuggerStam, if → IfStam, while → WhileStam, do → DoWhileStam, with → WithStam, try → TryStam, switch → SwitchStam, for → ForStam, yield → YieldStam]",
 			"YieldStam": "yield Expression",
@@ -5132,21 +5130,20 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			"CompareLv3": "ComputeLv2 (PREC3 ComputeLv2@~CompareExpr)*",
 			"Compare": "CompareLv3 (PREC4 CompareLv3@~CompareExpr)*",
 			"Compute": "Compare (PREC5 Compare@~ComputeExpr)*",
-			"Operate": "Compute (PREC6 [Keyword Assign Compute]@~LogicExpr)*",
+			"Operate": "Compute (PREC6 [return → ReturnStam, break → BreakStam, continue → ContinueStam, throw → ThrowStam, debugger → DebuggerStam, Assign, Compute]@~LogicExpr)*",
 			"Binary": "Assign | Operate",
 			"Ternary": "Operate (\\?@@TernaryExpr [Declaration Keyword Expression] (: [Declaration Keyword Expression])?)?",
 			"Rest": "...?∅@@RestExpr IDENTIFIER",
-			"AssignRight": "[ArrowExpr Expression]",
-			"ArrayAssignExpr": "[∅ (Rest (,∅ Rest)*)@:ArrayPatt ]∅ = AssignRight",
-			"JsonAssignExpr": "{∅ ((IDENTIFIER (\\: IDENTIFIER)?)@?AssignExpr (,∅ (IDENTIFIER (\\: IDENTIFIER)?)@?AssignExpr)*)@:JsonPatt }∅ = AssignRight",
-			"Assign": "[ \\[ → ArrayAssignExpr, \\{ → JsonAssignExpr, Access (=@@AssignExpr | ASSIGN@@AssignPatt) AssignRight∆1107 ]",
-			"ArgusItem": "[ ... → Rest, \\[ → ArrayAssignExpr, \\{ → JsonAssignExpr, VariableExpr (= AssignRight)?@@AssignExpr ]",
+			"ArrayAssignExpr": "[∅ (Rest (,∅ Rest)*)@:ArrayPatt ]∅ = Expression",
+			"JsonAssignExpr": "{∅ ((IDENTIFIER (\\: IDENTIFIER)?)@?AssignExpr (,∅ (IDENTIFIER (\\: IDENTIFIER)?)@?AssignExpr)*)@:JsonPatt }∅ = Expression",
+			"Assign": "[\\[ → ArrayAssignExpr, \\{ → JsonAssignExpr, Access (=@@AssignExpr | ASSIGN@@AssignPatt) Expression∆1107 ]",
+			"ArgusItem": "[ ... → Rest, \\[ → ArrayAssignExpr, \\{ → JsonAssignExpr, VariableExpr (= Expression)?@@AssignExpr ]",
 			"Argus": "ArgusItem (,∅ ArgusItem)*",
 			"ArgusStam": "ArgusItem (,∅ ArgusItem)*",
-			"ArgusExpr": "\\(∅ ( \\)∅ | ArgusItem (,∅ ArgusItem)* \\)∅)",
-			"ParamsGroup": "(AssignRight (, [\\, \\)]→)*) (,∅ AssignRight (, [\\, \\)]→)*)*",
+			"ArgusExpr": "\\(∅ (\\)∅ | ArgusItem (,∅ ArgusItem)* \\)∅)",
+			"ParamsGroup": "(Expression (, [\\, \\)]→)*) (,∅ Expression (, [\\, \\)]→)*)*",
 			"ParamsExpr": "\\(∅ ( \\)∅ | ,* ParamsGroup \\)∆1104∅)",
-			"Params": "ParamsExpr | [--1, BLANK]→ [--2, !END]→ ParamsGroup@:ParamsExpr",
+			"Params": "ParamsExpr | #IS(--1, BLANK) → #NOT(--2, END) → ParamsGroup@:ParamsExpr",
 			"CommaExpr": "Expression (,∅ Expression∆1125)*",
 			"Comma": "Expression (,∅ Expression∆1125)*@@CommaExpr",
 			"CompelExpr": "(∅ CommaExpr∆1126 )∅",
@@ -5154,7 +5151,6 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			"SeleteLeft": "(<- | if\\n) Comma∆1127",
 			"SeleteRight": "[&& || and or ->] Statement∆1127",
 			"LinkStam": "Access (..∅ (Access Params?)@:LinkPatt)+",
-			"ArrowExpr": "(ArgusExpr | IDENTIFIER@:ArgusExpr) =>∅ ({→ [JsonExpr Block] | ReturnStam | ThrowStam | Expression)",
 			"VarStam": "var∅ ArgusStam∆1007",
 			"LetStam": "let∅ ArgusStam∆1009",
 			"ConstStam": "const∅ ArgusStam∆1010",
@@ -5166,24 +5162,25 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			"DebuggerStam": "debugger",
 			"FunctionExpr": "function \\*?@@GeneratorExpr #NameExpr(id)?@@FunctionDecl ArgusExpr Block",
 			"FunctionDecl": "function \\*?@@GeneratorDecl #NameExpr(id)∆1024 ArgusExpr Block",
-			"MethodDecl": "NameExpr ArgusExpr [{ :]→ Block∆1106",
+			"MethodDecl": "NameExpr ArgusExpr [\\{ :] → Block∆1106",
+			"ArrowExpr": "(ArgusExpr | IDENTIFIER@:ArgusExpr) =>∅ (\\{→ [JsonExpr Block] | ReturnStam | ThrowStam | Expression)",
 			"Class": "class@@ClassExpr (extends! → #NameExpr(id)?@@ClassDecl) (extends Params∆1021)?@:ExtendsExpr Block",
 			"GetterDecl": "get∅ NameExpr ArgusExpr?@!ArgusExpr Block",
 			"SetterDecl": "set∅ NameExpr ArgusExpr Block",
 			"StaticDecl": "static∅ [MethodDecl ArgusStam]",
 			"ProtoDecl": "prototype∅ [MethodDecl ArgusStam]",
 			"PropertyDecl": "property∅ [MethodDecl ArgusStam]",
-			"ConstructorDecl": "constructor@:NameExpr ArgusExpr [{ :]→ Block∆1106",
+			"ConstructorDecl": "constructor@:NameExpr ArgusExpr [\\{ :] → Block∆1106",
 			"If": "if ConditionExpr StamBlock∆1012@@IfPatt",
-			"Else": "else@@ElsePatt (if∅ ConditionExpr@@ElseIfPatt | ConditionExpr [{ :]→@@ElseIfPatt)? StamBlock∆1019",
+			"Else": "else@@ElsePatt (if∅ ConditionExpr@@ElseIfPatt | ConditionExpr [\\{ :]→@@ElseIfPatt)? StamBlock∆1019",
 			"Try": "try StamBlock∆1016@@TryPatt",
 			"Catch": "catch ConditionExpr StamBlock@@CatchPatt",
 			"Finally": "finally StamBlock@@FinallyPatt",
 			"WhileStam": "while ConditionExpr StamBlock∆1013",
 			"WithStam": "with ConditionExpr StamBlock∆1014",
-			"SwitchStam": "switch ConditionExpr (\\:∅ #Case(indent)* | {∅ #Case* }∆1110∅)@:BlockNode∆1017",
-			"Case": "(case@@CaseStam CommaExpr | default@@DefaultStam) \\:∆1020∅ ({indent} #Block(indent, case, default) | {indent}! #Block(brace, case, default))?",
-			"ConditionExpr": "Comma &==[CompelExpr]?@@=ConditionExpr",
+			"SwitchStam": "switch ConditionExpr (\\:∅ #Case(indent)* | \\{∅ #Case* \\}∆1110∅)@:BlockNode∆1017",
+			"Case": "(case@@CaseStam CommaExpr | default@@DefaultStam) \\:∆1020∅ (#ARGU(indent) #Block(indent, case, default) | #ARGU(indent)! #Block(brace, case, default))?",
+			"ConditionExpr": "Comma #CHECK(last, ==, CompelExpr)?@@=ConditionExpr",
 			"ForStam": "for ForCondition∆1022 StamBlock∆1106",
 			"ForCondition": require("./for.js"),
 			"IfStam": "If (#INDENT Else)*",
@@ -5191,10 +5188,10 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			"DoWhileStam": "do StamBlock∆1015 (#INDENT while ConditionExpr)?"};
 	});
 	return module.exports;
-})('./settings/syntax/index.js', './settings/syntax', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/syntax/index.js', './settings/syntax');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		module.exports = {
-			"Object": 'CONST  IDENTIFIER  NUMBER  STRING  REGEXP  COMMENT  JsonExpr  ArrayExpr',
+			"Object": 'CONST  IDENTIFIER  NUMBER  STRING  REGEXP  COMMENT  JsonExpr  ArrayExpr  ArrowExpr  FunctionExpr',
 			"Variable": 'VariableExpr',
 			"Access": 'Variable  AccessExpr  SuperExpr  ThisExpr  SliceExpr',
 			"Unary": 'UnaryExpr  PrefixExpr  PostfixExpr  NotExpr  NewExpr',
@@ -5204,7 +5201,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			"Binary": 'Value  Operate  Assign',
 			"Ternary": 'TernaryExpr',
 			"Comma": 'CommaExpr ArgusExpr ArgusStam ParamsExpr JsonExpr ArrayExpr JsonPatt ArrayExpr',
-			"Expression": 'Binary  Ternary  FunctionExpr  ClassExpr  CommaExpr',
+			"Expression": 'Binary  Ternary  ClassExpr  CommaExpr',
 			"IfStam": 'IfPatt  ElseIfPatt  ElsePatt',
 			"TryStam": 'TryPatt  CatchPatt  FinallyPatt',
 			"Control": 'IfStam  WhileStam  DoWhileStam  WithStam  ForStam  SwitchStam  CaseStam  DefaultStam  TryStam',
@@ -5218,8 +5215,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			"Scope": 'Json  Let  Class  Function  Root'};
 	});
 	return module.exports;
-})('./settings/node.js', './settings', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/node.js', './settings');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Variable = 'VariableExpr ArrayPatt JsonPatt RestExpr'
 		var Assign = 'AssignExpr[0] AssignPatt[0] ArrayAssignExpr[0] JsonAssignExpr[0]'
 		module.exports = [
@@ -5242,8 +5239,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			"ArgusExpr ->< "+Assign+" -> "+Variable+" -> argument"];
 	});
 	return module.exports;
-})('./settings/scope.js', './settings', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/scope.js', './settings');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		/*
 		#内部变量
 		    @ref @i                          生成一个随机的标识符名称
@@ -5339,7 +5336,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				"@0 == [GetterDecl SetterDecl]": '@0',
 				"@0 == [FunctionDecl MethodDecl ClassDecl]": '#LIST(`@[0]`, `module.exports.@[0.name] = @[0.name]`)',
 				"@0 == VarStam": "#LIST(`@[0]`, #EACH( @[0.0], `module.exports.@[0] = #VALUE(@[0])` ))",
-				"@0 == ArgusStam": "#EACH(@0, `exports.@[0] = #VALUE(@)` )",
+				"@0 == ArgusStam": "#EACH(@0, `module.exports.@[0] = #VALUE(@)` )",
 				"default": {"error": 1103}},
 			"MemberExpr": {
 				"@0 === [": {"@[1.-1] === UnaryExpr &&  @[1.-1.0] === [-]": "@0@[@.0].length@1@2"},
@@ -5410,8 +5407,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				"default": "function @0@1@2"}};
 	});
 	return module.exports;
-})('./settings/standards/es5/index.js', './settings/standards/es5', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/standards/es5/index.js', './settings/standards/es5');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		module.exports = {
 			"0": 'Tea core not init',
 			"1": 'not supported',
@@ -5440,7 +5437,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			"1021": 'extends statement syntax error',
 			"1022": 'Condition expression of for statement syntax error',
 			"1023": 'Condition expression miss right ")" token',
-			"1024": 'Function declaration nedd a name',
+			"1024": 'Function declaration need a name',
 			"1100": 'Unexpected statement',
 			"1101": 'Unexpected statement end',
 			"1102": '%s statement syntax error',
@@ -5489,10 +5486,10 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			"ASSIGN": "Invalid left-hand side in assignment"};
 	});
 	return module.exports;
-})('./helper/code.js', './helper', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./helper/code.js', './helper');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Asset = (function(){
-			var Method, Token, cache, conf_pack, conf_set, logic_symbol, conf_re;
+			var Method, Token, cache, conf_pack, conf_set, conf_re;
 			Method = require("./method.js");
 			Token = require("../token.js");
 			cache = Jsop.data();
@@ -5515,7 +5512,6 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				"*": "mode",
 				"?": "mode",
 				"!": "mode"};
-			logic_symbol = /^&(==|===|!=|!==)\[(.*?)\]$/;
 			conf_re = new RegExp('(?:('+SText.re(Object.keys(conf_set))+'|∆(\\d*))|'+'('+SText.re(Object.keys(conf_pack))+')([A-Za-z]{3,}))$');
 			function Asset(str){
 				this.config = {"mode": ''};
@@ -5529,7 +5525,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 						this.type = '*';
 						this.content = str;
 					}else {
-						checkPairAsset(this, str) || checkMethodAsset(this, str) || checkLogicAsset(this, str) || checkSubAsset(this, str) || checkNodeAsset(this, str) || checkCodeAsset(this, str);
+						checkPairAsset(this, str) || checkSetAsset(this, str) || checkMethodAsset(this, str) || checkSubAsset(this, str) || checkNodeAsset(this, str) || checkCodeAsset(this, str);
 					}
 				}
 			};
@@ -5541,12 +5537,12 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 						return parseCodeAsset.call(this, src, grm);
 					case 'Pair Test':
 						return parsePairAsset.call(this, src, grm);
+					case 'Set Test':
+						return parseSetAsset.call(this, src, grm);
 					case 'Method Test':
 						return parseMethodAsset.call(this, src, grm);
 					case 'Node Test':
 						return parseNodeAsset.call(this, src, grm);
-					case 'Logic':
-						return parseLogicAsset.call(this, src, grm);
 					case 'Sub':
 						return;
 				}
@@ -5608,35 +5604,43 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 					return true;
 				}
 			};
-			function checkMethodAsset(self, str){
-				var m;
+			function checkSetAsset(self, str){
+				var m, list, key, patt, temp;
 				if (m = str.match(/^\[(.*?)\]$/)){
-					self.type = 'Method Test';
-					self.content = /→/.test(m[1]) ? 'ROUTE' : 'IS';
-					self.param = SText.split(m[1], ',', 'params', true);
+					str = m[1];
+					if (/[^\\],/.test(str)){
+						list = SText.split(str, ',', 'params', true);
+					}else {
+						list = SText.split(str, ' ', true, true);
+					}
+					for (var i = list.length - 1; i >= 0; i--){
+						key = i;
+						patt = list[i];
+						if (patt.indexOf('→') > 0){
+							temp = patt.split('→');
+							key = temp[0].trim();
+							patt = temp[1].trim();
+							list.splice(i, 1);
+							list.__HasKey__ = true;
+						}
+						list[key] = {"patt": patt};
+						if (/^[A-Z][A-Za-z]+$/.test(patt)){
+							list[key].__TestNode__ = true;
+						}else if (/[a-z]+/i.test(patt) && /\W+/.test(patt)){
+							list[key].__TestPatt__ = true;
+						}
+					}
+					self.type = 'Set Test';
+					self.content = list;
 					return true;
 				}
+			};
+			function checkMethodAsset(self, str){
+				var m;
 				if (m = str.match(/^#(\w+)(?:\((.*?)\))?$/)){
 					self.type = 'Method Test';
 					self.content = m[1];
 					self.param = m[2] ? SText.split(m[2], ',', 'params', true) : [];
-					return true;
-				}
-				if (m = str.match(/^\{(\w+)\}$/)){
-					self.type = 'Method Test';
-					self.content = 'ISPARAM';
-					self.param = [m[1]];
-					self.config.test = true;
-					return true;
-				}
-			};
-			function checkLogicAsset(self, str){
-				var m;
-				if (m = str.match(logic_symbol)){
-					self.type = 'Logic';
-					self.content = m[1];
-					self.param = SText.split(m[2], ',', 'trim', true);
-					self.config.test = true;
 					return true;
 				}
 			};
@@ -5689,6 +5693,42 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				return true;
 			};
 			// parse asset
+			function parseSetAsset(src, grm){
+				var token, text, types, content, patt, ref;
+				token = src.current;
+				text = token.text;
+				types = token.types;
+				content = this.content;
+				if (content.__HasKey__){
+					if (types[0] != 'NUMBER' && content.hasOwnProperty(text)){
+						content = [content[text]];
+					}else {
+						for (var type, i = 0; i < types.length; i++){
+							type = types[i];
+							if (content.hasOwnProperty(type)){
+								content = [content[type]];
+								break;
+							}
+						}
+					}
+				}
+				for (var item, i = 0; i < content.length; i++){
+					item = content[i];
+					patt = item.patt;
+					if (token.text == patt || types.indexOf(patt) != -1){
+						return token;
+					}
+					if (item.__TestNode__){
+						if (ref = grm.parser(patt, src, null, true)){
+							return ref;
+						}
+					}else if (item.__TestPatt__){
+						if (ref = grm.pattern(patt, src)){
+							return ref;
+						}
+					}
+				}
+			};
 			function parsePairAsset(src, grm){
 				var s1, s2, ref, ab, list;
 				ref = this.content, s1 = ref[0], s2 = ref[1];
@@ -5723,31 +5763,6 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				}
 				return false;
 			};
-			function parseLogicAsset(src, grm){
-				var type, last, params;
-				switch (type = this.content){
-					case "==":case "===":case "!=":case "!==":
-						last = grm.handle.cache;
-						while (isArray(last)){
-							last = last[last.length-1];
-						}
-						if (last && last.is){
-							params = this.param;
-							switch (type){
-								case "==":
-									return !!last.is.apply(last, params);
-								case "===":
-									return params.indexOf(last.type) != -1 || params.indexOf(last.text) != -1;
-								case "!=":
-									return !last.is.apply(last, params);
-								case "!==":
-									return params.indexOf(last.type) == -1;
-							}
-						}
-						break;
-				}
-				return false;
-			};
 			function parseNodeAsset(src, grm){
 				var name, token, ref;
 				name = this.content;
@@ -5770,7 +5785,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				var name;
 				name = this.content;
 				if (Method.hasOwnProperty(name)){
-					return Method[name].call(grm, src, this.param);
+					return Method[name].call(grm, src, this.param, this.config);
 				}
 				if (grm.parser(name)){
 					return grm.parser(name, src, this.param);
@@ -5782,8 +5797,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Asset;
 	});
 	return module.exports;
-})('./core/grammar/asset.js', './core/grammar', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/grammar/asset.js', './core/grammar');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Pattern = (function(){
 			var cache, Asset, Card;
 			cache = Jsop.data();
@@ -5902,8 +5917,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Pattern;
 	});
 	return module.exports;
-})('./core/standard/pattern.js', './core/standard', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/standard/pattern.js', './core/standard');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Macro = (function(){
 			var Template;
 			Template = require("../template.js");
@@ -5996,13 +6011,14 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Macro;
 	});
 	return module.exports;
-})('./preprocess/prepor/macro.js', './preprocess/prepor', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./preprocess/prepor/macro.js', './preprocess/prepor');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Sugar = (function(){
 			var Template, Grammar;
 			Template = require("../template.js");
 			Grammar = require("../../core/grammar");
-			function Sugar(name, pattern, body, location){
+			function Sugar(type, name, pattern, body, location){
+				this.type = type;
 				this.name = name;
 				this.pattern = pattern;
 				this.bodys = Template.create(body, ['std', 'node', 'scope']);
@@ -6012,7 +6028,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				var index, node, scope, patt;
 				if (tar.isSource){
 					index = tar.index;
-					if (node = parser.pattern(this.pattern, tar, params, this.name)){
+					if (node = parser.pattern(this.pattern, tar, params, this.type == 'expr' || this.type == 'stam' ? this.name : null)){
 						return node;
 					}
 					tar.index = index;
@@ -6042,8 +6058,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Sugar;
 	});
 	return module.exports;
-})('./preprocess/prepor/sugar.js', './preprocess/prepor', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./preprocess/prepor/sugar.js', './preprocess/prepor');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var SYMBOL
 		exports['TAG'] = function(prepor, src, index){
 			var token;
@@ -6165,8 +6181,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./preprocess/gatherer/const.js', './preprocess/gatherer', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./preprocess/gatherer/const.js', './preprocess/gatherer');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		exports['#define'] = function(prepor, src, index){
 			var token, a, name, args, b, body, ref;
 			token = src[index];
@@ -6193,7 +6209,7 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			// debug log
 			Tea.log('#undef marco : '+names.join(','), token.location);
 		}
-		exports['#expr'] = exports['#stam'] = function(prepor, src, index){
+		exports['#expr'] = exports['#stam'] = exports['#sugar'] = function(prepor, src, index){
 			var token, type, a, name, pattern, b, body, ref;
 			token = src[index];
 			type = token.text.substr(1);
@@ -6253,8 +6269,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./preprocess/gatherer/define.js', './preprocess/gatherer', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./preprocess/gatherer/define.js', './preprocess/gatherer');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Template
 		Template = require("../template.js")
 		exports['#if'] = exports['#ifdef'] = function(prepor, src, index){
@@ -6424,8 +6440,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./preprocess/gatherer/control.js', './preprocess/gatherer', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./preprocess/gatherer/control.js', './preprocess/gatherer');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		exports['#include'] = function(prepor, src, index){
 			var token, a, b, dir, files, ab, list;
 			token = src[index];
@@ -6465,8 +6481,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./preprocess/gatherer/include.js', './preprocess/gatherer', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./preprocess/gatherer/include.js', './preprocess/gatherer');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		module.exports = function(src, params){
 			var token, comm_token, ab, handle;
 			token = src.current;
@@ -6509,8 +6525,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./settings/syntax/comment.js', './settings/syntax', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/syntax/comment.js', './settings/syntax');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Syntax
 		Syntax = require("../../core/syntax.js")
 		module.exports = function(src, params){
@@ -6525,8 +6541,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./settings/syntax/root.js', './settings/syntax', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/syntax/root.js', './settings/syntax');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Syntax
 		Syntax = require("../../core/syntax.js")
 		module.exports = function(src, params){
@@ -6699,8 +6715,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./settings/syntax/block.js', './settings/syntax', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/syntax/block.js', './settings/syntax');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Syntax
 		Syntax = require("../../core/syntax.js")
 		var patt = "(; → | var∅ Argus@=VarPatt | let∅ Argus@=LetPatt | Argus@:InitPatt)\n            (;∅ (;→ | Comma) ;∆1022∅ Comma? | [in of -> => <- <= ...] Comma ) |\n            CommaExpr (... Comma)?"
@@ -6746,8 +6762,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./settings/syntax/for.js', './settings/syntax', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/syntax/for.js', './settings/syntax');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Card
 		Card = require("../../../core/card.js")
 		module.exports = function(node, params){
@@ -6796,16 +6812,15 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./settings/standards/es5/block.js', './settings/standards/es5', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/standards/es5/block.js', './settings/standards/es5');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Card
 		Card = require("../../../core/card.js")
 		module.exports = function(node, param){
-			var scope, file, dir, params, list, card;
+			var scope, file, params, list, card;
 			scope = node.scope.root;
 			file = node[0].location.fileName;
-			dir = Fp.dirName(node[0].location.fileName);
-			params = parseRequireParams.call(this, node[1], dir, file);
+			params = parseRequireParams.call(this, node[1], file);
 			list = [];
 			for (var data, i = 0; i < params.length; i++){
 				data = params[i];
@@ -6832,12 +6847,13 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			}
 			return list;
 		}
-		function parseRequireParams(node, dir, from){
-			var list, text, file, files;
+		function parseRequireParams(node, from){
+			var list, dir, text, file, files;
 			list = [];
+			dir = Fp && Fp.dirName(from) || from.split('/').slice(0, -1).join('/');
 			for (var item, i = 0; i < node.length; i++){
 				item = node[i];
-				if (item.is('STRING')){
+				if (Fp && item.is('STRING')){
 					text = item.text;
 					if (/\//.test(text)){
 						file = Fp.resolve(dir, text);
@@ -6908,8 +6924,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./settings/standards/es5/require.js', './settings/standards/es5', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/standards/es5/require.js', './settings/standards/es5');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		module.exports = function(node, params){
 			node.text = node.text.replace(/\n\s*/g, '');
 			if (Tea.argv['--const']){
@@ -6918,8 +6934,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./settings/standards/es5/regexp.js', './settings/standards/es5', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/standards/es5/regexp.js', './settings/standards/es5');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Card
 		Card = require("../../../core/card.js")
 		module.exports = function(node, params){
@@ -6994,8 +7010,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./settings/standards/es5/string.js', './settings/standards/es5', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/standards/es5/string.js', './settings/standards/es5');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Card
 		Card = require("../../../core/card.js")
 		module.exports = function(node, param){
@@ -7037,8 +7053,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./settings/standards/es5/argus.js', './settings/standards/es5', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/standards/es5/argus.js', './settings/standards/es5');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Card
 		Card = require("../../../core/card.js")
 		module.exports = function(node, params){
@@ -7100,8 +7116,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./settings/standards/es5/arrayassign.js', './settings/standards/es5', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/standards/es5/arrayassign.js', './settings/standards/es5');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Card
 		Card = require("../../../core/card.js")
 		module.exports = function(node, params){
@@ -7130,8 +7146,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./settings/standards/es5/jsonassign.js', './settings/standards/es5', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/standards/es5/jsonassign.js', './settings/standards/es5');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		module.exports = function(node, param){
 			if (!node[1]){
 				return rewriteForRange.call(this, node, param);
@@ -7250,8 +7266,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./settings/standards/es5/for.js', './settings/standards/es5', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/standards/es5/for.js', './settings/standards/es5');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Card
 		Card = require("../../../core/card.js")
 		module.exports = function(node, param){
@@ -7327,8 +7343,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./settings/standards/es5/class.js', './settings/standards/es5', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/standards/es5/class.js', './settings/standards/es5');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		module.exports = function(node, params){
 			var name, scope, member;
 			name = 'this';
@@ -7360,8 +7376,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./settings/standards/es5/at.js', './settings/standards/es5', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./settings/standards/es5/at.js', './settings/standards/es5');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		function SUGAR(src, params){
 			var map, sugar, node;
 			if (!this.prepor){
@@ -7384,38 +7400,44 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			}
 		}
 		module.exports.SUGAR = SUGAR
-		function ROUTE(src, params){
-			var token, text, patt, res;
-			if (params.length){
-				for (var item, i = 0; i < params.length; i++){
-					item = params[i];
-					item = item.replace(/\s*→\s*/, '→').split('→');
-					if (item.length == 2){
-						params[item[0]] = item[1];
-					}else {
-						params['default'] = item[0];
+		function CHECK(src, params, config){
+			var left, mark, right, last;
+			if (!config.test){
+				params[2] = params[2].split(' ');
+				config.test = true;
+			}
+			left = params[0];
+			mark = params[1];
+			right = params[2];
+			switch (left){
+				case 'last':
+					last = this.handle.cache;
+					while (isArray(last)){
+						last = last[last.length-1];
 					}
-				}
-				params.length = 0;
+					break;
+				default:
+					last = this.handle.cache[left];
+					break;
 			}
-			token = src.current;
-			text = token.text;
-			patt = params.hasOwnProperty(text) ? params[text] : params['default'];
-			if (patt){
-				if (text == patt){
-					return token;
-				}
-				if (this.parser(patt)){
-					return this.parser(patt, src);
-				}
-				if (res = this.pattern(patt, src)){
-					return res;
+			if (last && last.is){
+				switch (mark){
+					case "==":
+						return !!last.is.apply(last, right);
+					case "===":
+						return right.indexOf(last.type) != -1 || right.indexOf(last.text) != -1;
+					case "!=":
+						return !last.is.apply(last, right);
+					case "!==":
+						return right.indexOf(last.type) == -1;
 				}
 			}
+			return false;
 		}
-		module.exports.ROUTE = ROUTE
-		function ISPARAM(src, argus){
+		module.exports.CHECK = CHECK
+		function ARGU(src, argus, config){
 			var params;
+			config.test = true;
 			params = this.handle.params;
 			if (params && argus){
 				for (var item, i = 0; i < argus.length; i++){
@@ -7427,37 +7449,59 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			}
 			return false;
 		}
-		module.exports.ISPARAM = ISPARAM
-		function IS(src, params){
-			var index, yes, no, ref, token, text, types, res;
-			ref = checkIsMethodArgus(params, src), index = ref[0], yes = ref[1], no = ref[2];
-			if (!(token = src[index])){
-				return !yes && no ? true : false;
+		module.exports.ARGU = ARGU
+		function IS(src, params, config){
+			var m, index, token;
+			if (!params.mode){
+				if (m = params[0].match(/^([\+\-]{1,2})(\d+)/)){
+					params.mode = [m[1], parseInt(m[2]), 0];
+					params.shift();
+				}else {
+					params.mode = [0, 0, 0];
+				}
+				if (params.mode[1]){
+					config.test = true;
+				}
 			}
-			text = token.text;
-			types = token.types;
-			if (yes){
-				for (var name, i = 0; i < yes.length; i++){
-					name = yes[i];
-					if (res = this.parser(name, src, null, true)){
-						return res;
-					}
-					if (types.indexOf(name) != -1 || name == text){
-						if (!no || (!token.is.apply(token, no) && name != text)){
-							return token;
-						}
-					}
-				}
-			}else if (no){
-				if (!token.is.apply(token, no) && name != text){
-					return token;
-				}
-			}else {
-				throw Error.create('params error', token, new Error());
+			index = moveIndex(src, params.mode);
+			if (!(token = src[index])){
+				return false;
+			}
+			if (params.indexOf(token.text) != -1){
+				return token;
+			}
+			if (token.is.apply(token, params)){
+				return token;
 			}
 			return false;
 		}
 		module.exports.IS = IS
+		function NOT(src, params, config){
+			var m, index, token;
+			if (!params.mode){
+				if (m = params[0].match(/^([\+\-]{1,2})(\d+)/)){
+					params.mode = [m[1], parseInt(m[2]), 0];
+					params.shift();
+				}else {
+					params.mode = [0, 0, 0];
+				}
+				if (params.mode[1]){
+					config.test = true;
+				}
+			}
+			index = moveIndex(src, params.mode);
+			if (!(token = src[index])){
+				return false;
+			}
+			if (params.indexOf(token.text) != -1){
+				return false;
+			}
+			if (token.is.apply(token, params)){
+				return false;
+			}
+			return token;
+		}
+		module.exports.NOT = NOT
 		function INDENT(src, params){
 			var cache, last, check_indent;
 			cache = this.handle.cache;
@@ -7512,62 +7556,35 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			return false;
 		}
 		module.exports.CONCAT = CONCAT
-		function checkIsMethodArgus(argus, src){
-			var mode, vals, lf, m, temp, yes, no, index, num;
-			if (argus.length == 1){
-				mode = null, vals = argus[0], lf = argus[1];
-			}else {
-				mode = argus[0], vals = argus[1], lf = argus[2];
-			}
-			if (typeof mode == 'string'){
-				if (!(m = mode.trim().match(/([\+\-]{1,2})(\d+)/))){
-					throw Error.create('"" pattern error', new Error());
-				}
-				mode = [m[1], parseInt(m[2])];
-			}
-			if (typeof vals == 'string'){
-				temp = vals.split(' ');
-				yes = [];
-				no = [];
-				for (var item, i = 0; i < temp.length; i++){
-					item = temp[i];
-					if (item[0] == '!'){
-						no.push(item.substr(1));
-					}else {
-						yes.push(item);
-					}
-				}
-				vals = {"yes": yes.length && yes, "no": no.length && no};
-				argus[0] = mode;
-				argus[1] = vals;
-			}
+		function moveIndex(src, data){
+			var index, num;
 			index = src.index;
-			if (mode){
-				num = mode[1];
+			if (data){
+				num = data[1];
 				while (--num >= 0){
-					switch (mode[0]){
+					switch (data[0]){
 						case '++':
 							index++;
 							break;
 						case '+':
 						default:
-							index = src.nextIndex(index, !lf);
+							index = src.nextIndex(index, !data.lf);
 							break;
 						case '--':
 							index--;
 							break;
 						case '-':
-							index = src.prevIndex(index, !lf);
+							index = src.prevIndex(index, !data.lf);
 							break;
 					}
 				}
 			}
-			return [index, vals.yes, vals.no];
+			return index;
 		};
 	});
 	return module.exports;
-})('./core/grammar/method.js', './core/grammar', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/grammar/method.js', './core/grammar');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Asset = (function(){
 			var Method, cache, asset_re;
 			Method = require("./method.js");
@@ -7932,8 +7949,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		module.exports = Asset;
 	});
 	return module.exports;
-})('./core/standard/asset.js', './core/standard', false);
-(function(_filename, _dirname, main){var module  = new Module(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/standard/asset.js', './core/standard');
+(function(__filename, __dirname){var module  = new Module(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		var Asset, Card
 		Asset = null
 		Card = require("../card.js")
@@ -8232,8 +8249,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 		};
 	});
 	return module.exports;
-})('./core/standard/method.js', './core/standard', false);
-module.exports = (function(_filename, _dirname, main){var module  = Module.main(_filename, _dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
+})('./core/standard/method.js', './core/standard');
+(function(__filename, __dirname){var module  = Module.main(__filename, __dirname);var require = Module.makeRequire(module);var exports = module.exports;module.register(function(){
 		require("./tea.js")
 		if (!module.parent){
 			(function(){
@@ -8397,4 +8414,4 @@ module.exports = (function(_filename, _dirname, main){var module  = Module.main(
 		};
 	});
 	return module.load();
-})('./index.js', '.', true);
+})('./index.js', '.');

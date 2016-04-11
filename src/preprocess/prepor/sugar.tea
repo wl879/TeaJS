@@ -4,7 +4,8 @@ class Sugar:
 	Template = require "../template";
 	Grammar  = require "../../core/grammar";
 
-	constructor(name, pattern, body, location):
+	constructor(type, name, pattern, body, location):
+		@.type     = type;
 		@.name     = name;
 		@.pattern  = pattern
 		@.bodys    = Template.create(body, ['std', 'node', 'scope']);
@@ -13,7 +14,7 @@ class Sugar:
 	parse(parser, tar, params):
 		if tar.isSource:
 			index = tar.index;
-			if node = parser.pattern( @.pattern, tar, params, @.name):
+			if node = parser.pattern( @.pattern, tar, params, @.type == 'expr' || @.type == 'stam' ? @.name : null):
 				return node;
 			tar.index = index;
 

@@ -104,11 +104,11 @@ repository:
                 name: keyword.control
             -   match: \b(as|in|of|not is|not|is|and|or|typeof|new|instanceof|extends)\b
                 name: keyword.operator
-            -   match: \b(var|let|const|class|function|constructor|export|prototype|property)\b
+            -   match: \b(var|let|const|class|function|constructor|export|prototype|property|static|get|set)\b
                 name: storage.type
             -   match: \b(eval|super|Array|Number|Function|Object)\b
                 name: support.function
-            -   match: \b(this|JSON|console|Math)\b
+            -   match: \b(this|JSON|console|Math|parseInt|parseFloat)\b
                 name: support.function
             # names
             -   match: "\\b(?:(__[\\$a-zA-Z_]\\w*)|([A-Z][\\$a-zA-Z_]\\w*))\\b"
@@ -142,7 +142,7 @@ repository:
             # pattern
             -   name: keyword
                 begin: "(^|(?<=[:=,(]))\\s*<"
-                end: ">"
+                end: "(?<!=)>"
                 patterns:
                 -   include: "#syntax_pattern"
                 -   match: "\\\\>"
@@ -153,9 +153,12 @@ repository:
                 name: comment
             -   match: (\+\?|\*?|\?\:|\?\!|\?\=|\?|\+|\*|\!|∆\w+|∅|→|\\n\b|\&(==|===|\!=|\!==))
                 name: string
+            -   include: "#syntax_set"
+            -   match: "#[A-Z]\\w+"
+                name: entity.name.function
             -   match: "[A-Z]\\w+"
                 name: storage.type
-            -   match: (\w+|[^\{\}\(\)\[\]\#\|\,]|[\{\}\(\)\[\]\,\#\|](?=\s*[→∅?+*!∆]))
+            -   match: (\w+|\\.|[^\{\}\(\)\[\]\#\|\,]|[\{\}\,\#\|](?=\s*[→∅?+*!∆]))
                 name: constant.character
             -   include: "#syntax_sub_1"
             
@@ -180,6 +183,16 @@ repository:
         patterns:
             -   include: "#syntax_pattern"
 
+    syntax_set:
+        begin: "(?<!\\\\)\\["
+        end: "(?<!\\\\)\\]"
+        beginCaptures:
+            "0": {name: "entity.name.function"}
+        endCaptures:
+            "0": {name: "entity.name.function"}
+        patterns:
+            -   include: "#syntax_pattern"
+
 patterns:
 -   include: "#tea"
 
@@ -196,6 +209,23 @@ patterns:
 
 -   match: "#(script|endif|end|ifdef|if|elifdef|elif|else)"
     name: keyword.other
+
+-   begin: "#(sugar|expr|stam)"
+    end: "\\n"
+    beginCaptures:
+        "0": {name: "keyword"}
+    patterns:
+    -   name: keyword
+        begin: "<"
+        end: "(?<!=)>"
+        patterns:
+        -   include: "#syntax_pattern"
+        -   match: "\\\\>"
+    -   name: keyword
+        begin: "{"
+        end: "}"
+        patterns:
+        -   include: "#tea"
 
 -   match: "#(token)\\ +([\\$a-zA-Z_]\\w*(?:\\s*,\\s*[\\$a-zA-Z_]\\w*)*)|#(exp|stat)\\
         +([\\$a-zA-Z_]\\w*)\\ +(\\/[^\\/]+\\/)|#(define)\\ +([\\$a-zA-Z_]\\w*)(?:\\(((?:\\(.*?\\)|[^\\)]*)*)\\))?|#(test|end\\w*)(.*$)|#(run|endrun|line|token|define|exp|stat|argv|undef|if\\w*|el\\w+)\\b|#(include)\\s*((?:(?:[^,;\\s\\\\]+(?:\\\\

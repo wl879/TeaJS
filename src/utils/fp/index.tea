@@ -2,14 +2,11 @@
 Fs   = require "fs";
 Path = require "path";
 
-export dirName  = Path.dirname;
-export fileName = Path.filename;
-export baseName = Path.basename;
-export extName = Path.extname;
-export join     = Path.join;
-
-export name(to):
-	return Path.parse(to).name;
+export dirName  = Path && Path.dirname;
+export baseName = Path && Path.basename;
+export extName  = Path && Path.extname;
+export name     = Path && (to) => Path.parse(to).name;
+export join     = Path && Path.join;
 
 export relative(from, to):
 	if from:
@@ -30,7 +27,6 @@ export resolve(from, to, check_dir):
 	if check_dir && /\/$/.test(to):
 		from += '/';
 	return from; 
-
 
 export mkdir(to, mode):
 	if !Fs.existsSync(to):
@@ -92,7 +88,6 @@ export scanPath(to, filter, deep, reverse):
 				continue;
 			res.files.push( tmp );
 	return res;
-
 
 export checkFiles(to, from, def_file):
 	if Array.isArray(from):
@@ -200,3 +195,7 @@ function getherFiles( res ):
 		for dir, data in res.dirs:
 			list.push.apply(list, getherFiles( data ) );
 	return list;
+
+if !Path || !Fs:
+	console.error('Fp module load fail!')
+	module.exports = null;

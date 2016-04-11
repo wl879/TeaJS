@@ -25,7 +25,7 @@ function locationPrinter(loc):
 	return printer( 'Location', print.fragment(text, code, pos, file));
 
 function tokenPrinter(token):
-	return "(<g:${token.type.slice(0,3)}:> '${SText(token.text)}')";
+	return "(<g:${token.types.join(' ').replace(/\b(\w{3})\w+\b/g, '$1')}:> '${SText(token.text)}')";
 
 function sourcePrinter(src):
 	texts = [];
@@ -54,7 +54,12 @@ function assetPrinter(asset, __level = 0):
 			texts.push('\n'+patternPrinter(asset.content, __level+1).replace(/^/mg, SText.tabsize)+'\n');
 		case 'Pair Test':
 			texts[0] += ': "'+asset.content[0]+'" ... "'+asset.content[1]+'"';
-
+		case 'Set Test':
+			temp = [];
+			for key in asset.content:
+				if key[0] != '_':
+					temp.push(key+'→'+asset.content[key].patt);
+			texts[0] += ': ['+temp.join(',')+']';	
 	text = '['+texts.join(' ')+']';
 	return text;
 

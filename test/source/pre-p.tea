@@ -27,9 +27,10 @@
 }
 
 // define Loops statment
-#expr LoopRight <for ForCondition END∅>
+// #sugar Expression <[function → FunctionExpr, class → Class, ArrowExpr, Ternary] (#CHECK(last, ==, Access) (Params@@CallExpr | (=@@AssignExpr | ASSIGN@@AssignPatt) AssignRight∆1107))?>
+#expr LoopRight <#IS(for) ForCondition END∅>
 #stam LoopStam <Expression@:BlockNode\n LoopRight> @[1.0] (@[1.1]) @[0]
-console.log(1) for a => arr;
+console.log 1 for a => arr;
 
 // test argv
 #argv --os 'android'

@@ -273,7 +273,7 @@
           </dict>
           <dict>
             <key>match</key>
-            <string>\b(var|let|const|class|function|constructor|export|prototype|property)\b</string>
+            <string>\b(var|let|const|class|function|constructor|export|prototype|property|static|get|set)\b</string>
             <key>name</key>
             <string>storage.type</string>
           </dict>
@@ -285,7 +285,7 @@
           </dict>
           <dict>
             <key>match</key>
-            <string>\b(this|JSON|console|Math)\b</string>
+            <string>\b(this|JSON|console|Math|parseInt|parseFloat)\b</string>
             <key>name</key>
             <string>support.function</string>
           </dict>
@@ -367,7 +367,7 @@
             <key>begin</key>
             <string>(^|(?&lt;=[:=,(]))\s*&lt;</string>
             <key>end</key>
-            <string>&gt;</string>
+            <string>(?&lt;!=)&gt;</string>
             <key>patterns</key>
             <array>
               <dict>
@@ -399,6 +399,16 @@
             <string>string</string>
           </dict>
           <dict>
+            <key>include</key>
+            <string>#syntax_set</string>
+          </dict>
+          <dict>
+            <key>match</key>
+            <string>#[A-Z]\w+</string>
+            <key>name</key>
+            <string>entity.name.function</string>
+          </dict>
+          <dict>
             <key>match</key>
             <string>[A-Z]\w+</string>
             <key>name</key>
@@ -406,7 +416,7 @@
           </dict>
           <dict>
             <key>match</key>
-            <string>(\w+|[^\{\}\(\)\[\]\#\|\,]|[\{\}\(\)\[\]\,\#\|](?=\s*[→∅?+*!∆]))</string>
+            <string>(\w+|\\.|[^\{\}\(\)\[\]\#\|\,]|[\{\}\,\#\|](?=\s*[→∅?+*!∆]))</string>
             <key>name</key>
             <string>constant.character</string>
           </dict>
@@ -480,6 +490,36 @@
           </dict>
         </array>
       </dict>
+      <key>syntax_set</key>
+      <dict>
+        <key>begin</key>
+        <string>(?&lt;!\\)\[</string>
+        <key>end</key>
+        <string>(?&lt;!\\)\]</string>
+        <key>beginCaptures</key>
+        <dict>
+          <key>0</key>
+          <dict>
+            <key>name</key>
+            <string>entity.name.function</string>
+          </dict>
+        </dict>
+        <key>endCaptures</key>
+        <dict>
+          <key>0</key>
+          <dict>
+            <key>name</key>
+            <string>entity.name.function</string>
+          </dict>
+        </dict>
+        <key>patterns</key>
+        <array>
+          <dict>
+            <key>include</key>
+            <string>#syntax_pattern</string>
+          </dict>
+        </array>
+      </dict>
     </dict>
     <key>patterns</key>
     <array>
@@ -520,6 +560,57 @@
         <string>#(script|endif|end|ifdef|if|elifdef|elif|else)</string>
         <key>name</key>
         <string>keyword.other</string>
+      </dict>
+      <dict>
+        <key>begin</key>
+        <string>#(sugar|expr|stam)</string>
+        <key>end</key>
+        <string>\n</string>
+        <key>beginCaptures</key>
+        <dict>
+          <key>0</key>
+          <dict>
+            <key>name</key>
+            <string>keyword</string>
+          </dict>
+        </dict>
+        <key>patterns</key>
+        <array>
+          <dict>
+            <key>name</key>
+            <string>keyword</string>
+            <key>begin</key>
+            <string>&lt;</string>
+            <key>end</key>
+            <string>(?&lt;!=)&gt;</string>
+            <key>patterns</key>
+            <array>
+              <dict>
+                <key>include</key>
+                <string>#syntax_pattern</string>
+              </dict>
+              <dict>
+                <key>match</key>
+                <string>\\&gt;</string>
+              </dict>
+            </array>
+          </dict>
+          <dict>
+            <key>name</key>
+            <string>keyword</string>
+            <key>begin</key>
+            <string>{</string>
+            <key>end</key>
+            <string>}</string>
+            <key>patterns</key>
+            <array>
+              <dict>
+                <key>include</key>
+                <string>#tea</string>
+              </dict>
+            </array>
+          </dict>
+        </array>
       </dict>
       <dict>
         <key>match</key>

@@ -4,7 +4,7 @@ var child_process, binVers, binIndex;
 require("./bin/tea.js");
 child_process = require('child_process');
 binVers = [
-	['test', './lib/index.js'],
+	// ['test', './lib/index.js'],
 	['beta', './bin/tea.js']
 ];
 binIndex = 0;
@@ -80,6 +80,9 @@ if (!module.parent){
 					console.log( 'Remove old : ./bin/tea.js > ./bin/tea.'+Tea.version+'.js');
 					child_process.execSync('mv '+root+'/bin/tea.js '+root+'/bin/tea.'+Tea.version+'.js');
 					child_process.execSync('mv '+root+'/bin/tea.tmp.js '+root+'/bin/tea.js');
+					Exec( 'node '+root+'/lib/index.js -f '+root+'/src/tea.tea -o '+root+'/bin/tea.base.js -c -v', function(err){
+						Tea.exit();
+					});
 				}
 			});
 			break;

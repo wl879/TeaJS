@@ -1,5 +1,5 @@
 
-module.exports = SText;
+// module.exports = SText;
 
 pair    = {'(':')', '[':']', '{':'}', '\'':'\'', '\"':'\"', '`':'`'};
 
@@ -7,7 +7,7 @@ pair_re = new RegExp( '\\'+Object.keys(pair).join('|\\'), 'g' );
 
 sep_cache = {};
 
-function SText(something, qq):
+export default SText(something, qq):
 	if typeof something == 'object':
 		cache = [];
 		text = JSON.stringify(something, function(key, value) {

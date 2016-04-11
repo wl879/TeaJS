@@ -59,14 +59,14 @@ class Grammar:
 		if ref = patt.parse(@, src, params):
 			if ref.error:
 				return errorResponse(ref.error, src, @);
+			if packname:
+				ref = packResponse(ref, packname, 'ret node', @.handle);
 
 		if packname:
-			ref = packResponse(ref, packname, null, @.handle);
 			if _handle != @.handle:
 				_handle.subs |= [];
 				_handle.subs.push( @.handle );
 			@.handle = _handle;
-
 		return ref;
 
 	stack( check ):
@@ -78,12 +78,12 @@ class Grammar:
 
 		if check == 'loop':
 			text = print.toText(ref);
-			list = text.replace(/^\s*\| \*.*$/mg,'').replace(/[\s\-\*\>]+/g, '-').split('-');
+			list = text.replace(/^\s*\| \*.*$/mg,'').replace(/[\s\-\*\>]+/g, '-').replace(/(\[|\]|\(|\))/g, '\\$1').split('-');
 			for i -> list:
 				if list[i]:
 					if m = list.slice(i+1).join('-').match( new RegExp(list[i]+'.*?'+list[i], 'g')):
 						if m.length > 5:
-							return '∞ '+m[0];
+							return list[i]+' ∞ '+m[0];
 			return text;
 		return ref;
 
@@ -104,6 +104,7 @@ class Grammar:
 				if res.isToken || res.isSyntax:
 					return res;
 				if res.length == 1:
+					console.log('xxxxxxxxxxxxxxxxx')
 					return res[0];
 				if res.length > 1:
 					return new Syntax(name, res);

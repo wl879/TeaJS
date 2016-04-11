@@ -7,8 +7,9 @@ class Prepor:
 
 	constructor():
 		@.standards  = {};
-		@.expression = {};
-		@.statement  = {};
+		@.expr = {};
+		@.stam  = {};
+		@.sugar      = {};
 		@.macro      = {};
 		@.map        = {};
 
@@ -22,13 +23,9 @@ class Prepor:
 
 	add(type, name, args, body, location):
 		switch type:
-			case 'expr':
-				@.map[name] = 'expression';
-				@.standards[name] = @.expression[name] = new Sugar(name, args, body, location);
-
-			case 'stam':
-				@.map[name] = 'statement';
-				@.standards[name] = @.statement[name] = new Sugar(name, args, body, location);
+			case 'sugar', 'expr', 'stam':
+				@.map[name] = type;
+				@.standards[name] = @[type][name] = new Sugar(type, name, args, body, location);
 
 			case 'macro':
 				@.map[name] = 'macro';

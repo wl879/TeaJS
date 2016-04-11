@@ -1,5 +1,6 @@
 
 require "../lib/tea.js";
+
 Tea.argv['--verbose'] = true;
 
 argv = process.argv.slice();
@@ -41,11 +42,13 @@ if argv[0]:
 for name, file in source_file:
 	runTest(file);
 
+// runTest(source_file['try'])
+
 function runTest(file, text):
 	print "<-->";
 	console.log('[Test source file] '+file);
 	ctx = Tea.context(file, text);
-	// print ctx.source;
+	print ctx.source;
 	print ctx.AST;
 	// print ctx.CAST;
 	print.bd( ctx.output() );

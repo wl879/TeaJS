@@ -1,15 +1,11 @@
-var Fs, Path, dirName, fileName, baseName, extName, join;
+var Fs, Path, dirName, baseName, extName, name, join;
 Fs = require("fs");
 Path = require("path");
-exports.dirName = (dirName = Path.dirname);
-exports.fileName = (fileName = Path.filename);
-exports.baseName = (baseName = Path.basename);
-exports.extName = (extName = Path.extname);
-exports.join = (join = Path.join);
-function name(to){
-	return Path.parse(to).name;
-};
-module.exports.name = name;
+module.exports.dirName = (dirName = Path && Path.dirname);
+module.exports.baseName = (baseName = Path && Path.basename);
+module.exports.extName = (extName = Path && Path.extname);
+module.exports.name = (name = Path && function(to){return Path.parse(to).name});
+module.exports.join = (join = Path && Path.join);
 function relative(from, to){
 	if (from){
 		to = Path.relative(from, to);
@@ -267,3 +263,7 @@ function getherFiles(res){
 	}
 	return list;
 };
+if (!Path || !Fs){
+	console.error('Fp module load fail!');
+	module.exports = null;
+}

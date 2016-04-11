@@ -11,29 +11,34 @@ export SUGAR(src, params):
 		if node = sugar.parse(@, src):
 			return node;
 
-export ROUTE(src, params):
-	if params.length:
-		for i, item -> params:
-			item = item.replace(/\s*→\s*/, '→').split('→');
-			if item.length == 2:
-				params[ item[0] ] = item[1];
-			else:
-				params[ 'default' ] = item[0];
-		params.length = 0;
-	token = src.current;
-	text  = token.text;
-	patt  = text in params ? params[text] : params['default'];
-	if patt:
-		if text == patt:
-			return token;
+export CHECK(src, params, config):
+	if !config.test:
+		params[2] = params[2].split(' ');
+		config.test = true;
+	left  = params[0]
+	mark  = params[1];
+	right = params[2];
+	switch left:
+		case 'last':
+			last = @.handle.cache;
+			while isArray(last):
+				last = last[-1];
+		default:
+			last = @.handle.cache[left];
+	if last && last.is:
+		switch mark:
+			case "==":
+				return !!last.is.apply(last, right);
+			case "===":
+				return right.indexOf(last.type) != -1 || right.indexOf(last.text) != -1;
+			case "!=":
+				return !last.is.apply(last, right);
+			case "!==":
+				return right.indexOf(last.type) == -1;
+	return false;
 
-		if @.parser(patt):
-			return @.parser(patt, src);
-
-		if res = @.pattern(patt, src):
-			return res;
-
-export ISPARAM(src, argus):
+export ARGU(src, argus, config):
+	config.test = true;
 	params = @.handle.params;
 	if params && argus:
 		for item => argus:
@@ -41,27 +46,41 @@ export ISPARAM(src, argus):
 				return true;
 	return false;
 
-export IS(src, params):
-	[index, yes, no] = checkIsMethodArgus(params, src);
-
+export IS(src, params, config):
+	if !params.mode:
+		if m = params[0].match(/^([\+\-]{1,2})(\d+)/):
+			params.mode = [m[1], parseInt(m[2]), 0];
+			params.shift();
+		else:
+			params.mode = [0, 0, 0];
+		if params.mode[1]:
+			config.test = true;
+	index = moveIndex(src, params.mode);
 	if not token = src[index]:
-		return !yes && no ? true : false;
-	
-	text = token.text;
-	types = token.types;
-	if yes:
-		for name => yes:
-			if res = @.parser(name, src, null, true):
-				return res;
-			if types.indexOf(name) != -1 || name == text:
-				if !no || (!token.is.apply(token, no) && name != text):
-					return token;
-	else if no:
-		if !token.is.apply(token, no) && name != text:
-			return token;
-	else:
-		Err 'params error', token;
+		return false;
+	if params.indexOf( token.text ) != -1:
+		return token;
+	if token.is.apply(token, params):
+		return token;
 	return false;
+
+export NOT(src, params, config):
+	if !params.mode:
+		if m = params[0].match(/^([\+\-]{1,2})(\d+)/):
+			params.mode = [m[1], parseInt(m[2]), 0];
+			params.shift();
+		else:
+			params.mode = [0, 0, 0];
+		if params.mode[1]:
+			config.test = true;
+	index = moveIndex(src, params.mode);
+	if not token = src[index]:
+		return false;
+	if params.indexOf( token.text ) != -1:
+		return false;
+	if token.is.apply(token, params):
+		return false;
+	return token;
 
 export INDENT(src, params):
 	cache = @.handle.cache;
@@ -104,44 +123,18 @@ export CONCAT(src, params):
 		return token;
 	return false;
 
-function checkIsMethodArgus(argus, src):
-
-	if argus.length == 1:
-		mode = null, vals = argus[0], lf = argus[1];
-	else:
-		mode = argus[0], vals = argus[1], lf = argus[2];
-
-	if mode as 'string':
-		if not m = mode.trim().match(/([\+\-]{1,2})(\d+)/):
-			Err '"" pattern error';
-		mode = [m[1], parseInt(m[2])];
-
-	if vals as 'string':
-		temp = vals.split(' ');
-		yes = [];
-		no = [];
-		for item => temp:
-			if item[0] == '!':
-				no.push( item.substr(1) );
-			else:
-				yes.push( item );
-		vals = {yes: yes.length && yes, 
-				no: no.length && no};
-		argus[0] = mode;
-		argus[1] = vals;
-
+function moveIndex(src, data):
 	index = src.index;
-	if mode:
-		num = mode[1];
+	if data:
+		num   = data[1];
 		while --num >= 0:
-			switch mode[0]:
+			switch data[0]:
 				case '++':
 					index ++;
 				case '+': default:
-					index = src.nextIndex( index, !lf);
+					index = src.nextIndex( index, !data.lf);
 				case '--':
 					index --;
 				case '-':
-					index = src.prevIndex( index, !lf );
-
-	return [index, vals.yes, vals.no];
+					index = src.prevIndex( index, !data.lf);
+	return index;

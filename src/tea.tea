@@ -4,33 +4,25 @@ if typeof global == 'undefined':
 		throw 'Tea script run environment error!';
 	window.global = window;
 
-id_index = 0;
-
-global.SText = require "../utils/stext";
-
-global.Jsop = require "../utils/jsop";
-
-global.print = require "../utils/print";
-
-global.Fp = require "../utils/fp";
-
+global.SText   = require "../utils/stext";
+global.Jsop    = require "../utils/jsop";
+global.print   = require "../utils/print";
+global.Fp      = require "../utils/fp";
 global.isArray = Array.isArray;
-
-global.isJson = Jsop.isJson;
-
+global.isJson  = Jsop.isJson;
 global.isClass = Jsop.isClass;
+global.ID      = function():
+	ID.index |= 0;
+	return parseInt((Date.now()+'').substr(-8)+(ID.index++)+Math.round( Math.random()*100) )+'';
 
-global.ID = function():
-	return parseInt((Date.now()+'').substr(-8)+(id_index++)+Math.round( Math.random()*100) )+'';
-
-global.__checkGlobal = function():
-	var def = 'global process GLOBAL root console Path Tea Fp'.split(' ');
-	for name in global:
-		if def.indexOf(name) >= 0:
-			continue;
-		if typeof global[name] == 'function':
-			continue;
-		print('[Global scope pollution]', name, global[name]);
+// global.__checkGlobal = function():
+// 	var def = 'global process GLOBAL root console Path Tea Fp'.split(' ');
+// 	for name in global:
+// 		if def.indexOf(name) >= 0:
+// 			continue;
+// 		if typeof global[name] == 'function':
+// 			continue;
+// 		print('[Global scope pollution]', name, global[name]);
 
 export default class Tea:
 
@@ -47,8 +39,7 @@ export default class Tea:
 	require "./settings";
 	
 	constructor(file, text, prepor, std, outfile, map):
-		this.fileName = file;
-		this.dirName  = Fp.dirName(this.fileName)
+		this.fileName = file || '';
 		this.std      = std || Tea.argv['--std'] || 'es5';
 		this.outfile  = outfile;
 		this.outmap   = map;
@@ -72,7 +63,6 @@ export default class Tea:
 	get CAST():
 		if !this._cast:
 			std        = this.std;
-			dirname    = this.dirName;
 			main       = Tea.CAST(this.AST, std, this.prepor);
 			this._cast = main;
 			if Tea.argv['--concat'] && (list = main.scope.cache.require) && list.length:
@@ -104,7 +94,7 @@ export default class Tea:
 		map.parse( this.CAST );
 		if file:
 			map.file = file;
-			SText.writeFile( map.text, Fp.resolve( this.dirName, file ), 'UTF-8');
+			SText.writeFile( map.text, Fp.resolve( Fp.dirName(this.fileName), file ), 'UTF-8');
 		return map;
 
 	output(file, map):
@@ -112,9 +102,9 @@ export default class Tea:
 		file |= this.outfile;
 		map  |= this.outmap
 		if file:
-			file = Fp.resolve( this.dirName, file );
+			file = Fp.resolve( Fp.dirName(this.fileName), file );
 		if map:
-			map = Fp.resolve(Fp.dirName(file), map as 'string' ? map : file+'.map' );
+			map = Fp.resolve( Fp.dirName(file), map as 'string' ? map : file+'.map' );
 			script += '\n\n//# sourceMappingURL='+ (file ? Fp.relative(Fp.dirName(file), map) : map);
 			this.sourcemap(map);
 			this.outmap = map;
@@ -124,17 +114,14 @@ export default class Tea:
 		return script;
 
 	// static
-	Tea.argv     = require("../utils/argv").create();
 	Tea.filename = __filename;
-	Tea.dirname  = __dirname;
 	Tea.prep     = Preprocess;
 	Tea.version  = "VER";
-	Tea.argv.set(
-		"""
+	Tea.inNode   = typeof process != 'undefined';
+	Tea.argv     = require("../utils/argv").create(null,"""
 		* <r:TeaJS:> version <g:VER:>
-		CMDHELP
-		"""
-	)
+		CMDHELP""");
+
 	static context(file, text, prepor, stdv):
 		return new Tea(file, text, prepor, stdv);
 
@@ -143,7 +130,6 @@ export default class Tea:
 		return ctx.output();
 
 	// core method
-
 	static source(text, file, prepor):
 		src = new Source(text, file);
 		if prepor !== false:

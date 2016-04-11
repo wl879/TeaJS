@@ -1,16 +1,12 @@
-
 # TeaJS
-
--
 
 
 又一种新的预编译 javascript 脚本语言，用一种友好的方式开发面向客户端的 javascript 程序。
 
-
 -
 
+### 安装 [REPL](http://wl879.github.io/TeaJS/)
 
-### 安装
 
 ```
 npm install tea-js
@@ -383,10 +379,14 @@ npm install tea-js
 * `@:`  设置 表达式 字段 匹配的节点名称 
 
 
-> 内部方法
+> 方法
 
 * `#INDENT` 无参数，检查缩进层级
 * `#CONCAT(a, b, types)` 搜索 a 与 b 之间的 token，将其合并为一个 token，types 定义其类型，多个用空格分隔
+* `#IS([--, ++, -, +]index, type...)`  检查 当前 或 位移 后的token 是否等于 type
+* `#NOT([--, ++, -, +]index, type...)`  检查 当前 或 位移 后的token 是否不等于 type
+* `#ARGU(name)`  判断参数是否存在
+* `#CHECK([last, index], [==, !=], type)` 判断以匹配结果中是否等于（不等于）type
 
 
 ### StandardPattern

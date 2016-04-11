@@ -4,8 +4,7 @@ Card = require "../../../core/card";
 module.exports = function(node, param):
 	scope  = node.scope.root;
 	file   = node[0].location.fileName;
-	dir    = Fp.dirName(node[0].location.fileName);
-	params = parseRequireParams.call(@, node[1], dir, file);
+	params = parseRequireParams.call(@, node[1], file);
 	list   = [];
 	for i, data -> params:
 		if data.file:
@@ -26,10 +25,11 @@ module.exports = function(node, param):
 		return @.pattern('[#COMMA(@)]', list, 'ArrayExpr');
 	return list;
 
-function parseRequireParams(node, dir, from):
+function parseRequireParams(node, from):
 	list = [];
+	dir  = Fp && Fp.dirName(from) || from.split('/').slice(0, -1).join('/');
 	for i, item -> node:
-		if item.is('STRING'):
+		if Fp && item.is('STRING'):
 			text = item.text;
 			if /\//.test(text):
 				file = Fp.resolve(dir, text);
