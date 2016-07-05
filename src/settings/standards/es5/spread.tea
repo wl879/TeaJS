@@ -1,0 +1,58 @@
+
+module.exports = function(heap, node, params):
+	if node.parent.type == 'ParamsExpr':
+		heap = heap.find('target', node.parent.parent );
+	else if node.parent.type == 'ArrayExpr':
+		heap =  heap.find('target', node.parent );
+	if heap:
+		heap.ondid(reparseSpreadCallback);
+		return '';
+
+	Tea.error 1116, node;
+
+function reparseSpreadCallback(heap, result, params):
+	node = heap.target;
+	switch node.type:
+		case 'ParamsExpr':
+			return @.card('ParamsExpr', '.apply(null, ', parseSpreadList.call(@, node), ')' );
+
+		case 'ArrayExpr':
+			return parseSpreadList.call(@, node);
+		
+		case 'SuperExpr':
+			params = parseSpreadList.call(@, node[1].type == 'ParamsExpr' ? node[1] : node[2]);
+			for i <- result:
+				if typeof result[i] == 'string':
+					if /\.call/.test( result[i] ):
+						result[i] = result[i].replace(/\.call/, '.apply');
+						result.delete(i+1, result.length);
+						result.add( params, ')');
+						break;
+			return result;
+		
+		case 'CallExpr', 'RequireExpr':
+			if node[0].type == 'AccessExpr':
+				patt = '#ref(@[0.0])@[0.1].apply(@ref, ';
+			else:
+				patt = '@0.apply(null, ';
+			return @.transform(patt, node).add(  parseSpreadList.call(@, node[1]), ')' );
+		
+		default:
+			Tea.error 1117, node.type, node;
+	return result;
+
+function parseSpreadList(node):
+	list = [];
+	arr  = [];
+	for i, item -> node:
+		if item.type == 'SpreadExpr':
+			if arr.length:
+				list.push( '[', Jsop.join(arr, ','), ']', ',');
+			arr = [];
+			list.push( @.transform(item[1]), ',' );
+		else:
+			arr.push( @.transform(item) );
+	if arr.length:
+		list.push( '[',  Jsop.join(arr), ']');
+	list.pop();
+	return @.card( node.type, '[].concat(', list, ')');

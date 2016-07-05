@@ -15,22 +15,25 @@ if !module.parent:
 			Tea.tabsize( parseInt(Tea.argv['--tab']) );
 
 		if Tea.argv['--define']:
-			files = checkPath( Tea.argv['--define'], Tea.argv['--path'] );
+			files = resolvePath( Tea.argv['--define'], Tea.argv['--path'] );
 			if !files:
 				print '* <g:Cant find define file as <r:"'+Tea.argv['--define']+'":>!!:>';
 				Tea.exit();
-			Tea.prep.load( files );
+			Tea.define( 'sugar', files );
 
 		if Tea.argv['--eval'] && Tea.argv['--eval'].length:
-			ctx = Tea.context(null, Tea.argv['--eval']);
+			ctx = Tea.create(null, Tea.argv['--eval']);
 			nextStep(ctx);
 			return;
 
 		if Tea.argv['--file'] || Tea.argv['--path']:
 			checkDefine( Tea.argv['--path'] || Fp.dirName(Tea.argv['--file']) );
-			files = checkPath( Tea.argv['--file'], Tea.argv['--path'] );
+			files = resolvePath( Tea.argv['--file'], Tea.argv['--path'] );
+			if !files:
+				print '* <g:Cant find file as <r:"'+Tea.argv['--file']+'":>!!:>';
+				Tea.exit();
 			for file => files:
-				ctx = Tea.context(file);
+				ctx = Tea.create(file);
 				nextStep(ctx);
 			return;
 
@@ -39,7 +42,7 @@ if !module.parent:
 				print '\n* Are you <g:NongShaLei??????:>\n';
 				print Tea.argv.help();
 				Tea.exit();
-			ctx = Tea.context(null, chunk);
+			ctx = Tea.create(null, chunk);
 			nextStep(ctx);
 			return;
 		});
@@ -53,7 +56,7 @@ if !module.parent:
 			print ctx.source;
 		if Tea.argv['--ast']:
 			print ctx.fileName;
-			print ctx.AST;
+			print ctx.nodeTree;
 		if Tea.argv['--ast'] || Tea.argv['--token']:
 			return;
 
@@ -88,33 +91,33 @@ if !module.parent:
 			Tea.exit();
 		);
 
-	function checkPath(file, path, out):
-		if path:
-			path = Fp.resolve(path);
+	function resolvePath(file, path, out):
+		path = path && Fp.resolve(path);
+
 		if file:
 			files = []
 			file_list = [];
-			if isArray(file):
+			if Array.isArray(file):
 				for i -> file:
 					file_list.push( Fp.resolve(path, file[i]) );
 			else:
 				file_list.push( Fp.resolve(path, file) );
 			for i, file -> file_list:
 				if /[^\w\/]/.test(file) || Fp.isDir(file):
-					temp = Fp.checkFiles(file, null, ['index.tea']);
+					temp = Fp.checkFiles(file, null, ['.tea', 'index.tea']);
 					files.push.apply( files, temp );
 				else if Fp.isFile(file):
 					files.push(file);
 				else if Fp.isFile( file + '.tea' ):
 					files.push(file + '.tea');
-		else:
+		else if path:
 			files = Fp.scanFile(path, /\.tea/, 100);
 		for i, file <- files:
 			if /(__define\.tea)$/.test(file):
 				files.splice(i, 1);
-		return files;
+		return files.length && files;
 
-	function checkOut(out, path, file):			
+	function checkOut(out, path, file):
 		out = Fp.resolve(out, true);
 		if Fp.isDir(out) || /\/$/.test(out):
 			if path:
@@ -132,4 +135,4 @@ if !module.parent:
 	function checkDefine( path ):
 		file = Fp.join( Fp.resolve(path), '__define.tea' );
 		if Fp.isFile(file):
-			Tea.prep.load( file );
+			Tea.define( 'sugar', file );

@@ -1,0 +1,72 @@
+
+export default class Location:
+
+	var file_cache = [];
+	var	source_cache = [];
+
+	constructor(file, source, code, start, end, line, column):
+		if !source && file:
+			source = Fp.readFile(file);
+
+		@.__file_id    = CacheFile(file);
+		@.__source_id  = CacheSource(source);
+		@.code         = code || '';
+		@.lineNumber   = line ? null;
+		@.columnNumber = column ? null;
+		@.start        = start ? 0;
+		@.end          = end || start + @.code.length - 1;
+		if line == null:
+			CountLineNumber(@, start);
+
+	get fileName():
+		return file_cache[@.__file_id] || '';
+
+	get source():
+		var data = source_cache[@.__source_id];
+		return data && data.source || '';
+
+	get line():
+		var data = source_cache[@.__source_id];
+		return data && data[@.lineNumber-1][3] || '';
+
+	fission(code, start, end):
+		return new Location(@.__file_id, @.__source_id, code, start, end);
+
+	@::isLocation = true;
+
+	function CountLineNumber(loc, start):
+		if data = source_cache[loc.__source_id]:
+			for i, line_data -> data:
+				if start >= line_data[1] && start <= line_data[2]:
+					loc.lineNumber = line_data[0];
+					loc.columnNumber = start - line_data[1];
+					break;
+		return loc;
+
+	function CacheFile(file):
+		if typeof file == 'number':
+			return file;
+		if file:
+			var index = file_cache.indexOf(file);
+			if index == -1:
+				index = file_cache.push(file) - 1;
+			return index;
+		return null;
+
+	function CacheSource(source):
+		if typeof source == 'number':
+			return source;
+		if source:
+			var index = -1;
+			for i -> source_cache:
+				if source_cache[i].text == source:
+					index = i;
+					break;
+			if index == -1:
+				var lines = source.split('\n'), shift = 0, data = [];
+				for i, line -> lines:
+					data.push( [i+1, shift, (shift += line.length + 1)-1, line+'\n'] );
+				data.source = source;
+				index = source_cache.push(data) - 1;
+			return index;
+		return null;

@@ -8,6 +8,9 @@ export extName  = Path && Path.extname;
 export name     = Path && (to) => Path.parse(to).name;
 export join     = Path && Path.join;
 
+export split(to):
+	return Path.parse(to);
+
 export relative(from, to):
 	if from:
 		to = Path.relative(from, to);
@@ -15,25 +18,30 @@ export relative(from, to):
 			to = './'+to;
 	return to;
 
-export resolve(from, to, check_dir):
+export resolve(from, to, exts):
 	if !to:
 		to = from, from = null;
 	else to === true:
-		check_dir = to, to = from, from = null;
+		exts = to, to = from, from = null;
 	to = to.replace(/^`+|^'+|^"+|"+$|'+$|`+$/g, '').trim();
 	if !/^(\~|\/|\.)/.test(to):
 		to = './'+to;
-	from = from ? Path.resolve(from, to) : Path.resolve(to);
-	if check_dir && /\/$/.test(to):
-		from += '/';
-	return from; 
+	path = from ? Path.resolve(from, to) : Path.resolve(to);
 
-export mkdir(to, mode):
-	if !Fs.existsSync(to):
-		base_dir = Path.dirname(to);
-		if !Fs.existsSync(base_dir):
-			mkdir(base_dir, mode);
-		return Fs.mkdirSync(to, mode || 0755);
+	if Array.isArray(exts):
+		if !isFile(path):
+			for ext => exts:
+				if isFile(path + ext):
+					path = path + ext;
+					break;
+	else if exts && /\/$/.test(to):
+		path += '/';
+	return path;
+
+export isPath(text):
+	// var winpath = /^[a-zA-Z];[\\/]((?! )(?![^\\/]*\s+[\\/])[\w -]+[\\/])*(?! )(?![^.]+\s+\.)[\w -]+$/; 
+	// var lnxPath = /^([\/] [\w-]+)*$/; 
+	return /^([^\*\s]|\\[ \t])*(\/([^\*\s]|\\[ \t])+)+$/.test(text);
 
 export isExist(to):
 	return Fs.existsSync( to );
@@ -43,6 +51,10 @@ export isFile(to):
 
 export isDir(to):
 	return Fs.existsSync( to ) && Fs.statSync(to).isDirectory();
+
+/**
+ * 
+ */
 
 export scanDir(to, filter, deep, reverse):
 	res = scanPath( to, filter, deep, reverse);
@@ -58,7 +70,7 @@ export scanPath(to, filter, deep, reverse):
 	if typeof filter == 'number':
 		reverse = deep, deep = filter, filter = null;
 
-	if isArray(filter):
+	if Array.isArray(filter):
 		dir_filter = filter[0];
 		file_filter = filter[1];
 	else:
@@ -157,6 +169,44 @@ export checkPath(to, from):
 	res.dirs  = dirs;
 	res.files = files;
 	return res;
+
+/**
+ * 
+ */
+
+export writeFile(content, file, encoding):
+	dir  = Path.dirname(file);
+	!isDir( dir ) && mkdir(dir, 0755);
+	return Fs.writeFileSync(file, content, encoding||'utf8');
+
+export readFile(file, encoding, linenum):
+	if encoding as 'number':
+		linenum = encoding, encoding = 'utf-8';
+	if isFile( file ):
+		text = Fs.readFileSync(file, encoding||'utf-8');
+		if linenum:
+			text = readLine(text, linenum);
+		return text;
+
+export readLine(text, something):
+	if something as 'number':
+		lines = text.split('\n');
+		return lines[ something-1 ];
+	if something as 'string':
+		if index == text.indexOf(something):
+			if index >= 0:
+				return indexLine(text, text.indexOf(something))[0];
+
+export mkdir(to, mode):
+	if !Fs.existsSync(to):
+		base_dir = Path.dirname(to);
+		if !Fs.existsSync(base_dir):
+			mkdir(base_dir, mode);
+		return Fs.mkdirSync(to, mode || 0755);
+
+/**
+ * 
+ */
 
 function wildcard(str, force):
 	if !str || str as RegExp:

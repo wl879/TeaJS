@@ -1,19 +1,92 @@
+#define VER {
+#script
+if pk = SText.readFile('./package.json'):
+	if m = pk.match(/\"version\"\s*:\s*\"([\w\.]+)\"/):
+		write m[1];
+#end
+}
 
 if typeof global == 'undefined':
 	if typeof window == 'undefined':
 		throw 'Tea script run environment error!';
 	window.global = window;
 
-global.SText   = require "../utils/stext";
-global.Jsop    = require "../utils/jsop";
-global.print   = require "../utils/print";
-global.Fp      = require "../utils/fp";
-global.isArray = Array.isArray;
-global.isJson  = Jsop.isJson;
-global.isClass = Jsop.isClass;
-global.ID      = function():
-	ID.index |= 0;
-	return parseInt((Date.now()+'').substr(-8)+(ID.index++)+Math.round( Math.random()*100) )+'';
+global.SText   = require "./utils/stext";
+global.Jsop    = require "./utils/jsop";
+global.print   = require "./utils/print";
+global.Fp      = require "./utils/fp";
+// global.TeaPack      = require "../utils/teapack";
+
+var Helper     = require "./helper";
+var Argv       = require("./utils/argv")
+                 
+
+global.Tea     = require "./core";
+
+Tea.filename = __filename;
+
+Tea.version  = "VER";
+
+Tea.inNode   = typeof process != 'undefined';
+
+Tea.argv     = Argv.create(null,
+					#script
+					if md = SText.readFile('./README.md'):
+						if m = md.match(/```console([\w\W]*?)```/):
+							write '"""        * <r:TeaJS:> version <g:VER:>'+m[1]+'"""';
+					#end
+				);
+
+Tea.create = function(file, text, sugar_box, stdv):
+				return new Tea(file, text, sugar_box, stdv);
+
+Tea.compile = function(text, sugar_box, from, stdv):
+				ctx = new Tea(from, text, sugar_box, stdv);
+				return ctx.output();
+
+Tea.ID      = function():
+				Tea.ID.index |= 0;
+				return parseInt((Date.now()+'').substr(-8)+(Tea.ID.index++)+Math.round( Math.random()*100) )+'';
+
+Tea.log     = function():
+				if Tea.argv['--verbose']:
+					Tea.log = Helper.log;
+					Tea.log.apply( null, arguments);
+
+Tea.error   = function():
+				arguments[arguments.length++] = new Error();
+				throw Helper.error( arguments );
+
+/**
+ * 
+ */
+Tea.tabsize   = function(num):
+				SText.tabsize = SText.cope(' ', num);
+
+Tea.exit     = function(state = 0):
+				print '* <r:TeaJS:> exit - Used time <b:'+Tea.uptime('ms')+':>';
+				process.exit( state );
+
+Tea.uptime   = function(unit):
+				t = process.uptime();
+				switch unit:
+					case 's':
+						return t+'s';
+					case 'ms':
+						return t*1000+'ms';
+				return t*1000;
+
+Tea.memory   = function(unit):
+				data = process.memoryUsage();
+				rss = data.rss;
+				switch unit:
+					case 'kb':
+						return Math.floor(data.rss*100/1024)/100 + ' KB';
+					case 'mb':
+						return Math.floor(data.rss*100/1024/1024)/100 + ' MB';
+				return rss;
+
+require "./settings";
 
 // global.__checkGlobal = function():
 // 	var def = 'global process GLOBAL root console Path Tea Fp'.split(' ');
@@ -23,200 +96,3 @@ global.ID      = function():
 // 		if typeof global[name] == 'function':
 // 			continue;
 // 		print('[Global scope pollution]', name, global[name]);
-
-export default class Tea:
-
-	Helper     = require "./helper";
-	Token      = require "./core/token";
-	Source     = require "./core/source";
-	SourceMap  = require "./core/sourcemap";
-	Syntax     = require "./core/syntax";
-	Scope      = require "./core/scope";
-	Card       = require "./core/card";
-	Grammar    = require "./core/grammar";
-	Standard   = require "./core/standard";
-	Preprocess = require "./preprocess";
-	require "./settings";
-	
-	constructor(file, text, prepor, std, outfile, map):
-		this.fileName = file || '';
-		this.std      = std || Tea.argv['--std'] || 'es5';
-		this.outfile  = outfile;
-		this.outmap   = map;
-		if text && text.isSource:
-			this._source = text;
-		else:
-			this.sourcetext = text || SText.readFile(file);
-
-		this.prepor = Preprocess.create(prepor);
-
-	get source():
-		if !this._source:
-			this._source = Tea.source(this.sourcetext, this.fileName, this.prepor);
-		return this._source;
-
-	get AST():
-		if !this._ast:
-			this._ast = Tea.AST(this.source, this.prepor);
-		return this._ast;
-
-	get CAST():
-		if !this._cast:
-			std        = this.std;
-			main       = Tea.CAST(this.AST, std, this.prepor);
-			this._cast = main;
-			if Tea.argv['--concat'] && (list = main.scope.cache.require) && list.length:
-				requires = {};
-				for file => list:
-					if !requires[file]:
-						Tea.log('* <r:Concat require:> : <d:'+file+':>');
-						if !/\.tea/.test(file):
-							requires[file] = {
-								"fileName" : file,
-								"CAST"     : concatFromJs(list, file, std)
-							};
-						else:
-							requires[file] = {
-								"fileName" : file,
-								"CAST"     : concatFromTea(list, file, std)
-							};
-				this._cast = Preprocess.concatModule(this, Jsop.toArray(requires) );
-		return this._cast;
-
-	get scope():
-		if !this.AST.scope:
-			return Tea.scope(this.AST);
-		return this.AST.scope;
-
-	sourcemap(file):
-		map = new SourceMap();
-		map.sourceRoot = this.fileName;
-		map.parse( this.CAST );
-		if file:
-			map.file = file;
-			SText.writeFile( map.text, Fp.resolve( Fp.dirName(this.fileName), file ), 'UTF-8');
-		return map;
-
-	output(file, map):
-		script = this.CAST.toScript();
-		file |= this.outfile;
-		map  |= this.outmap
-		if file:
-			file = Fp.resolve( Fp.dirName(this.fileName), file );
-		if map:
-			map = Fp.resolve( Fp.dirName(file), map as 'string' ? map : file+'.map' );
-			script += '\n\n//# sourceMappingURL='+ (file ? Fp.relative(Fp.dirName(file), map) : map);
-			this.sourcemap(map);
-			this.outmap = map;
-		if file:
-			SText.writeFile(script, file, 'UTF-8');
-			this.outfile = file;
-		return script;
-
-	// static
-	Tea.filename = __filename;
-	Tea.prep     = Preprocess;
-	Tea.version  = "VER";
-	Tea.inNode   = typeof process != 'undefined';
-	Tea.argv     = require("../utils/argv").create(null,"""
-		* <r:TeaJS:> version <g:VER:>
-		CMDHELP""");
-
-	static context(file, text, prepor, stdv):
-		return new Tea(file, text, prepor, stdv);
-
-	static compile(text, prepor, from, stdv):
-		ctx = new Tea(from, text, prepor, stdv);
-		return ctx.output();
-
-	// core method
-	static source(text, file, prepor):
-		src = new Source(text, file);
-		if prepor !== false:
-			src.prepor = Preprocess.gather(src, prepor);
-		return src;
-
-	static scope(ast, check_define):
-		return Scope.init(ast, check_define);
-		
-	static grammar(type, src, prepor):
-		prepor     |= src.prepor;
-		grammar       = Grammar.create( prepor );
-		syntax        = grammar.parser(type, src);
-		syntax.source = src;
-		return syntax;
-
-	static standard(version = 'es5', syntax, prepor):
-		prepor  |= syntax.source && syntax.source.prepor;
-		scope      = Tea.scope(syntax);
-		std        = Standard.create(version, prepor);
-		card       = std.read( syntax );
-		card.scope = scope;
-		return card;
-
-	static card():
-		return Jsop.newClass(Card, arguments);
-
-	static AST(src, prepor):
-		return Tea.grammar('Root', src.refresh(0), prepor);
-	
-	static CAST(ast, version, prepor):
-		return Tea.standard(version, ast, prepor);
-
-	// tools
-	static tabsize(num):
-		SText.tabsize = SText.cope(' ', num);
-
-	static exit(state = 0):
-		print '* <r:TeaJS:> exit - Used time <b:'+Tea.uptime('ms')+':>';
-		process.exit( state );
-
-	static uptime(unit):
-		t = process.uptime();
-		switch unit:
-			case 's':
-				return t+'s';
-			case 'ms':
-				return t*1000+'ms';
-		return t*1000;
-
-	static memory(unit):
-		data = process.memoryUsage();
-		rss = data.rss;
-		switch unit:
-			case 'kb':
-				return Math.floor(data.rss*100/1024)/100 + ' KB';
-			case 'mb':
-				return Math.floor(data.rss*100/1024/1024)/100 + ' MB';
-		return rss;
-
-	static log():
-		if Tea.argv['--verbose']:
-			Tea.log = Helper.log;
-			Tea.log.apply( null, arguments);
-
-	function concatFromJs(list, file, std):
-		src = Tea.source(null, file, false);
-		while true:
-			src.index = src.indexOf('require',  ++src.index);
-			if src.index >= 0:
-				if node = Tea.grammar('RequireExpr', src):
-					concatRequire(list, Tea.standard(std, node));
-				continue;
-			break;
-		return Tea.card('Source', Jsop.toArray(src));
-
-	function concatFromTea(list, file, std):
-		prepor = Tea.prep.create();
-		src    = Tea.source(null, file, prepor);
-		node   = Tea.AST(src, prepor);
-		card   = Tea.CAST(node, std, prepor);
-		concatRequire(list, card);
-		return card;
-
-	function concatRequire(list, card):
-		if scope = card.scope:
-			if scope.cache.require && scope.cache.require.length:
-				list.push.apply(list, scope.cache.require);
-
-global.Tea = Tea;

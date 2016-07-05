@@ -1,104 +1,116 @@
 
-module.exports = function(node, param):
-	if !node[1]:
-		return rewriteForRange.call(@, node, param);
-	switch node[1].isToken && node[1].text:
-		case 'of', 'in':
-			return rewriteForIn.call(@, node, param);
-		case '->', '=>', '<=', '<-':
-			return rewriteForEach.call(@, node, param);
-		case '...':
-			return rewriteForRange.call(@, node, param);
-		default:
-			if node[0].is('VarPatt', 'LetPatt'):
-				return "var @0; @1; @2";
-	return "@0; @1; @2";
+module.exports = function(heap, node):
+	card = @.card('ForStam');
+	card.add( node[0] );
 
-function rewriteForIn(node, param):
-	vars   = @.handle.variables;
-	vars.i = node[0][0];
-	vars.temp = node[0][1];
-	if !vars.temp && node[1].text == 'of':
-		vars.temp = vars.i;
-		vars.i = @.pattern('#VAR(for_let, i)', node);
+	cond = node[1];
+	if cond[1]:
+		switch cond[1].isToken && cond[1].text:
+			case 'of', 'in':
+				card.add( parseForIn.call(@, heap, cond) );
+			case '->', '=>', '<=', '<-', '>', '<', '>=':
+				card.add( parseForEach.call(@, heap, cond) )
+			case '...':
+				card.add( parseForRange.call(@, heap, cond) );
+			default:
+				card.add( @.transform('(@0; @1; @2)', cond) );
 	else:
-		if state = node.scope.state(vars.i.text):
-			@.pattern('#VAR(for_let, i, @)', vars.i);
-		else:
-			node.scope.define('let', vars.i);
-	if vars.temp:
-		node.scope.define('let', vars.temp);
+		card.add( parseForRange.call(@, heap, cond) );
 
-	return "var @i in #VALUE(@[2], ref)" +
-		   "#HEAD( `if (!@ref.hasOwnProperty(@i)) continue`, Let )" +
-		   (vars.temp ? "#HEAD( `var @temp = @ref[@i]`, Let )" : "");
+	card.add( @.transform(node[2]) );
+	return card;
 
-function rewriteForEach(node, param):
-	vars  = @.handle.variables;
+function parseForIn(heap, node):
 	scope = node.scope;
-	mark  = node[1].text;
-	
-	if node[0][1]:
-		i     = node[0][0];
-		vars.temp = node[0][1]
-	else if (mark == '<=' || mark == '=>'):
-		vars.temp = node[0][0];
+	$i     = node[0][0];
+	$temp  = node[0][1];
+	if !$temp && node[1].text == 'of':
+		$temp = $i;
+		$i    = scope.createVariable('i', 'unknow');
 	else:
-		i     = node[0][0];
+		if node[0].type == 'InitPatt':
+			scope.define( 'unknow', $i, scope.createVariable( $i || 'i', 'unknow', false) );
+			if $temp:
+				scope.define( 'unknow', $temp, scope.createVariable( $temp, 'unknow', false) );
 
-	if i:
-		if i.type == 'AssignExpr':
-			def = '@[0.0.2]';
-			i   = i[0];
-		text = i.text;
-		state = scope.state( text );
-		if !state || node[0].type != 'InitPatt':
-			scope.define( 'for_let', i);
-			vars['i'] = text;
-		else:
-			if !def && state != 'for_let':
-				def = text;
-			@.pattern('#VAR(for_let, i, @)', i);
+	heap.variable('i', $i);
+	patt = '(var @i in #ref(@2, ref, up undefined))';
+	patt+= '#head("if (!@ref.hasOwnProperty(@i)) continue", LetScope)';
+	if $temp:
+		heap.variable('temp', $temp);
+		patt += '#head("var @temp = @ref[@i]", LetScope)';
+	return @.transform( patt, node);
+
+function parseForEach(heap, node):
+	scope = node.scope;
+
+	$i      = node[0][0];
+	$temp   = node[0][1];
+	$oper   = node[1].text;
+	$target = node[2];
+
+	if !$temp && ($oper == '=>' || $oper == '<='):
+		$temp = $i;
+		$i = scope.createVariable('i', 'unknow');
 	else:
-		@.pattern('#VAR(for_let, i)', node);
+		if $i.type == 'AssignExpr':
+			$def = $i[2].text;
+			$i   = $i[0];
+		if node[0].type == 'InitPatt':
+			if !$def && scope.state( $i )[0]:
+				$def = scope.alias($i)[0] || $i.text;
+			scope.define('unknow', $i, scope.createVariable( $i || 'i', 'unknow', false));
 
 	init = [];
-	if node[2].is('Access'):
-		vars.ref = node[2];
-	else:
-		init.push( '@ref = #VALUE(@[2])' );
 
-	if vars.temp:
+	heap.variable('i', $i);
+	if $target.is('Variable', 'NUMBER', 'STRING'):
+		heap.variable('target', $target);
+	else:
+		heap.variable('target', scope.createVariable('ref', 'unknow') );
+		init.push( '@target = #group(@[2])' );
+
+	if $temp:
+		if !$temp.is('Variable'):
+			Tea.error 1022, $temp;
+		if node[0].type == 'InitPatt':
+			scope.define('unknow', $temp, scope.createVariable( $temp || 'temp', 'unknow', false));
+		heap.variable('temp', $temp);
 		init.push( '@temp' );
-		scope.define('let', vars.temp);
-	
-	if mark == '=>' || mark == '->':
-		init.push( '@i = '+(def || '0') );
-		patt = 'var '+init.join(', ')+'; @i < @ref.length; @i++';
-	else:
-		init.push( '@i = '+(def || '@ref.length - 1') );
-		patt = 'var '+init.join(', ')+'; @i >= 0; @i--';
-	
-	if vars.temp:
-		patt += "#HEAD( `@temp = @ref[@i]`, Let )";
-	return patt;
 
-function rewriteForRange(node, param):
+	switch $oper:
+		case '<=', '<-':
+			init.push( '@i = '+($def || '@target.length-1') );
+			patt = "(var ${init.join(', ')}; @i >= 0; @i--)"
+
+		case '=>', '->':
+			init.push( '@i = '+($def || '0') );
+			patt = "(var ${init.join(', ')}; @i < @target.length; @i++)"
+
+		case '<', '>', '>=':
+			init.push( '@i = '+($def || '0') );
+			patt = "(var ${init.join(', ')}; @i @1 @target; @i++)"
+			if $temp:
+				Tea.error 1022, $temp;
+		default:
+			Tea.error 1022, node[1];
+
+	if $temp:
+		patt += "#head(`@temp = @target[@i]`, LetScope )";
+	return @.transform( patt, node);
+
+function parseForRange(heap, node):
+	scope = node.scope;
+	heap.variable('i',  scope.createVariable( 'i', 'unknow') );
 	if node[1]:
-		vars = @.handle.variables;
-		vars.left  = node[0];
-		vars.right = node[2];
-		if vars.left.type == 'NUMBER' || vars.right.type == 'NUMBER':
-			return "var @i = @right; @i >= @left; @i--";
-		return "var @i = @left; @i <= @right; @i++";
+		if node[0][0].type == 'NUMBER' && node[2].type == 'NUMBER' && parseInt(node[0][0].text) > parseInt(node[2].text):
+			return @.transform("(var @i = @2; @i >= @0; @i--)", node);
+		return @.transform("(var @i = @0; @i <= @2; @i++)", node);
 
 	node = node[0][0];
 	if node.type == 'NUMBER':
-		return "var @i = 0; @i < @; @i++";
+		return @.transform("(var @i = 0; @i < @; @i++)", node);
 
 	if node.is('Variable'):
-		return "var @i = 0; @i < @.length; @i++"
-
-	if node.is('Value'):
-		return "var @i = 0, @ref = @; @i < @ref.length; @i++";
-	return "var @i = 0, @ref = (@); @i < @ref.length; @i++";
+		return @.transform("(var @i = 0; @i < @.length; @i++)", node);
+	return @.transform("(var @i = 0, #ref(@, ref, let of for); @i < @ref.length; @i++)", node);

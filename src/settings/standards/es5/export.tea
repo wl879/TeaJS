@@ -1,0 +1,113 @@
+
+module.exports = function(heap, node, params):
+	switch node.type:
+		case 'ExportDecl':
+			return parseExportDecl.call(@, node);
+		
+		case 'ExportDefaultDecl':
+			return parseExportDefaultDecl.call(@, node);
+		
+		case 'ExportAllDecl':
+			return parseExportAllDecl.call(@, node);
+
+function parseExportDecl(node):
+	switch node[0].type:
+		case 'FunctionDecl', 'MethodDecl', 'ClassDecl':
+			return @.card(
+					'List',
+					@.transform(node[0]),
+					@.transform('module.exports.@[name] = @[name]', node[0], 'ExportDecl')
+				);
+
+		case 'GetterDecl':
+			return @.transform( 'module.exports.__defineGetter__("@0", function@1@2)', node[0], 'ExportDecl' );
+
+		case 'SetterDecl':
+			return @.transform( 'module.exports.__defineSetter__("@0", function@1@2)', node[0], 'ExportDecl' );
+
+		case 'VarDecl', 'ConstDecl':
+			return @.card(
+					'List',
+					@.transform(node[0]),
+					@.transform('#join( "(@:ExportDecl)module.exports.@0 = @0", false)', node[0][0], 'List')
+				);
+
+		case 'SequenceDecl':
+			return @.transform( '#join( "(@:ExportDecl)module.exports.@0 = #group(@)", false)', node[0], 'List' );
+		
+		case 'JsonPatt':
+			if node[1]:
+				return parseExportFrom.call(@, node);
+			return parseExportDest.call(@, node);
+
+		default:
+			Tea.error 1103, node;
+
+function parseExportDefaultDecl(node):
+	switch node[0].type:
+		case 'FunctionDecl', 'MethodDecl':
+			@.transform('#head("module.exports = @[0.name]")', node);
+			return @.transform(node[0]);
+		case 'ClassDecl':
+			return @.card(
+					'List',
+					@.transform(node[0]),
+					@.transform('module.exports = @[name]', node[0], 'ExportDecl')
+				);
+		default:
+			return @.transform('module.exports = #group(@0)', node);
+
+function parseExportAllDecl(node):
+	return @.card(
+			"ExportAllDecl", 
+			`
+			(function(from, exp){
+				Object.keys(from).forEach(
+					function(k){
+						exp.__defineGetter__(k, function(){return from[k]});
+					}
+				)
+			})(`, @.transform( node[0][0].is('STRING') ? 'require(@0)' : '(typeof(@0)=="string"?require(@0):@0)' , node ), ', module.exports)' );
+
+function parseExportFrom(node):
+	scope = node.scope;
+	json_patt = node[0];
+	from  = @.transform('RequireExp', node[1]);
+	keys  = [];
+	names = [];
+	use_names = false;
+	for i, item -> json_patt:
+		node.scope.alias(item);
+		if item.type == 'PropertyInit':
+			keys.push( @.transform('"@0"', item), ',' );
+			names.push( @.transform('"@2"', item), ',' );
+			use_names = true;
+		else:
+			keys.push( @.transform('"@"', item), ',' );
+			names.push( @.transform('"@"', item), ',' );
+	keys.pop();
+	names.pop();
+	return @.card(
+		"ExportDecl", 
+		"(function(from, keys, names){keys.forEach(function(k, i){module.exports.__defineGetter__(names[i] || k, function(){return from[k]})}})\n",
+		"(",from, ", [", keys, "], [", use_names && names, "])"
+	);
+
+function parseExportDest(node):
+	scope = node.scope;
+	json_patt = node[0];
+	list = [];
+	for i, item -> json_patt:
+		scope.alias(item);
+		switch item.type:
+			case 'RestPatt':
+				Tea.error 1131, item;
+			case 'PropertyInit':
+				if item[2].text == 'default':
+					ref = @.transform( 'module.exports = @0', item, 'ExportDecl' );
+				else:
+					ref = @.transform( 'module.exports.@2 = @0', item, 'ExportDecl' );
+			default:
+				ref = @.transform( 'module.exports.@ = @', item, 'ExportDecl' );
+		list.push( ref );
+	return @.card('List', list);;

@@ -1,48 +1,18 @@
-module.exports =  {
-		Object          : 'CONST  IDENTIFIER  NUMBER  STRING  REGEXP  COMMENT  JsonExpr  ArrayExpr  ArrowExpr  FunctionExpr'
-
-		Variable        : 'VariableExpr'
-
-		Access          : 'Variable  AccessExpr  SuperExpr  ThisExpr  SliceExpr'
-
-		Unary           : 'UnaryExpr  PrefixExpr  PostfixExpr  NotExpr  NewExpr'
-
-		Value           : 'Object  Access  Unary  RequireExpr  CompelExpr  CallExpr'
-
-		Operate         : 'CompareExpr  ComputeExpr  LogicExpr'
-
-		Assign          : "AssignExpr  ArrayAssignExpr  JsonAssignExpr"
-
-		Binary          : 'Value  Operate  Assign'
-
-		Ternary         : 'TernaryExpr'
-
-		Comma           : 'CommaExpr ArgusExpr ArgusStam ParamsExpr JsonExpr ArrayExpr JsonPatt ArrayExpr'
-
-		Expression      : 'Binary  Ternary  ClassExpr  CommaExpr'
-		
-		// Statement
-     	IfStam          : 'IfPatt  ElseIfPatt  ElsePatt'
-
-     	TryStam         : 'TryPatt  CatchPatt  FinallyPatt'
-     	
-     	Control         : 'IfStam  WhileStam  DoWhileStam  WithStam  ForStam  SwitchStam  CaseStam  DefaultStam  TryStam'
-		
-		Statement       : 'Control  VarStam  LetStam  ConstStam  ClassDecl  ReturnStam  BreakStam  ContinueStam  DebuggerStam  ThrowStam  LabelStam  LinkStam  SeleteStam'
-
-		// Declaration
-		Declaration     : 'FunctionDecl  MethodDecl  GetterDecl  SetterDecl  StaticDecl  ProtoDecl  PropertyDecl  ConstructorDecl  ExportDecl'
-		
-		// block
-		Block           : 'BlockStam  BlockNode'
-
-		NodeBlock       : 'Block  Root'
-		// scope
-		Function        : 'FunctionExpr  FunctionDecl  GetterDecl  SetterDecl  MethodDecl  PackageExpr  ArrowExpr  ConstructorDecl'
-
-		Let             : 'IfPatt  ElseIfPatt  ElsePatt  WhileStam  DoWhileStam  WithStam  ForStam  SwitchStam'
-
-		Class           : 'ClassExpr  ClassDecl'
-
-		Scope           : 'Json  Let  Class  Function  Root'
+module.exports = { 
+    Const     : [ 'CONST', 'NUMBER', 'REGEXP', 'STRING', 'TAG' ],
+    Variable  : [ 'VariableExpr' ],
+    Object    :  [ 'ArrayExpr', 'JsonExpr', 'FunctionExpr', 'VariableExpr', 'CONST', 'NUMBER', 'REGEXP', 'STRING', 'TAG' ],
+    Access    : [ 'AtExpr', 'AccessExpr', 'VariableExpr' ],
+    Value     : [ 'ArrowExpr', 'GroupExpr', 'SuperExpr', 'RequireExpr', 'CallExpr', 'AccessExpr', 'SliceExpr', 'ArrayExpr', 'JsonExpr', 'FunctionExpr', 'VariableExpr', 'CONST', 'NUMBER', 'REGEXP', 'STRING', 'TAG', 'AtExpr' ],
+    Unary     : [ 'NotExpr', 'PrefixExpr', 'NewExpr', 'UnaryExpr', 'PostfixExpr' ],
+    Operate   : [ 'LogicExpr', 'ComputeExpr', 'CompareExpr' ],
+    Assign    : [ 'ArrayDest', 'JsonDest', 'AssignExpr', 'AssignPatt' ],
+    Binary    : [ 'LogicExpr', 'ComputeExpr', 'CompareExpr', 'ArrayDest', 'JsonDest', 'AssignExpr', 'AssignPatt' ],
+    Ternary   : [ 'TernaryExpr' ],
+    Express   : [ 'SpreadExpr', 'TernaryExpr', 'CallExpr', 'ArrowExpr', 'GroupExpr', 'SuperExpr', 'RequireExpr', 'AccessExpr', 'SliceExpr', 'ArrayExpr', 'JsonExpr', 'FunctionExpr', 'VariableExpr', 'CONST', 'NUMBER', 'REGEXP', 'STRING', 'TAG', 'AtExpr', 'NotExpr', 'PrefixExpr', 'NewExpr', 'UnaryExpr', 'PostfixExpr', 'LogicExpr', 'ComputeExpr', 'CompareExpr', 'ArrayDest', 'JsonDest', 'AssignExpr', 'AssignPatt' ],
+    Declare   : [ 'VarDecl', 'LetDecl', 'ConstDecl', 'FunctionDecl', 'ExportDecl', 'StaticDecl', 'GetterDecl', 'SetterDecl', 'ConstructorDecl', 'ImportDecl', 'MethodDecl', 'ClassExpr', 'ClassDecl', 'ExtendsExpr', 'BlockNode' ],
+    Execute   : [ 'ReturnStam', 'BreakStam', 'ContinueStam', 'ThrowStam', 'DebuggerStam', 'YieldStam' ],
+    Control   : [ 'IfStam', 'WhileStam', 'DoWhileStam', 'WithStam', 'TryStam', 'SwitchStam', 'ForStam' ],
+    Statement : [ 'ConstructorDecl', 'MethodDecl', 'LabelStam', 'SeleteStam', 'LinkStam', 'VarDecl', 'LetDecl', 'ConstDecl', 'FunctionDecl', 'ExportDecl', 'StaticDecl', 'GetterDecl', 'SetterDecl', 'ImportDecl', 'ClassExpr', 'ClassDecl', 'ExtendsExpr', 'BlockNode', 'ReturnStam', 'BreakStam', 'ContinueStam', 'ThrowStam', 'DebuggerStam', 'YieldStam', 'IfStam', 'WhileStam', 'DoWhileStam', 'WithStam', 'TryStam', 'SwitchStam', 'ForStam' ],
+    Block     : [ 'BlockNode', 'BlockStam' ]
 }

@@ -1,8 +1,5 @@
 
-Syntax = require "../../core/syntax";
-
-module.exports = function(src, params):
-	
+module.exports = function(heap, src, params):
 	switch params && params[0]:
 		case 'brace':
 			params = params.slice(1);
@@ -17,119 +14,109 @@ module.exports = function(src, params):
 		case '{':
 			return checkBraceBlock.call(@, src, params);
 		case ':':
-			return checkIndentBlock.call(@, src, params) || new Syntax('BlockNode');
+			return checkIndentBlock.call(@, src, params) || @.node('BlockNode');
 		case ';':
-			Err 1111,  src.current.text, src.current;
+			Tea.error 1111,  src.current.text, src.current;
 
 function checkLineBlock(src, params):
-	node = new Syntax('BlockNode');
+	node = @.node('BlockNode');
 	ends = ['\n', ';', '}', ']', ']', 'else', 'while', 'catch', 'finally'];
 	if params && params.length:
 		ends.push.apply(ends, params);
-	back_index = src.index;
+	step_index = src.index;
 	while src.index < src.length:
 		if src.current.text == ';':
-			back_index = src.index;
-			@.next(src);
+			step_index = src.index;
+			src.next();
 			if src.current.text == ',':
 				break;
 		if src.current.type == 'EOT':
-			back_index = src.index;
+			step_index = src.index;
 			break;
 		if ends.indexOf(src.current.text) != -1:
 			break;
-		if ref = @.parser('Statement', src):
+		if ref = @.parse('Statement'):
+			step_index = src.index;
 			node.add(ref);
-			back_index = src.index;
-			@.next(src);
+			src.next();
 			continue;
 		break;
-	src.index = back_index;
+	src.index = step_index;
 	if node.length:
 		return node;
 
 function checkIndentBlock(src, params):
-
-	handle         = @.handle;
-	back_index     = src.index;
-	step_index     = src.current.text == ':' ? src.index : src.prevIndex(back_index, true);
+	node           = @.node('BlockNode');
+	step_index     = src.current.text == ':' ? src.index : src.prevIndex(src.index, true);
 	the_indent     = src.lineIndent(step_index);
-	node           = new Syntax('BlockNode');
-	node.subType   = 'IndentBlock';
-	node.theIndent = the_indent;
-	// 
+	
 	if src[step_index].text == ':':
 		step_index = src.nextIndex(step_index);
 		if !src[step_index].is('LF'):
 			src.index = step_index;
 			node = checkLineBlock.call(@, src, params);
 			if src[src.nextIndex(src.index)].is('LF'):
-				step_index = back_index = src.index;
+				step_index = src.index;
 			else:
 				return node;
+
 	src.index = step_index;
-	@.next(src, 1);
-	step_index = src.index;
+	src.next(1);
 
 	ends = ['}', ')', ']'];
 	if params && params.length:
 		ends.push.apply(ends, params);
 
 	while src.index < src.length:
-		
+
 		if src.current.type == 'EOT':
-			return node;
+			src.index = step_index;
+			break;
+		
+		if ends.indexOf(src.current.text) != -1 || src.lineIndent() <= the_indent:
+			if src[step_index].is('LF'):
+				step_index = step_index - 1;
+			src.index = step_index;
+			break;
 
-		step_index = src.index;
-		if ends.indexOf(src.current.text) == -1:
+		if src.current.is('BREAK', 'BLANK', 'COMMENT', 'COMM'):
+			step_index = src.index;
+			src.next(1);
+			continue;
 
-			if src.lineIndent(step_index) > the_indent:
-				if src.current.is('BLOCKBREAK', 'BLANK'):
-					back_index = src.index;
-					@.next(src, 1);
-					continue;
+		if ref = @.parse('Statement'):
+			step_index = src.index;
+			node.add(ref);
+			src.next(1);
+			continue;
 
-				if ref = @.parser('Statement', src):
-					if handle.comms && handle.comms.length:
-						node.add( handle.comms );
-						handle.comms.length = 0;
-					node.add(ref);
-					back_index = src.index;
-					@.next(src, 1);
-					continue;
-		break;
-
-	if src[back_index].is('LF'):
-		back_index = back_index - 1;
-
-	src.index = back_index;
-
+		return @.throw(1100, src.current);
 	if node.length == 0 && src.current.text != ':':
-		return;
+		return false;
 	return node;
 
 function checkBraceBlock(src, ends):
-
+	node = @.node('BlockNode');
+	
 	check_brace = false;
-	node = new Syntax('BlockNode');
 	if src.current.text == '{':
-		if @.next(src, 1).current.text == '}'
+		if src.next(1).current.text == '}'
 			return node;
 		check_brace = true;
+
 	step_index = src.index;
-
-	handle = @.handle;
-
 	while src.index < src.length:
+
+
 
 		if src.current.type == 'EOT':
 			if check_brace:
-				return @.error(1110);
+				return @.throw(1110);
 			break;
 
-		if src.current.is('BLOCKBREAK', 'BLANK'):
+		if src.current.is('BREAK', 'BLANK', 'COMMENT'):
 			step_index = src.index;
-			@.next(src, 1);
+			src.next(1);
 			continue;
 
 		if ends && ends.indexOf( src.current.text ) != -1:
@@ -139,17 +126,14 @@ function checkBraceBlock(src, ends):
 		if check_brace && src.current.text == '}':
 			break;
 
-		if ref = @.parser('Statement', src):
-			if handle.comms && handle.comms.length:
-				node.add( handle.comms );
-				handle.comms.length = 0;
-			node.add(ref);
+		if ref = @.parse('Statement'):
 			step_index = src.index;
-			@.next(src, 1);
+			node.add(ref);
+			src.next(1);
 			continue;
-
-		return @.error(1100, src.current);
+		return @.throw(1100, src.current);
 
 	if !check_brace && node.length == 0:
 		return false;
+
 	return node;

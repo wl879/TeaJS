@@ -1,77 +1,139 @@
 
-Card = require "../../../core/card";
+module.exports = function(heap, node, param):
+	switch node.type:
+		case 'ClassDecl', 'ClassExpr':
+			return parseClassDecl.call(@, heap, node);
+		case 'ConstructorDecl':
+			return parseConstructorDecl.call(@, heap, node);
+		case 'SetterDecl':
+			return parseSetterDecl.call(@, heap, node);
+		case 'GetterDecl':
+			return parseGetterDecl.call(@, heap, node);
+		case 'StaticDecl':
+			return parseStaticDecl.call(@, heap, node);
+		case 'SuperExpr':
+			return parseSuperExpr.call(@, heap, node);
+		case 'AtExpr':
+			return parseAtExpr.call(@, heap, node);
 
-module.exports = function(node, param):
-	handle = @.handle;
-	vars   = handle.variables;
+function parseClassDecl(heap, node):
 	scope  = node.scope;
-	
+	if !scope.name:
+		if node.parent.type == 'AssignExpr' && node.parent[0].type == 'VariableExpr':
+			scope.name = node.parent[0].text;
+		else:
+			scope.name = '_class_';
+
 	if node[i = 1].type == 'NameExpr':
 		name = node[i++];
-	else if node.parent.type == 'AssignExpr' && node.parent[0].type == 'VariableExpr':
-		name = node.parent[0][0];
-	else:
-		name = '_Class_';
-	if node[i].type == 'ExtendsExpr':
+
+	if node[i].type == 'ExtendsExpr' || node[i].type == 'ExtendsMix':
 		extend = node[i++];
-		scope.super = 'this.__super__';
-	else:
-		scope.super = 'Object.prototype';
+	block = parseClassBlock.call(@, heap, node[i], extend);
+	
+	clas = @.card(node.type);
+	if node.type == 'ClassDecl':
+		 clas.add( 'var '+scope.name+' = ' );
+	clas.add('(function()', block, ')()' );
+	return clas;
 
-	name = vars.name = scope.name = name.text || name;
-	block = @.read( node[i], false, true )[1];
+function parseClassBlock(heap, node, extend):
+	scope = node.scope;
+	block = @.transform('{#head#foot}', node);
+	head  = block[1];
+	foot  = block[2];
+	body  = @.card('BodyNode');
+	block.insert(2, body);
 
-	start = 0
-	for i = 0 -> block:
-		if block[i].type:
-			if /VarStam|LetStam|AssignExpr|RequireExpr|COMMENT|STRING/.test(block[i].type):
-				continue;
-		start = i;
-		break;
+	for item => node:
+		switch item.type:
+			case 'ConstructorDecl':
+				head.insert(0, @.transform(item) );
+			case 'AssignExpr':
+				if item[0].type == 'VariableExpr':
+					body.add( @.transform( "@name.prototype.@0 = @2", item ) );
+				else:
+					body.add( @.transform(item) );
+			default:
+				body.add( @.transform(item) );
 
 	if extend:
-		block.insert(start, ClassExtends.call(@, scope, extend));
-	block.insert(start,  ClassConstructor.call(@, scope) );
+		head.insert(1, parseExtends.call(@, heap, extend) );
 
-	block.add( new Card( 'Line', 'return '+name) );
+	foot.add( 'return '+scope.name );
+	return block;
 
-	init_block =  @.pattern( '(function(){@})()', block, 'ClassInit');
-
-	if node.parent.type == 'AssignExpr':
-		return init_block;
-	return @.pattern('var @name = @', init_block, 'ClassDecl');
-
-function ClassConstructor(scope):
-	cache       = scope.cache;
-	constructor = cache.constructors && cache.constructors[0];
-	propertys   = cache.propertys;
-	if constructor:
-		argu  = @.read(constructor[1]);
-		if propertys:
-			constructor.scope.cachePush('head', propertys);
-		block = @.read(constructor[2], false, true)[1];
-	else:
-		argu = '()';
-		block = new Card('Block', propertys);
-	return @.pattern('function @name@[0]{@[1]}', [argu, block], 'ConstructorExpr');
-
-function ClassExtends(scope, node):
+function parseExtends(heap, node):
+	param = node[1];
 	list = [];
-	params = node[1];
-	list.push @.pattern('@name.prototype = Object.create(@[0].prototype)', params, 'Line');
-	list.push @.pattern('@name.prototype.__super__ = @[0].prototype', params, 'Line');
-	list.push @.pattern('@name.prototype.constructor = @name', params, 'Line');
-	if params.length > 1:
-		list.push @.pattern('
-		 		@name.__extends__ = function(){
-		 			for(var i=0, args = arguments; i<args.length; i++){
-		 				var _super = args[i].prototype;
-		 				for (var name in _super){
-							if (_super[name].hasOwnProperty(name)){
-								this.prototype[name] = _super[name];
-							}
-		 				}
-		 			}
-		 		}', params, 'Line');
-		list.push @.pattern('@name.__extends__(#COMMA(1))', params);
+	if node.type == 'ExtendsExpr':
+		list.push( @.transform('@[Class.name].prototype = Object.create(@[0].prototype, {constructor:{value:@name}})', param, 'ExtendsExpr') );
+		if param.length > 1:
+			mixin = @.transform('[#join(1)]', param);
+	else:
+		mixin = @.transform('[#join]', param);
+	if mixin:
+		list.push( @.card( 'MixExpr',
+			"(function(mixin){\n\tfor(var i = 0, mix; i < mixin.length; i++){
+		 		for (var k in (mix = mixin[i].prototype))
+					if (mix.hasOwnProperty(k))
+						Object.defineProperty(this, k, Object.getOwnPropertyDescriptor(mix, k))
+			}\n).call(", node.scope.name, ",", mixin, ")"
+		));
 	return list;
+
+function parseConstructorDecl(heap, node):
+	return @.transform('function @[Class.name]@1@2', node);
+
+function parseSetterDecl(heap, node):
+	return @.transform('@[Class.name].prototype.__defineSetter__("@0", function@1@2)', node);
+
+function parseGetterDecl(heap, node):
+	return @.transform('@[Class.name].prototype.__defineGetter__("@0", function@1@2)', node);
+
+function parseStaticDecl(heap, node):
+	if node[0].type == 'MethodDecl':
+		return @.transform(node[0]);
+	else:
+		return @.transform('#join("@[Class.name].@", false)', node[0], 'List');
+
+function parseSuperExpr(heap, node):
+	scope             = node.scope;
+	class_scope       = scope.query('ClassScope');
+	if not class_scope:
+		Tea.error 1115, node;
+	heap.variable('super', 'Object.getPrototypeOf('+class_scope.name+'.prototype)');
+	if node[1] && node[1].type == 'MemberExpr':
+		heap.variable('member', @.transform(node[1]));
+		params = node[2];
+	else:
+		heap.variable('member', '.'+scope.name);
+		params = node[1];
+	if params:
+		return @.transform('@super@member.call(this, #join)', params, 'SuperExpr');
+	else:
+		return @.card( 'SuperExpr', heap.variable('super') );
+
+function parseAtExpr(heap, node, params):
+	name = 'this';
+	scope = node.scope;
+	if scope.valid.type == 'ClassScope':
+		name = scope.valid.name;
+	else:
+		parent = scope.parent;
+		if node[1]:
+			member = node[1].text;
+		else if parent && parent.type == 'AccessExpr' && parent[1].type == 'MemberExpr':
+			member = parent[1][1].text;
+	
+		if member && scope.member(member) == 'static':
+			name = scope.query('ClassScope').name;
+		else if parent && parent.type == 'FunctionScope' && scope.target.type == 'ArrowExpr':
+			while parent.parent && parent.parent.type == 'ArrowExpr':
+				parent = parent.parent;
+			if heap = heap.find('target', parent.target):
+				heap.cache('heads', '_this = this', 'scope-heap');
+			name = '_this';
+	if node[1]:
+		name += '.@1';
+	return @.card('At', name);

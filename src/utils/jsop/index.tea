@@ -1,12 +1,16 @@
 // javascript object parser
 
-module.exports = jsop;
-
 SText = require "../stext";
 
-ArrPro = Array.prototype;
+var _slice_ = [].slice;
+var hasOwnProperty = ({}).hasOwnProperty;
 
-function jsop( str ):
+export default jsop( str ):
+	if arguments.length == 0:
+		return jsop.data();
+	return jsop.parse(str);
+
+export parse( str ):
 	if /^\[.*?\]$/.test(str):
 		list = SText.split(str.slice(1, -1), /;|,/, true);
 		for i -> list:
@@ -33,11 +37,18 @@ function jsop( str ):
 
 export data():
 	json = {
-		constructor : undefined,
-		isPrototypeOf : undefined,
-		toString : undefined,
-		toLocaleString : undefined,
-		valueOf : undefined
+		constructor          : undefined,
+		toString             : undefined,
+		toLocaleString       : undefined,
+		valueOf              : undefined,
+		hasOwnProperty       : undefined,
+		isPrototypeOf        : undefined,
+		propertyIsEnumerable : undefined,
+		__defineGetter__     : undefined,
+		__lookupGetter__     : undefined,
+		__defineSetter__     : undefined,
+		__lookupSetter__     : undefined,
+		__proto__            : undefined
 	};
 	return json;
 
@@ -50,7 +61,13 @@ export toArray(obj, start, end):
 		for key in obj:
 			temp.push( obj[key] );
 		obj = temp;
-	return ArrPro.slice.call(obj, start, end);
+	return _slice_.call(obj, start, end);
+
+export join(obj, separator = ','):
+	splice = [].splice;
+	for i = obj.length - 1; i > 0; i--:
+		splice.call(obj, i, 0, separator);
+	return obj;
 
 export concat(obj):
 	arguments[0] = copy(obj) || {};
@@ -59,7 +76,7 @@ export concat(obj):
 export extend(obj):
 	for i = 1, arg -> arguments:
 		if arg:
-			for k in arg:
+			for k => Object.getOwnPropertyNames(arg):
 				obj[k] = arg[k];
 	return obj;
 

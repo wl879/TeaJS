@@ -1,56 +1,67 @@
 
-class Node:
+class NodeObj:
 	
-	array = Array.prototype;
+	var array = Array.prototype;
 
 	get index():
 		return !@.parent ? -1 : array.indexOf.call( @.parent, @ );
-
-	get root():
-		p = @;
-		circular = [];
-		while p.parent:
-			if circular.indexOf(p.parent) != -1:
-				Err 3, p;
-			p = p.parent;
-			circular.push( p );
-		return p;
 
 	find( type ):
 		list = [];
 		for i, node -> @:
 			if node.type == type:
 				list.push(node);
-			else if node.isSyntax:
-				if _list = node.find(type):
-					list.push.apply(list, _list);
-		if list.length:
-			return list;
+			else if node.isNode:
+				list.push.apply(list, node.find(type));
+		return list;
 
-	query( type ):
-		p = @.parent;
-		while p && !p.is.apply(p, arguments):
-			if p.is('Block'):
-				return;
-			p = p.parent;
-		return p;
+	query():
+		node = @;
+		while node && !node.is.apply(node, arguments):
+			node = node.parent;
+		return node;
 
-	tokens(index):
+	insert(pos):
+		args = Jsop.toArray(arguments, 1);
+		len  = @.length;
+		if pos < 0:
+			pos = len + pos;
+		for var i = pos; i < len; i++:
+			args.push( @[i] );
+		@.length = pos;
+		@.add.apply(@, args);
+		return @;
+
+	delete(a, b = a):
+		array.splice.call(@, a, b - a + 1 );
+		return @;
+
+	toList(index):
 		if @.isToken:
 			return index ? null : (index == 0 ? @ : [@]);
-		var tokens = [];
-		for i -> @:
-			if !@[i]:
-				continue;
-			if @[i].isToken:
-				tokens.push(@[i]);
+		list = [];
+		for item => @:
+			if !item: continue;
+			if item.toList && item.length != null:
+				list.push.apply(list, item.toList());
 			else:
-				tokens.push.apply(tokens, @[i].tokens());
+				list.push(item);
 			if index === 0:
-				return tokens[0];
+				return list[0];
 		if typeof index == 'number':
-			return tokens[ index < 0 ? tokens.length + index : index ];
-		return tokens;
+			return list[ index < 0 ? list.length + index : index ];
+		return list;
+
+	is():
+		types = @.types || [@.type];
+		for item => arguments:
+			if item == 'HEAD' &&  @.indent >= 0:
+				return item;
+			else if types.indexOf(item) != -1:
+				return item;
+			else if Node.isType(types[0], item):
+				return item;
+		return false;
 
 	each(fn, __that, __indexs = []):
 		that = __that || @;
@@ -64,20 +75,51 @@ class Node:
 						continue;
 					if ref === false:
 						return __that ? false : @;
-					if node.isSyntax && node.each(fn, that, __indexs.concat(i)) === false:
+					if node.isNode && node.each(fn, that, __indexs.concat(i)) === false:
 						return __that ? false : @;
 		return @;
 
-	is():
-		types = @.types || [@.type];
+export default class Node extends NodeObj:
+
+	constructor(type):
+		@.type        = type;
+		// @.subType     = null;
+		@.length      = 0;
+		if arguments.length > 1:
+			@.add.apply( @, Jsop.toArray(arguments, 1) );
+
+	get text():
+		texts = [];
+		list  = @.toList();
+		for token => list:
+			texts.push(token.text);
+		return texts.join('');
+
+	add ():
 		for item => arguments:
-			if item == 'HEAD' &&  @.indent >= 0:
-				return item;
-			else if types.indexOf(item) != -1:
-				return item;
-			else if Node.isType(types[0], item):
-				return item;
-		return false;
+			if !item:
+				continue;
+			if item.isNode || item.isToken:
+				item.parent = @;
+				@[ @.length++ ] = item;
+			else if Array.isArray(item):
+				if item.length:
+					@.add.apply(@, item);
+			else:
+				Tea.error 'Node Object add medtch params error!';
+		return @;
+
+	clone ():
+		var node = new Node(@.type);
+		for i -> @:
+			node[node.length++] = @[i];
+		node.parent = @.parent;
+		node.scope = @.scope;
+		return node;
+
+	@::isNode = true;
+
+	@.NodeObj = NodeObj;
 
 	static map = {};
 
@@ -93,15 +135,11 @@ class Node:
 	static isType(name, type):
 		node_map = @.map;
 		if !type:
-			if node_map['Expression'].indexOf(name) != -1:
-				return 'Expression';
-			if node_map['Declaration'].indexOf(name) != -1:
-				return 'Declaration';
+			if node_map['Express'].indexOf(name) != -1:
+				return 'Express';
+			if node_map['Declare'].indexOf(name) != -1:
+				return 'Declare';
 			if node_map['Statement'].indexOf(name) != -1:
 				return 'Statement';
 			return false;
 		return name == type || node_map[type] && node_map[type].indexOf(name) != -1;
-
-	@::isNode = true;
-
-module.exports = Node;

@@ -1,68 +1,71 @@
 
 export default class Asset:
-		
-	Method = require "./method.js";
-	Token  = require "../token.js";
-
-	cache       = Jsop.data();
-	conf_pack   = {
-		"@@=" : "rename pattern"
-		"@@"  : "pattern name"
-		"@="  : "rename response"
-		"@?"  : "check response"
-		"@~"  : "packing matched"
-		"@:"  : "response name"
-		"@!"  : "check empty" };
-	conf_set    = {
-		"\\n" : "lf"
-		"∆"  : "error"
-		"∅"  : "ig"
-		"→"  : "test"
-		"+?" : "smallest mode"
-		"*?" : "smallest mode"
-		"+"  : "mode"
-		"*"  : "mode"
-		"?"  : "mode"
-		"!"  : "mode" };
-	conf_re     = new RegExp(
-		'(?:('+SText.re(Object.keys(conf_set))+'|∆(\\d*))|'+
-		   '('+SText.re(Object.keys(conf_pack))+')([A-Za-z]{3,}))$');
-
+	var Token     = require "../token.js";
+	var Methods   = require  "./method";
+	var Pattern   = null;
+	var cache     = Jsop();
+	var conf_pack = {"@@=" : "rename pattern", "@@" : "pattern name", "@=" : "rename pack", "@?" : "check pack", "@~" : "package matched", "@:" : "package node", "@!" : "check empty" };
+	var conf_set  = { "\\n" : "lf", "∆" : "error", "∅" : "ig", "→" : "test", "+?" : "smallest mode", "*?" : "smallest mode", "+" : "mode", "*" : "mode", "?" : "mode", "!" : "mode" };
+	var conf_re   = new RegExp('(\\.{3}|\\\\*)?(?:('+SText.re(Object.keys(conf_set))+')|∆(\\d*)|'+
+							   '('+SText.re(Object.keys(conf_pack))+')([A-Za-z]{3,}))$');
 	constructor(str):
-		@.config  = { mode : '' };
-		@.type    = null;
-		@.content = null;
-		@.param   = null;
-		@.string  = str;
+		Pattern |= require "./pattern";
+		@.config = { mode : '' };
+		@.type   = null;
+		@.value  = null;
+		@.params = null;
+		@.string = str;
 		if str:
 			str = checkConfig(@, str);
 			if str == '*':
 				@.type = '*';
-				@.content = str;
+				@.value = str;
 			else:
 				checkPairAsset  (@, str) ||
+				checkCharAsset  (@, str) ||
 				checkSetAsset   (@, str) ||
 				checkMethodAsset(@, str) ||
-				checkSubAsset   (@, str) ||
+				checkGroupAsset (@, str) ||
 				checkNodeAsset  (@, str) ||
 				checkCodeAsset  (@, str);
 
-	parse(src, grm):
+	exec(handle, src):
+		start_index = src.index;
+		if start_index >= src.length:
+			return false;
+
 		switch @.type:
 			case '*':
-				return src.current;
-			case 'Codes Test', 'Code Test':
-				return parseCodeAsset.call(@, src, grm);
+				ref = src.current;
+			case 'Code Test':
+				return @.value == src.current.text ? src.current : false;
+			case 'Char Test':
+				ref = parseCharAsset(handle, @, src);
+			case 'Codes Test':
+				ref = parseCodeAsset(handle, @, src);
 			case 'Pair Test':
-				return parsePairAsset.call(@, src, grm);
-			case 'Set Test':
-				return parseSetAsset.call(@, src, grm);
+				ref = parsePairAsset(handle, @, src);
 			case 'Method Test':
-				return parseMethodAsset.call(@, src, grm);
+				ref = parseMethodAsset(handle, @, src);
 			case 'Node Test':
-				return parseNodeAsset.call(@, src, grm);
-			case 'Sub':
-				return;
+				ref = parseNodeAsset(handle, @, src);
+			case 'Set Test':
+				ref = parseSetAsset(handle, @, src);
+			case 'Group':
+				ref = @.value.exec(handle, src);
+
+		// DEBUG LOG
+		if @.type != 'Group':
+			handle.heap.log( [@, ref, start_index, src.index] );
+		// DEBUG OVER
+
+		if ref:
+			if ref.isNode || ref.isToken || ref.length || ref.matched:
+				return ref;
+			return true;
+
+		src.index = start_index;
+		return false;
 
 	@::isAsset = true;
 
@@ -71,151 +74,207 @@ export default class Asset:
 			return cache[str] = new Asset(str);
 		return cache[str];
 
-	static parse(asset, src, grm):
-		if !asset.isAsset:
-			asset = Asset.compile(asset);
-		return asset.parse(src, grm);
-
 	// compile asset 
 
 	function checkConfig(self, str):
-
 		config = self.config;
 		while m = str.match( conf_re ):
-			if m.index == 0:
-				break;
+			[val, spilth, symbol, err, pack, name] = m;
 
-			if (m.index === 1 && str[0] === '\\'):
-				if m[0].length > 1 && m[1] && !m[2]:
-					m.index += 1;
-					m[1] = m[1].substr(1);
+			if spilth:
+				if spilth.length % 2 == 0:
+					m.index += spilth.length;
+				else if symbol.length > 1:
+					m.index += spilth.length+1;
+					symbol = symbol.substr(1);
 				else:
 					break;
 
-			if m[1]:
-				if m[2]:
-					config.error = parseInt( m[2] );
+			if m.index == 0:
+				break;
+
+			if symbol:
+				type = conf_set[symbol];
+				if 'smallest mode' == type:
+					config.smallest = true;
+					config.mode = symbol[0];
 				else:
-					name = conf_set[m[1]];
-					if name == 'smallest mode':
-						config.smallest = true;
-						config.mode = m[1][0];
-					else:
-						config[name] = m[1];
-			else if m[3]:
-				config.pack = conf_pack[ m[3] ];
-				config.name = m[4];
+					config[type] = symbol;
+			else if err:
+					config.error = parseInt( err );
+			else if pack:
+				config.packMode = conf_pack[ pack ];
+				config.packName = name;
+
 			str = str.substr(0, m.index );
 		return str;
 
 	function checkPairAsset(self, str):
-		if m = str.match(/^([^\. \(]+?)\.\.\.([^\. ]+)$/):
+		if m = str.match(/^([^\. ]*)\.\.\.([^\. ]*)$/):
 			self.type    = 'Pair Test';
-			self.content = [
+			self.value = [
 				SText.cleanESC(m[1]), 
 				SText.cleanESC(m[2])
 			];
 			return true;
 
-	function checkSetAsset(self, str):
-		if m = str.match(/^\[(.*?)\]$/):
-			str = m[1];
-			if /[^\\],/.test(str):
-				list = SText.split( str, ',', 'params', true);
-			else:
-				list = SText.split( str, ' ', true, true);
-
-			for i <- list:
-				key  = i;
-				patt = list[i];
-				if patt.indexOf('→') > 0:
-					temp = patt.split('→');
-					key  = temp[0].trim();
-					patt = temp[1].trim();
-					list.splice(i, 1);
-					list.__HasKey__ = true;
-
-				list[key] = { patt:patt };
-				if /^[A-Z][A-Za-z]+$/.test(patt):
-					list[key].__TestNode__ = true;
-				else if /[a-z]+/i.test(patt) && /\W+/.test(patt):
-					list[key].__TestPatt__ = true;
-
-			self.type = 'Set Test';
-			self.content = list;
-			return true;
-
 	function checkMethodAsset(self, str):
 		if m = str.match(/^#(\w+)(?:\((.*?)\))?$/):
 			self.type    = 'Method Test';
-			self.content = m[1];
-			self.param   = m[2] ? SText.split( m[2], ',', 'params', true) : [];
+			self.value = m[1];
+			self.params   = m[2] ? SText.split( m[2], ',', 'params', true) : [];
 			return true;
 
-	function checkSubAsset(self, str):
+	function checkGroupAsset(self, str):
 		if str[0] == '(' && str[-1] == ')':
 			str = str.slice(1, -1);
 			if m = str.match( /^(\?\!|\?\=|\?\:)/ ):
 				switch m[1]:
-					case '?:': self.config.ig = true;
+					case '?:': self.config.ig = '?:';
 					case '?!': self.config.mode = '!';
-					case '?=': self.config.test = true;
+					case '?=': self.config.test = '?=';
 				str = str.substr( m[0].length );
-			self.type    = 'Sub';
-			self.content = str;
+
+			group = Pattern.compile(str);
+			if group.length == 1 && m:
+				_asset = group[0];
+				Jsop.extend(group[0].config, self.config);
+				Jsop.extend(self, group[0]);
+				return true;
+			self.type  = 'Group';
+			self.value = group;
 			return true;
 
 	function checkNodeAsset(self, str):
 		if /^[A-Z]\w+$/.test(str):
 			self.type = 'Node Test';
-			self.content = str;
+			self.value = str;
 			return true;
 
 	function checkCodeAsset(self, str):
 		str        = SText.cleanESC(str);
 		if /^\w+$|\W/.test(str):
 			self.type = 'Code Test';
-			self.content = str;
+			self.value = str;
 			return true;
 
-		token_list = Token.tokenize( str, 0, 'code list');
+		token_list = tokenize(str);
 		if token_list.length == 1:
 			self.type = 'Code Test';
-			self.content = token_listp[0];
+			self.value = token_listp[0];
 		else:
 			self.type = 'Codes Test';
-			self.content = token_list;
+			self.value = token_list;
 		return true;
 
-	// parse asset
+	function checkCharAsset(self, str):
+		if m = str.match(/^\[\[(.*?)\]([\*\?\+]?)\]$/):
+			self.type = 'Char Test';
+			self.value = new RegExp( '^('+SText.split(m[1], ' ', true, true).join('|')+')'+(m[2]||'')+'$' );
+			return true
 
-	function parseSetAsset(src, grm):
-		token   = src.current;
-		text    = token.text;
-		types   = token.types;
-		content = @.content;
-		if content.__HasKey__:
-			if types[0] != 'NUMBER' && text in content:
-				content = [content[text]];
+	function checkSetAsset(self, str):
+		if m = str.match(/^\[(.*?)\]$/):
+			list = /[^\\],/.test(str) ? SText.split( m[1], ',', 'params', true) : SText.split( m[1], ' ', true, true);
+			value = { __HasKey__   : false, __Defaults__ : []}
+			for patt => list:
+				temp = SText.split(patt, '→', true);
+				if temp.length == 2:
+					value.__HasKey__ = true;
+					value[temp[0]] = checkPatt(temp[1]);
+				else:
+					value.__Defaults__.push( checkPatt(patt) );
+			self.type = 'Set Test';
+			self.value = value;
+			return true;
+
+	function checkPatt(patt):
+		data = {
+			value: patt
+			__TestNode__   : false
+			__TestPatt__   : false
+			__TestMethod__ : false
+		};
+		if /^`.+`$/.test(patt):
+			data.value = Pattern.compile( patt.slice(1, -1) );
+			data.__TestPatt__ = true;
+		else if /^#(\w+)(?:\((.*?)\))?$/.test(patt):
+			data.value  = RegExp.$1;
+			data.params = RegExp.$2 ? SText.split( RegExp.$2, ',', 'params', true) : [];
+			data.__TestMethod__ = true;
+		else if /^[A-Z][A-Za-z]+$/.test(patt):
+			data.__TestNode__ = true;
+		else if /[a-z]+/i.test(patt) && /\W+/.test(patt):
+			data.__TestPatt__ = true;
+		return data;
+
+	function tokenize(text, index = 0):
+		list = [], len = text.length;
+		while index < len:
+			if tokn = Token.create(text, index):
+				list.push( tokn.text );
+				index += tokn.text.length;
 			else:
-				for type => types:
-					if type in content:
-						content = [content[type]];
-						break;
-		
-		for i, item -> content:
-			patt = item.patt;
-			if token.text == patt || types.indexOf(patt) != -1:
-				return token;
-			if item.__TestNode__:
-				if ref = grm.parser(patt, src, null , true):
-					return ref;
-			else if item.__TestPatt__:
-				if ref = grm.pattern(patt, src):
-					return ref;
+				break;
+		return list;
 
-	function parsePairAsset(src, grm):
-		[s1, s2] = @.content;
+	/**
+	 * 
+	 */
+
+	function parseSetAsset(handle, asset, src):
+		token    = src.current;
+		text     = token.text;
+		types    = token.types;
+		value    = asset.value;
+		params   = handle.getHeap('params');
+		defaults = null;
+
+		if value.__HasKey__:
+			if text in value:
+				defaults = [value[text]];
+			else: 
+				for type => types:
+					if type in value:
+						defaults = [value[type]];
+						break;
+
+				if !defaults && params && params.length:
+					for name => params:
+						if name in value:
+							if defaults:
+								defaults.push(value[name]);
+							else:
+								defaults = [value[name]];
+		if !defaults:
+			defaults = value.__Defaults__;
+	
+		for data => defaults:
+			if data.__TestMethod__:
+				if ref = parseMethodAsset(handle, data, src):
+					return ref;
+				continue;
+
+			if data.__TestPatt__:
+				if ref = data.value.exec(handle, src):
+					return ref;
+				continue;
+			
+			if data.__TestNode__:
+				if ref = parseNodeAsset(handle, data, src):
+					return ref;
+				continue;
+			
+			if types.indexOf(data.value) != -1:
+				return token;
+
+			if text == data.value:
+				return token;
+			
+	function parsePairAsset(handle, asset, src):
+		[s1, s2] = asset.value;
+		s1 = s1 == '*' ? src.current.text : s1;
+		s2 = s2 == '*' ? src.current.text : s2;
 		if ab = src.indexPair(s1, s2, src.index, true):
 			if ab[0] == src.index:
 				list = Jsop.toArray(src, ab[0], ab[1]+1);
@@ -223,11 +282,14 @@ export default class Asset:
 				return list;
 		return false;
 
-	function parseCodeAsset(src, grm):
-		if @.type == 'Code Test':
-			return @.content == src.current.text ? src.current : false;
+	function parseCharAsset(handle, asset, src):
+		token = src.current;
+		if asset.value.test( token.text ):
+			return token;
+		return false;
 
-		code_list = @.content;
+	function parseCodeAsset(handle, asset, src):
+		code_list = asset.value;
 		index     = src.index - 1;
 		list      = [];
 		for code => code_list:
@@ -240,23 +302,25 @@ export default class Asset:
 			return list;
 		return false;
 
-	function parseNodeAsset(src, grm):
-		name  = @.content;
+	function parseNodeAsset(handle, asset, src):
+		name  = asset.value;
 		token = src.current;
+		
 		if token.types.indexOf( name ) != -1:
 			return token;
-		if grm.prepor && ref = grm.prepor.check(name, null, src, grm):
-			return ref;
-		if grm.parser(name):
-			return grm.parser(name, src, @.param);
+
+		if syntax = handle.__grammar__[name]:
+			if ref = handle.parse(syntax, asset.params):
+				return ref;
+
 		if name == token.text:
 			return token;
+
 		return false;
 
-	function parseMethodAsset(src, grm):
-		name =  @.content;
-		if name in Method:
-			return Method[name].call(grm, src, @.param, @.config);
-		if grm.parser(name):
-			return grm.parser(name, src, @.param);
-		Err 4002, name, grm.handle.name;
+	function parseMethodAsset(handle, asset, src):
+		name =  asset.value;
+		if name in Methods:
+			return Methods[name].call(handle, handle.heap, src, asset.params, asset.config);
+		if syntax = handle.__grammar__[name]:
+			return handle.parse(syntax, asset.params);

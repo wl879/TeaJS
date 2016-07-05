@@ -1,0 +1,59 @@
+export default class Syntax:
+	
+	var Pattern    = require  "./pattern";
+	var cache      = {};
+	var exec_cache = {length: 0};
+
+
+	constructor(name, patt, mode):
+		@.id   = Tea.ID();
+		@.name = name;
+		if !mode:
+			if /\w+(Expr|Decl|Patt|Stam|Dest)$/.test(name):
+				mode = 'package node';
+			else if /^[A-Z_]+$/.test(name):
+				mode = 'to token';
+		@.packMode = mode;
+
+		if typeof patt == 'function':
+			@.callback = patt;
+		else:
+			@.pattern = Pattern.compile(patt);
+		
+			if @.pattern.debug:
+				print @;
+
+	exec(handle, src, params):
+		id = src.id+':'+src.index+':'+@.id+':'+params;
+		if result = checExecCache(id, src):
+			return result;
+		handle.initHeap( @.name, { params : params, startIndex: src.index, packName: @.name, packMode: @.packMode, matchcache:[] } );
+		if @.pattern:
+			handle.setHeap( {syntax: @.pattern, debug: @.pattern.debug ? [] : null} );
+			result = @.pattern.exec(handle, src, true);
+		else:
+			result = @.callback.call(handle, handle.heap, src, params);
+		result = handle.didHeap(result);
+
+		sevaExecCache(id, result, src);
+		return result;
+
+	static compile(name, patt, mode):
+		id  = name+"::::"+patt+'::::'+mode;
+		if cache[id]:
+			return cache[id];
+		return cache[id] = new Syntax(name, patt, mode);
+
+	@::isSyntax = true;
+
+	function sevaExecCache(id, result, src):
+		exec_cache[id]    = [result, src.index];
+		exec_cache.length ++;
+		exec_cache.sourceID = src.id;
+
+	function checExecCache(id, src):
+		if exec_cache[id]:
+			src.index = exec_cache[id][1];
+			return exec_cache[id][0];
+		if exec_cache.length > 1000 || exec_cache.sourceID != src.id:
+			exec_cache = { length: 0 };

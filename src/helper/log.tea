@@ -3,28 +3,3 @@ module.exports = function(msg, loc):
 	if loc:
 		msg += ' <60> '+loc.fileName+':'+loc.lineNumber;
 	print( msg.replace(/^/mg, '  ') );
-
-// cache = {}
-
-// logPath = Tea.path ? Tea.path+'/.tea.log' : null;
-
-// module.exports = function():
-
-// export write():
-// 	if logPath:
-// 		console.log( logPath );
-
-// export clear():
-// 	if logPath:
-
-// export show( type ):
-// 	if logPath:
-
-// export time( id , echo):
-// 	if cache[id]:
-// 		use = Date.now() - cache[id];
-// 		text = "[used times] by ${id} : ${use}ms";
-// 		console.log(text);
-// 		cache[id] = null;
-// 	else:
-// 		cache[id] = Date.now();

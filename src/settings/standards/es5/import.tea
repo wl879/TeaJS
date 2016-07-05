@@ -1,0 +1,44 @@
+
+module.exports = function(heap, node, param):
+	if node[0].type == 'From':
+		return @.transform( "RequireExpr", node[0]);
+	
+	if node[i = 0].type == 'DefaultSpecifiers':
+		def = node[i++][0].text;
+	if node[i].type == 'Specifiers':
+		spe = node[i++][0];
+	from        = node[i];
+	requir      = @.transform( "RequireExpr", from);
+	scope       = node.scope.query('RootScope');
+	module_name = heap.variable('module', def || scope.createVariable( moduleName(from, 'module'), 'var'));
+
+	list = [];
+	list.push( @.transform("@module = @0", [requir], 'AssignExpr'), ', ' );
+
+	switch spe && spe.type:
+		case 'JsonPatt':
+			for item => spe:
+				scope.alias(item);
+				switch item.type:
+					case 'RestPatt':
+						Tea.error 1131, item;
+					case 'PropertyInit':
+						scope.define('var', item[2].text, module_name+'.'+item[0].text);
+					default:
+						scope.define('var', item.text, module_name+'.'+item.text);
+			break;
+		case 'All':
+			patt = "@0 = (function(from){var m = {}; for(var k in from) if(form.hasOwnProperty(k))m[k] = from[k]; return m})(@1)";
+			if def:
+				list.push( @.transform( patt, [spe[2], def], 'AssignExpr'), ', ' );
+			else:
+				list[0] = @.transform( patt, [spe[2], requir], 'AssignExpr');			
+	list.pop();
+	return @.card('VarDecl', 'var ', list);
+
+
+function moduleName(node, prefix = ''):
+	name = node.text
+	if name:
+		name = (prefix + name).replace(/[^\w\$]+/ig, '_').replace(/_[a-z]/g, ($0) => $0[1].toUpperCase());
+	return name || '';

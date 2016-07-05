@@ -1,0 +1,105 @@
+
+export default class TeaHeap:
+
+	constructor(id, parent, tea):
+		@.id     = id;
+		@.parent = parent;
+		@.tea    = tea;
+
+	set(name, value):
+		if typeof name == 'object':
+			return Jsop.extend(@, name);
+		return @[name] = value;
+
+	get(name, destroy):
+		value = @[name];
+		if destroy:
+			@[name] = null;
+		return value;
+
+	variable(name, value, oper):
+		if !@.variables:
+			@.variables = {};
+		if arguments.length > 1:
+			if oper == '+=':
+				return @.variables[name] += value;
+			if oper == '-=':
+				return @.variables[name] -= value;
+			return @.variables[name] = value;
+		return @.variables[name];
+
+	cache(name, value, find, find_value):
+		heap = find ? @.find(find, find_value) : @;
+		if heap:
+			if value:
+				heap[name] |= [];
+				if heap[name].indexOf(value) == -1:
+					heap[name].push(value);
+			return name ? heap[name] : heap;
+
+	find( key, value ):
+		heap = @;
+		while heap:
+			if value:
+				if heap[key] == value:
+					return heap;
+			else:
+				if heap.id  == key:
+					return heap;
+				if heap[key]:
+					return heap;
+			heap = heap.parent;
+
+	log( data ):
+		if @.debug:
+			@.debug.push( data );
+			return data;
+
+	ondid(fn, params):
+		@._ondid_       = fn;
+		@._ondidparams_ = params;
+
+	did( result, callback):
+		if @._ondid_:
+			result             =  @._ondid_.call(@.tea, @, result, @._ondidparams_);
+			@._ondid_       = null;
+			@._ondidparams_ = null;
+
+		if callback:
+			result = callback(@.tea, result);
+
+		if @.debug:
+			printDebugLog(@);
+		return result;
+
+	stack():
+		heap = @;
+		list = [];
+		while heap:
+			list.push( heap.id );
+			if /block|root/i.test( heap.id ):
+				break;
+			heap = heap.parent;
+		return '[Grammar match stack] '+list.reverse().join('->');		
+
+	function printDebugLog( heap ):
+		handle = heap.tea;
+		source = handle.source;
+		logs   = heap.debug;
+
+		texts = [];
+		for i, item <= logs:
+			[asset, ref, start, end] = item;
+			ref  = ref ? '<g:✓:>' : '<r:#:>';
+			code = source.join(start, end).replace(/\n/g, '\\n');
+			patt = asset.string;
+			if asset.type == 'Pattern' || asset.type == 'Or':
+				texts = [ "${ref} [${i?'Group':'Pattern'}] ${patt} \"${code}\"\n" + texts.reverse().join('\n').replace(/^/mg, '    ').replace(/^ (.*? \[Or)/mg, '$1') ];
+			else if !asset.type:
+				texts = [ "${ref} [Or] ${patt} \"${code}\"\n"+texts.reverse().join('\n') ];
+			else:
+				texts.push( "${ref} [${asset.type}] ${patt} \"${code}\"" );
+
+		print '<-->\n'+texts.join('\n')+'\n';
+
+	

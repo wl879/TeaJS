@@ -1,53 +1,30 @@
 
-export SUGAR(src, params):
-	if !@.prepor:
-		return;
-	if not map = @.prepor[params[0]]:
-		if sugar = @.prepor.check(params[0]):
-			if node = sugar.parse(@, src):
-				return node;
-		return;
-	for name, sugar in map:
-		if node = sugar.parse(@, src):
-			return node;
+export caller_is(heap, src, params, config):
+	if !config.inited:
+		config.test   = true;
+		config.inited = true;
+		params.level = /-\d+/.test(params[0]) ? parseInt(params.shift()) : 0;
 
-export CHECK(src, params, config):
-	if !config.test:
-		params[2] = params[2].split(' ');
-		config.test = true;
-	left  = params[0]
-	mark  = params[1];
-	right = params[2];
-	switch left:
-		case 'last':
-			last = @.handle.cache;
-			while isArray(last):
-				last = last[-1];
-		default:
-			last = @.handle.cache[left];
-	if last && last.is:
-		switch mark:
-			case "==":
-				return !!last.is.apply(last, right);
-			case "===":
-				return right.indexOf(last.type) != -1 || right.indexOf(last.text) != -1;
-			case "!=":
-				return !last.is.apply(last, right);
-			case "!==":
-				return right.indexOf(last.type) == -1;
-	return false;
+	level  = params.level;
+	caller = heap.get('parent');
+	while caller && level ++:
+		while /block|comma/i.test(caller.id):
+			caller = caller.parent;
+		caller = caller.parent;
+	return params.indexOf( caller.id ) !=- 1;
 
-export ARGU(src, argus, config):
+export has_param(heap, src, params, config):
 	config.test = true;
-	params = @.handle.params;
+	argus       = heap.get('params');
 	if params && argus:
-		for item => argus:
-			if params.indexOf(item) != -1:
+		for item => params:
+			if argus.indexOf(item) != -1:
 				return true;
 	return false;
 
-export IS(src, params, config):
-	if !params.mode:
+export is_token(heap, src, params, config):
+	if !config.inited:
+		config.inited = true;
 		if m = params[0].match(/^([\+\-]{1,2})(\d+)/):
 			params.mode = [m[1], parseInt(m[2]), 0];
 			params.shift();
@@ -55,6 +32,7 @@ export IS(src, params, config):
 			params.mode = [0, 0, 0];
 		if params.mode[1]:
 			config.test = true;
+
 	index = moveIndex(src, params.mode);
 	if not token = src[index]:
 		return false;
@@ -64,8 +42,9 @@ export IS(src, params, config):
 		return token;
 	return false;
 
-export NOT(src, params, config):
-	if !params.mode:
+export not_token(heap, src, params, config):
+	if !config.inited:
+		config.inited = true;
 		if m = params[0].match(/^([\+\-]{1,2})(\d+)/):
 			params.mode = [m[1], parseInt(m[2]), 0];
 			params.shift();
@@ -73,6 +52,7 @@ export NOT(src, params, config):
 			params.mode = [0, 0, 0];
 		if params.mode[1]:
 			config.test = true;
+
 	index = moveIndex(src, params.mode);
 	if not token = src[index]:
 		return false;
@@ -82,45 +62,62 @@ export NOT(src, params, config):
 		return false;
 	return token;
 
-export INDENT(src, params):
-	cache = @.handle.cache;
-	while last = cache[-1]:
-		if last.type == 'BlockNode':
-			if last.subType == 'IndentBlock'
-				check_indent = last.theIndent;
-			break;
-		cache = last;
-	if check_indent != null && check_indent != src.lineIndent():
-		return false;
-	return true;
-
-export CONCAT(src, params):
-	a = params[0] || src.current.text;
-	b = params[1];
-	if a && a.isToken:
-		a = a.text;
-	if b && b.isToken:
-		b = b.text;
-	if a as 'string':
-		if /\.{3}|\|| /.test(a) && a.length > 2:
-			patt = a;
-			a = src.index;
-			if temp = @.pattern(patt, src, null, 'Temp'):
-				b = src.index;
-			else:
-				return false;
-		else if (ab = src.indexPair(a, b||a, src.index, true)) && ab[0] == src.index:
-			a = ab[0];
-			b = ab[1];
+export before(heap, src, params, config):
+	if !config.inited:
+		config.inited = true;
+		config.test   = true;
+		if /(parent|before|last|-?\d+)/.test(params[0]):
+			params[1] = params.slice(1);
+			params[0] = params[0].split('.').map(($) => parseInt($)||$);
 		else:
-			return false;
-	if a < b:
-		types = params[2] && params[2].split(' ') || src.current.types.slice();
-		src.index = b;
-		token = src[a].clone( src.join(a, b), types);
-		token.location.code = token.text;
-		token.location.end = src[b].location.end;
-		return token;
+			params[1] = params.slice();
+			params[0] = ['last'];
+
+	asss  = params[0];
+	for i, item -> asss:
+		switch item:
+			case 'parent':
+				heap = heap.parent;
+				if heap && i == asss.length -1:
+					left = heap.matchcache[-1];
+			case 'before':
+				left = heap.parent && heap.parent.matchcache[-1];
+			case 'last':
+				left = heap.matchcache[-1];
+			default:
+				left = heap.matchcache[ item < 0 ? heap.matchcache.length + item : item ];
+
+	if left && left.is:
+		return !!left.is.apply(left, params[1]);
+	return false;
+
+export sugar_box(heap, src, params, config):
+	// TODO: check point
+	if not sugarBox = @.sugarBox || not name = params[0]:
+		return false;
+
+	if map = sugarBox[name]:
+		for name, sugar in map:
+			if node = @.parse( sugar, params ):
+				return node;
+		return false;
+
+	if sugar = sugarBox.get( params[0] ):
+		if node = @.parse( sugar, params ):
+			return node;
+	return false;
+
+export check_indent(heap, src, params, config):
+	start_indent = heap.get('startIndent');
+	if start_indent == null:
+		start_indent = heap.set('startIndent', src.lineIndent( heap.get('startIndex') ));
+	switch params[0]:
+		case 'in':
+			return start_indent < src.lineIndent();
+		case 'out':
+			return start_indent > src.lineIndent();
+		default:
+			return start_indent == src.lineIndent();
 	return false;
 
 function moveIndex(src, data):

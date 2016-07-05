@@ -1,0 +1,262 @@
+
+export default class Pattern:
+
+	var Asset  = require "./asset";
+	var Method = require "./method";
+	var cache  = Jsop();
+	
+	constructor( text ):
+		@.length = 0;
+		@.string = text;
+		text = text.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+		if m = text.match(/^\(@:([A-Z]\w+)\)\s*/):
+			@.name = m[1];
+			text   = text.substr(m[0].length);
+
+		while m = Asset.test( text ):
+			if m.index:
+				@.add( text.slice(0, m.index) );
+			@.add(  Asset.compile(m) );
+			text = text.substr( m.index + m[0].length );
+		if text:
+			@.add( text );
+
+		if @.length == 1 && @[0].type == 'Logic':
+			@.type = 'Logic';
+
+	add():
+		for asset => arguments:
+			if asset as 'string':
+				asset = SText.cleanESC( asset );
+			@[@.length ++] = asset;
+		return @;
+
+	@::isTransformPattern = true;
+
+	static test(text):
+		return !!Asset.test( text );
+
+	static compile(text, type):
+		key = text+(type||'');
+		if cache[key]:
+			return cache[key];
+		return cache[key] = new Pattern(text, type);
+
+	/**
+	 * parser
+	 */
+	
+	exec(handle, node, name):
+		if @.type == 'Logic':
+			return parseAsset(handle, @[0], node);
+		return parsePattern(handle, @, node, name);
+
+	static exec(handle, patt, node, name):
+		if !patt.isTransformPattern:
+			if !Pattern.test(patt):
+				return patt;
+			patt = Pattern.compile(patt);
+		return patt.exec(handle, node, name);
+
+	function parsePattern(handle, patt, node, name):
+		list = [];
+		for asset => patt:
+			if !asset.isAsset:
+				list.push( asset );
+				continue;
+
+			ref = parseAsset(handle, asset, node);
+
+			if ref === true || ref === '':
+				continue;
+			if ref === 0:
+				list.push( '0' );
+				continue;
+
+			if ref:
+				if asset.type == 'Logic':
+					continue;
+
+				if ref.isNode:
+					if handle.heap.id == node.type && ref == node:
+						for sub => ref:
+							list.push( handle.transform( sub ) );
+					else:
+						list.push( handle.transform( ref ) );
+					continue;
+				else if ref.isToken:
+					ref = handle.transform( ref );
+				list.push( ref );
+				continue;
+
+			if typeof list[-1] == 'string':
+				ref = list[-1].replace(/\s*(\,|\.|\:\:)*\s*$/, '');
+				if !ref:
+					list.pop();
+				else:
+					list[-1] = ref;
+
+		if list.length:
+			name = name || patt.name || node.type || 'Card';
+			if list.length == 1:
+				if list[0].isCard && list[0].type == name:
+					return list[0];
+			return handle.card( name, list );
+
+	/**
+	 * transform asset parser
+	 */
+
+	function parseAsset(handle, asset, node):
+		switch asset.type:
+			case 'Cache':
+				return parseCacheAsset(handle, asset, node);
+			case 'Acc':
+				return parseAccAsset(handle, asset, node);
+			case 'Call':
+				return parseCallAsset(handle, asset, node);
+			case 'Logic':
+				return parseLogicAsset(handle, asset, node);
+
+	function parseCacheAsset(handle, asset, node):
+		if asset.quick:
+			return node[asset.name];
+		variables = handle.heap.variables;
+		if variables && asset.name in variables:
+			return variables[asset.name];
+		return checkKeyAsset(handle, asset.name, node);
+
+	function parseAccAsset(handle, asset, node):
+		if keys = asset.params:
+			for i, key -> keys:
+				node || return;
+				if key < 0:
+					len = node.length;
+					if /block/i.test( node.type ):
+						while key++ < 0:
+							len -= 1;
+							while node[len] && node[len].is('COMMENT'):
+								len -= 1;
+						node = node[len];
+					else:
+						node = node[ len + key ];
+					continue;
+
+				if key == '@':
+					node = node.parent;
+					continue;
+
+				if ref = checkKeyAsset(handle, key, node, i):
+					node = ref;
+					continue;
+
+				node = node[key];
+		return node;
+
+	function parseCallAsset(handle, asset, node):
+		params = asset.params;
+		name   = asset.name;
+		if params && params.length:
+			if params[0].isAsset && (params[0].type == 'Acc' || params[0].type == 'Cache'):
+				node   = parseAsset(handle, params[0], node);
+				params = params.slice(1);
+			else:
+				params = params.slice();
+			for i -> params:
+				if /^@[a-z_]+$/i.test(params[i]):
+					params[i] = handle.heap.variable( params[i].substr(1) ) || params[i];
+		ref = checkMethod(handle, name, node, params);
+		if ref == null:
+			ref = handle.transform(name, node, params);
+		return ref;
+
+	function parseLogicAsset(handle, patt, node):
+		exprs = patt.exprs;
+		for item => exprs:
+			ref = parseLogicExpr(handle, item, node);
+			if ref:
+				if !item.and:
+					return ref;
+			else if item.and:
+				return false;
+		return false;
+
+	function checkKeyAsset(handle, name, node, is_ass):
+		switch name:
+			case 'ref':
+				return checkMethod(handle, 'var', node, ['let undefined', name]);
+			case 'i':
+				return checkMethod(handle, 'var', node, ['let undefined', name]);
+			case 'name':
+				return node.isScope ? node.valid.name : node.scope.valid.name;
+			case 'Class', 'Function', 'Root':	
+				return (node.isScope ? node : node.scope).query(name+'Scope');
+			default:
+				if name[0] == '?':
+					return node[ name.substr(1) ] || node;
+				if name[0] == '#':
+					if !is_ass:
+						return handle.heap.variable( name.substr(1) );
+					return node[ handle.heap.variable( name.substr(1) ) ];
+
+	function checkMethod(handle, name, node, params):
+		if name in Method:
+			return Method[name](handle, node, params);
+		// Tea.error 5002, name, std, node;
+
+	function parseLogicExpr(handle, item, node):
+		oper  = item.oper;
+		if oper == '-=' || oper == '+=' || oper == '=':
+			left  = item.left;
+			right = parseLogicHand(handle, item.right, node);
+			handle.heap.variable(left.name,  parseInt(right) || right, oper);
+			return true;
+
+		left  = parseLogicHand(handle, item.left, node);
+		right = parseLogicHand(handle, item.right, node);
+		switch oper:
+			case '===', '!==', '==', '!=':
+				if not right as 'object':
+					right = [right];
+				if left:
+					if right.indexOf( left.text || left ) != -1:
+						return oper[0] == '!' ? false : true;
+					
+					if oper.length == 3:
+						if left.type && right.indexOf( left.type ) != -1:
+							return oper[0] == '!' ? false : true;
+					else:
+						if left.is && left.is.apply(left, right):
+							return oper[0] == '!' ? false : true;
+
+				return oper[0] == '!' ? true : false;
+
+			case '>=':
+				return left >= right;
+			case '<=':
+				return left <= right;
+			case '>':
+				return left > right;
+			case '<':
+				return left < right;
+			default:
+				return left;
+
+	function parseLogicHand(handle, exps, node):
+		if !exps || !exps.length:
+			return exps;
+		list = [];
+		for exp => exps:
+			if exp == '!':
+				NOT = true;
+				continue;
+			if exp.isAsset:
+				exp = parseAsset(handle, exp, node);
+			list.push( NOT ? !exp : exp );
+			NOT = false;
+		if list.length == 1:
+			return list[0];
+		for i -> list:
+			if list[i].isNode || list[i].isToken || list[i].isCard:
+				list[i] = list[i].text;
+		return eval( list.join('') );

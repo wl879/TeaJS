@@ -1,8 +1,10 @@
 
-class Argv:
-	_conf_re = /^\s*(\-\w)?(?:, *)?(\-\-[\w\-]+)?\ +(\<[^\>]+\>|\[[^\]]+\]|"[^"]+"|'[^']+'|\w+?\b)?\s*(.*)$/mg;
-	_desc    = {};
-	_config  = {};
+// TODO: --os --xxxx
+
+export default class Argv:
+	var _conf_re = /^\s*(\-\w)?(?:, *)?(\-\-[\w\-]+)?\ +(\<[^\>]+\>|\[[^\]]+\]|"[^"]+"|'[^']+'|\w+?\b)?\s*(.*)$/mg;
+	var _desc    = {};
+	var _config  = {};
 	constructor (argv, desc):
 		@.length = 0;
 		if argv || desc:
@@ -148,6 +150,3 @@ class Argv:
 				self[temp] = true;
 			name = '-'+name[-1];
 		return name;
-
-module.exports = Argv;
-

@@ -2914,8 +2914,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 			};
 			function format(card){
 				each(card);
-				if (card.type == 'Root'){
-					if (card.length){
+				if (card.type == 'Root' && card.length){
+					if (card.length > 1 || (card[0].type != 'JsonExpr' && card[0].type != 'ArrayExpr')){
 						lineFeed(card);
 					}
 				}
@@ -2981,6 +2981,8 @@ var Module = (function(){_cache = {};_main  = new Module();function Module(filen
 				}
 			};
 			function indentLine(card, parent){
+				if (card.type == 'String')
+					return card;
 				for (var item, i = 0; i < card.length; i++){
 					item = card[i];
 					if (item == '\n'){

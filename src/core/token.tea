@@ -1,7 +1,7 @@
 
 Node = require "./node.js";
 
-class Token extends Node:
+export default class Token extends Node.NodeObj:
 
 	static map = {
 		types     : {},
@@ -23,7 +23,7 @@ class Token extends Node:
 		@.indent   = -1;
 		@.location = location || null;
 	
-	get types:
+	get types():
 		return @._types;
 
 	set types(types):
@@ -31,18 +31,6 @@ class Token extends Node:
 			@._types = Jsop.toArray(types);
 			@.type = @._types[0];
 		return @._types;
-
-	get fileName:
-		return @.location && @.location.fileName;
-
-	get start:
-		return @.location && @.location.start;
-
-	get end:
-		return @.location && @.location.end;
-
-	// rewrite
-	@::isToken  = true
 	
 	clone(text, types):
 		var token = new Token(text || @.text, types || @.types, @.location);
@@ -50,6 +38,8 @@ class Token extends Node:
 		token.indent = @.indent;
 		token.scope = @.scope;
 		return token;
+
+	@::isToken  = true
 
 	static define(types, literals):
 		map = @.map;
@@ -85,7 +75,7 @@ class Token extends Node:
 
 	static create(text, index = 0, location):
 		if not text = text.substr(index):
-			Err 'create token object of param is empty!';
+			Tea.error 'create token object of param is empty!';
 
 		token_literals   = @.map.literals;
 		do:
@@ -144,17 +134,3 @@ class Token extends Node:
 			return {error:'tokenize parse error! unexpected token like as "'+code+'"'};
 
 		return new Token(code, types || token_literals[code], location && location.fission(code, index) );
-
-	static tokenize(text, index = 0, opt):
-		list = [], len = text.length;
-		while index < len:
-			if tokn = Token.create(text, index):
-				if tokn.error:
-					Err tokn.error, [text, index, text[index]];
-				list.push( opt == 'code list' ? tokn.text : tokn);
-				index += tokn.text.length;
-			else:
-				break;
-		return list;
-
-module.exports = Token;

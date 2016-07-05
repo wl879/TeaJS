@@ -1,11 +1,8 @@
 # TeaJS
 
-
 又一种新的预编译 javascript 脚本语言，用一种友好的方式开发面向客户端的 javascript 程序。
 
--
-
-### 安装 [REPL](http://wl879.github.io/TeaJS/)
+### 安装 OR [TEST REPL](http://wl879.github.io/TeaJS/)
 
 
 ```
@@ -13,9 +10,8 @@ npm install tea-js
 ```
 
 
-### 介绍
 
--
+### 介绍
 
 > #### 命令行参数
 
@@ -38,14 +34,59 @@ npm install tea-js
         --nopp                           不进行预编译
         --test                           编译后运行
     ... 自定义参数，用于预编译时判断与读取(使用Argv['--name']读取)
-``` 
+```
+
+
+
 
 
 ### 预编译
 
--
-
 此功能基本与 C 语言中的预编译相似，可以定义宏，逻辑控制。同时还扩展了 模板功能，语法糖自定义功能
+
+#### #define
+
+#### #undef
+
+#### #argv
+
+#### #token
+
+#### #expr/stam/sugar/std
+
+> ```c++
+> //
+> #token name <token code>
+>
+> // 定义语句声名，独立的一段代码，以分号或换行结束，例如: var/if 等语句
+> #stam name <syntax pattern>
+>
+> // 定义表达式，可以做为值返回代码，例如: a = 10, a + 100;
+> #expr name <syntax pattern>
+>
+> #sugar name <syntax pattern>
+>
+> #std name standard pattern
+> ```
+
+
+
+#### #if/ifdef/elfi/elifdef/else/endif
+
+#####  ●   内部参数
+
+> ```shell
+> --file
+> --version -v
+> ```
+
+#### #scipte
+
+#### #include
+
+
+
+
 
 
 > #### 宏定义
@@ -84,11 +125,7 @@ npm install tea-js
 
 
 ```c
-    // 定义语句声名，独立的一段代码，以分号或换行结束，例如: var/if 等语句
-    #stam name <grammar pattern> standard pattern
 
-    // 定义表达式，可以做为值返回代码，例如: a = 10, a + 100;
-    #expr name <grammar pattern> standard pattern 
 ```
 
 * [grammar pattern](#user-content-GrammarPattern)  定义语法解析
@@ -108,11 +145,11 @@ npm install tea-js
                 
     #endif
 ```
-    
- * `__main`              //返回编译文件是否为根文件
- * `__root`              //返回根文件路径
- * `__file`              //返回当前文件路径
- * `__version`           //返回当前文件路径
+
+* `__main`              //返回编译文件是否为根文件
+* `__root`              //返回根文件路径
+* `__file`              //返回当前文件路径
+* `__version`           //返回当前文件路径
 
 
 > #### 动态设置命令参数
@@ -120,10 +157,10 @@ npm install tea-js
 ```c
     #argv --name value
 ```
- 
- * `--name` 为参数名
- * `value` 为参数值，默认为 `true`
- 
+
+* `--name` 为参数名
+* `value` 为参数值，默认为 `true`
+
 
 
 > #### 动态运行脚本
@@ -138,7 +175,7 @@ npm install tea-js
     #end
 ```
 
-    
+
 > #### 引入文件
 
 
@@ -157,7 +194,7 @@ npm install tea-js
 > #### 字符串:
 
 支持换行格式，双引号支持嵌入变量
- 
+
 ```js
     // 不保留换行符，输出为单行。
     "abc" 'abc'
@@ -242,7 +279,7 @@ npm install tea-js
 
 * 支持箭头函数声明
 * 支持声明带缺省的函数参数
-    
+
 ```js
     function(a, b=2){}           // function(a, b){  if (b == null) b = 2; }
     fn = (a, b) => a > b;        // fn = function(a, b){return a > b};
@@ -254,7 +291,7 @@ npm install tea-js
 * 支持缩进的代码块
 * `if`、`while`、`do` 等语句扩号可以省略
 * `else if` 语句可以简写成 else
-    
+
 ```js
     if a && b:                   // if (a && b){
         block1                   //     block1;
@@ -264,7 +301,7 @@ npm install tea-js
         block3                   //     block3;
                                  // }
 ```
-    
+
 > #### for 语句
 
 ```js
@@ -323,13 +360,13 @@ npm install tea-js
 
 -
 
- 
+
 ### GrammarPattern
 
 > 示例
 
 下面示例中，可以获取到类似 JSX 中的 <> 语法
- 
+
 
 ```js
 #expr SyntaxPatt <\<...\>>
@@ -345,10 +382,11 @@ npm install tea-js
 
 > 字段
 
+* `(?debug)` 开启 debug 模式
 * `()` 子匹配
-	* `?:` 忽略匹配结果
-	* `?!` 测试匹配，如果匹配成功则算为失败匹配，反之则继续匹配
-	* `?=` 测试匹配，不匹配结果
+  * `?:` 忽略匹配结果
+  * `?!` 测试匹配，如果匹配成功则算为失败匹配，反之则继续匹配
+  * `?=` 测试匹配，不匹配结果
 * `[case → pattern]`    路由格式
 * `[pattern pattern]`   “或” 格式的快捷调用
 * `&==[type]`           判断最后匹配节点类型 
@@ -377,16 +415,17 @@ npm install tea-js
 * `@?`  检测匹配的结果，为数组时打包为节点
 * `@~`  将以匹配的结果打包为节点
 * `@:`  设置 表达式 字段 匹配的节点名称 
+* `@!`  为空时打包为节点
 
 
 > 方法
 
 * `#INDENT` 无参数，检查缩进层级
-* `#CONCAT(a, b, types)` 搜索 a 与 b 之间的 token，将其合并为一个 token，types 定义其类型，多个用空格分隔
-* `#IS([--, ++, -, +]index, type...)`  检查 当前 或 位移 后的token 是否等于 type
-* `#NOT([--, ++, -, +]index, type...)`  检查 当前 或 位移 后的token 是否不等于 type
-* `#ARGU(name)`  判断参数是否存在
-* `#CHECK([last, index], [==, !=], type)` 判断以匹配结果中是否等于（不等于）type
+* `#TOKEN_IS([--, ++, -, +]index, type...)`  检查 当前 或 位移 后的token 是否等于 type
+* `#TOKEN_NOT([--, ++, -, +]index, type...)`  检查 当前 或 位移 后的token 是否不等于 type
+* `#PARAM_IS(name)`  判断参数是否存在
+* `#MATCHED([last, index], type)` 判断以匹配结果中是否等于（不等于）type
+* `#CALLER_IS(type)`
 
 
 ### StandardPattern

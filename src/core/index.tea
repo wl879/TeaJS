@@ -1,0 +1,200 @@
+
+
+export default class Tea:
+
+	var Token     = require "./token";
+	var Node      = require "./node";
+	var Source    = require "./source";
+	var SourceMap = require "./sourcemap";
+	var Scope     = require "./scope";
+	var Card      = require "./card";
+	var Grammar   = require "./grammar";
+	var Transform = require "./transform";
+	var Sugar     = require "./sugar";
+	var Heap      = require "./heap";
+
+	constructor(file, text, sugar_box, std):
+		@.fileName = file || '';
+		@.sugarBox = Sugar.box(sugar_box);
+		@.standard = std || 'es5';
+		@.grammar  = 'tea';
+		@.heap     = 0;
+		if text:
+			if text.isSource:
+				@.source = text;
+			else:
+				@.fileText = text;
+		else:
+			@.fileText = file && Fp.readFile(file);
+
+	set grammar(version):
+		@.__grammar__ = typeof version == 'string' ? Grammar.cache['tea'] : version;
+		return @.__grammar__;
+
+	get grammar():
+		return @.__grammar__ || @.__grammar__ = Grammar.cache['tea'];
+
+	set standard(version):
+		@.__standard__ = typeof version == 'string' ? Transform.cache[version] : version;
+		return @.__standard__;
+
+	get standard():
+		return @.__standard__;
+
+	set source( src ):
+		sugar_box = @.sugarBox;
+		if src.sugarBox.length:
+			sugar_box.extend( src.sugarBox );
+		@.__source__ = src;
+		for i, token => src:
+			if token:
+				switch token.type:
+					case 'IDENTIFIER':
+						if macro = sugar_box.get( token.text, 'macro' ):
+							macro.exec(@, src, i);
+					case 'TAG':
+						if macro =  sugar_box.get( token.text.substr(1), 'macro' ):
+							macro.exec(@, src, i);
+		@.__source__.refresh(0);
+		return @.__source__;
+
+	get source():
+		if !@.__source__:
+			src          = Source.create(@.fileText, @.fileName);
+			@.source     = src;
+		return @.__source__;
+
+	get scope():
+		if !@.nodeTree.scope:
+			return Scope.init( @.nodeTree );
+		return @.nodeTree.scope;
+
+	get nodeTree():
+		if !@.__nodeTree__:
+			@.source.refresh(0);
+			@.heap     = 0;
+			@.__nodeTree__ = @.parse('Root');
+		return @.__nodeTree__;
+
+	get cardTree():
+		if !@.__cardTree__:
+			Scope.init( @.nodeTree );
+			@.heap     = 0;
+			@.__cardTree__ = @.transform( @.nodeTree )
+		return @.__cardTree__;
+
+	token(text, index, loc):
+		return Token.create(text, index, loc);
+
+	node():
+		return Jsop.newClass(Node, arguments);
+
+	card():
+		return Jsop.newClass(Card, arguments);
+
+	/**
+	 * resolver
+	 */
+	
+	argv(name, value):
+		@.__argv__ |= {};
+		if arguments.length > 1:
+			return @.__argv__[name] = value;
+		if name in @.__argv__:
+			return @.__argv__[name];
+		return Tea.argv[name];
+	
+	initHeap( id, sets ):
+	 	@.heap = new Heap(id, @.heap, @);
+	 	if sets:
+	 		@.heap.set(sets);
+	 	return @.heap;
+
+	didHeap( result, callback ):
+		heap   = @.heap;
+		result = heap.did(result, callback);
+		@.heap = heap.parent;
+	 	return result;
+
+	setHeap(name, value):
+		return @.heap.set(name, value);
+
+	getHeap(name):
+		return @.heap.get(name);
+
+	/**
+	 * grammar part
+	 */
+	parse(syntax, params, name, mode):
+		return Grammar.parse(@, syntax, params, name, mode);
+
+	/**
+	 * transform part
+	 */
+	transform(std, node, params):
+		return Transform.parse(@, std, node, params);
+
+	/**
+	 *
+	 */
+	
+	sourcemap( file ):
+		map = new SourceMap();
+		map.sourceRoot = @.fileName;
+		map.parse( @.cardTree );
+		if file:
+			map.file = file;
+			Fp.writeFile( map.text, Fp.resolve( Fp.dirName( @.fileName ), file ), 'UTF-8');
+		return map;
+
+	output( file, map ):
+		script = @.cardTree.text;
+		if file:
+			file = Fp.resolve( Fp.dirName(@.fileName), file );
+		if map:
+			map = Fp.resolve( Fp.dirName(file), map as 'string' ? map : file+'.map' );
+			script += '\n\n//# sourceMappingURL='+ (file ? Fp.relative(Fp.dirName(file), map) : map);
+			@.sourcemap( map );
+		if file:
+			Fp.writeFile(script, file, 'UTF-8');
+		return script;
+
+	/**
+	 *
+	 */
+
+	static define(type, name, value):
+		switch type:
+			case 'token':
+				names   = Array.isArray(name)  ? name  : name.split(' ').filter( ($) => $ );
+				values  = Array.isArray(value) ? value : SText.split(value, ' ', null, true, false).filter( ($) => $ );
+				Token.define( names, values );
+
+			case 'node':
+				names   = Array.isArray(name)  ? name  : name.split(' ').filter( ($) => $ );
+				values  = Array.isArray(value) ? value : SText.split(value, ' ', null, true, false).filter( ($) => $ );
+				Node.define( names, values );
+
+			case 'scope':
+				if Array.isArray(value):
+					for i -> value:
+						Scope.define(name, value[i]);
+				else:
+					Scope.define(name, value);
+
+			case 'sugar':
+				Sugar.define(name);
+
+			case 'syntax':
+				Grammar.define('tea', name, value);
+
+			default:
+				Transform.define(type, name, value);
+
+	@::throw = function(msg, target, asset):
+		if !msg || @.tryMode: return false;
+		if msg === '∆': msg = 1100;
+		Tea.error msg, target, @.heap.stack( asset );
+
+
+

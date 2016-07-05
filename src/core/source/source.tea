@@ -1,0 +1,244 @@
+
+export default class Source:
+	var Token      = require "../token";
+	var Lexer      = require "./lexer";
+	var Sugar      = require "../sugar";
+	var EOT        = new Token('\4', ['EOT', 'END']);
+	var pair_cache = {};
+
+	constructor(text, file):
+		@.id       = Tea.ID();
+		@.index    = 0;
+		@.length   = 0;
+		@.sugarBox = Sugar.box();
+		if file || text:
+			[].push.apply(@, Lexer(text, file, @.sugarBox));
+			@.refresh(0);
+
+	get current():
+		return @[@.index] || EOT;
+
+	get text():
+		return @.join();
+
+	add( token ):
+		@[@.length++] = token;
+		return @;
+
+	back( opt, catch_comm ):
+		while opt > 1:
+			@.index = @.prevIndex(@.index, opt--, catch_comm);
+		@.index = @.prevIndex(@.index, opt, catch_comm);
+		return @;
+
+	next( opt, catch_comm ):
+		while opt > 1:
+			@.index = @.nextIndex(@.index, opt--, catch_comm);
+		@.index = @.nextIndex(@.index, opt, catch_comm);
+		return @;
+
+	nextIndex( index, ig_lf, catch_comm ):
+		return countIndex(1, @, index, ig_lf, catch_comm);
+
+	prevIndex( index, ig_lf, catch_comm ):
+		return countIndex(-1, @, index, ig_lf, catch_comm);
+
+	delete( a, b = a ):
+		for var i=a; i <= b; i++:
+			@[i] = null;
+		return @;
+
+	insert( pos = 0, value, del_len = 0 ):
+		if typeof value == 'string':
+			value = Lexer(value, 'preprocess/insert', @.sugarBox);
+		else if value.isToken:
+			value = [value];
+
+		args   = [pos, del_len];
+		indent = SText.copy(' ', @.lineIndent(pos)) || '';
+		for i, token => value:
+			if !token || token.type == 'EOT':
+				continue;
+			if i && indent && token.indent >= 0:
+				if token.is('BLANK'):
+					token.text += indent;
+					token.indent = token.text.length;
+				else:
+					token.indent = null;
+					head_token = token.clone(indent, ['BLANK']);
+					head_token.indent = indent.length;
+					args.push( head_token );
+			args.push( token );
+		[].splice.apply(@, args);
+		return @;
+
+	/**
+	 * xxx
+	 */
+
+	indexPair(s1, s2, index, not_throw_error):
+		var p1 = pair_cache[s1] || (pair_cache[s1] = new RegExp('^('+SText.re(s1)+')$')),
+			p2 = pair_cache[s2] || (pair_cache[s2] = new RegExp('^('+SText.re(s2)+')$'));
+		var a = -1, b = index ? @.index, len = @.length, keep = 0;
+
+		while b < len:
+			if @[b]:
+				text = @[b].text;
+				if text == '\\':
+					b += 2;
+					continue;
+				if p1.test( text ):
+					if a == -1:
+						a = b;
+					else if s1 == s2 || p2.test( text ):
+						return [a, b];
+					else:
+						keep += 1;
+				else if p2.test( text ) && a != -1:
+					if keep == 0:
+						return [a, b];
+					keep -= 1;
+			b += 1;
+
+		if !not_throw_error:
+			Tea.error 1004, s2, @[b];
+
+	lineIndent(index):
+		index = index ? @.index;
+		while index >= 0:
+			if  @[index] && @[index].indent >= 0:
+				return @[index].indent;
+			index --;
+		return -1;
+
+	refresh( index ):
+		if index as 'number':
+			@.index = index;
+		return cleanSource(@);
+
+	join(a, b):
+		if Array.isArray(a):
+			b = a[1], a = a[0];
+		a = a < 0 ? @.length + a : (a || 0),
+		b = b < 0 ? @.length + b : (b || b === 0 ? b : @.length);
+		var texts = [];
+		for var i=a; i <= b; i++:
+			@[i] && @[i].text != '\4' -> texts.push( @[i].text );
+		return texts.join('');
+
+	@::isSource = true;
+
+	function countIndex(ori, src, index, ig_lf, catch_comm):
+		var len = src.length - 1, type;
+		while (index += ori) >=0 && index <= len:
+			type = src[index] && src[index].type;
+			if !type || type == 'BLANK' || (!catch_comm && type == 'COMMENT') || (ig_lf && type == 'LF'):
+				continue;
+			return index;
+		if ori > 0:
+			return index > len ? len : index;
+		return index < 0 ? 0 : index;
+
+	function cleanSource(src):
+		len = src.length;
+		for var i = len-1; i >= 0; i--:
+			if !src[i]: continue;
+			if src[i].type == 'EOT':
+				src[i] = null;
+				continue;
+			if src[i].type == 'LF':
+				b = i;
+				a = i - 1;
+				while a >= -1:
+					if b === 0 || src[a].type == 'LF':
+						src.delete( a+1, b);
+						break;
+					if !src[a] || src[a].type == 'BLANK':
+						a -= 1;
+						continue;
+					break;
+				if token = src[ b+1 ]:
+					if token.type == 'BLANK':
+						token.text = SText.spaceTab(token.text);
+						token.indent = token.text.length;
+					else:
+						token.indent = 0;
+		list = [];
+		for var i = 0, token -> src:
+			if token:
+				list.push(token);
+			src[i] = null;
+		src.length = 0;
+		[].push.apply(src, list);
+		return src.add( EOT );
+
+/*
+	clone(a, b):
+		src = new Source();
+		a = a < 0 ? @.length + a : (a || 0);
+		b = b < 0 ? @.length + b : (b || @.length-1);
+		for i = a; i <= b; i++:
+			if @[i]:
+				src.add( @[i] );
+		if b != @.length -1:
+			src.add( EOT );
+		return src;
+
+	trimIndent(a, b, len):
+		a = a < 0 ? @.length + a : (a || 0);
+		b = b < 0 ? @.length + b : (b || @.length-1);
+		
+		if len == null:
+			for i = a; i <= b; i++:
+				token = @[i];
+				if token && token.indent >= 0:
+					if len == null || token.indent < len:
+						len = token.indent;
+
+		if len > 0:
+			for i = a; i <= b; i++:
+				token = @[i];
+				if token && token.indent >= 0:
+					token.indent = Math.max( token.indent-len, 0 );
+					if token.type = 'BLANK':
+						token.text = token.text.substr(0, token.indent);
+		return @;
+
+	indexLine(index):
+		index = index ? @.index;
+		var a = index, b = index, len = @.length-2;
+		while a > len || (a > 0 && @[a-1] && @[a-1].type != 'LF'):
+			a --;
+		while b < len && (!@[b] || @[b].type != 'LF'):
+			b ++;
+		return [(a > len ? len : a), (b > len ? len : b), index];
+
+	indexOf(target, index = 0):
+		if not is_re = target as RegExp:
+			is_str = target as 'string';
+		for i = index -> @:
+			if !@[i]:
+				continue;
+			if is_re:
+				if target.test(@[i].text):
+					return i;
+			else if is_str:
+				if @[i].text == target:
+					return i;
+			else if @[i] == target:
+				return i;
+
+	matchOf(re, index = 0):
+		var a, b;
+		if m = @.string.match(re):
+			for i = index, token -> @:
+				if !token: continue;
+				if token.location.start == m.index:
+					a = i;
+				if token.location.end == m.index+m[0].length:
+					b = i;
+				if a != null && b != null:
+					return [a, b]
+
+
+ */

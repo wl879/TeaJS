@@ -1,0 +1,76 @@
+
+export default class Macro:
+	
+	var Script = require "./script";
+
+	constructor(name, args, body):
+		@.name     = name;
+		@.args     = args && SText.split(args, ',', true);
+		@.script   = new Script(body.replace(/\\\n\s*|\n$/g, ''), args);
+
+	exec(handle, src, index):
+		_index    = src.index;
+		src.index = index;
+		token     = src[index];
+		if token.text == @.name || token.text == '#'+@.name:
+			if @.args:
+				if not params = getParams(handle, src.next()):
+					src.index = _index;
+					return false;
+				value = @.value( params );
+			else:
+				value = @.value();
+			src.delete(index, src.index);
+			if value:
+				value = SText.clip(value);
+				if token.text[0] == '#':
+					value = '"'+value.replace(/(^|[^\\])"/g, '$1\\"')+'"';
+				src.insert(index+1, value);
+		src.index = _index;
+		return true;
+
+	value( params ):
+		value = @.script.value.apply(@.script, params);
+		if @.args:
+			args = @.args;
+			temp = '';
+			re   = toRe(@);
+			while m = value.match(re):
+				index = m[3] || args.indexOf(m[2]);
+				if m[2] == 'ARGR...':
+					param = params.slice(index >= 0 ? index : args.length).join(', ');
+				else if params[index]:
+					param = params[index]+'';
+				else:
+					param = '';
+
+				switch param && m[1]:
+					case '###': param = '##'+'"'+param.replace(/(^|[^\\])"/g, '$1\\"')+'"';
+					case '#'  : param = '"'+param.replace(/(^|[^\\])"/g, '$1\\"')+'"';
+					case '##@': param = '##'+"'"+param.replace(/(^|[^\\])'/g, "$1\\'")+"'";
+					case '#@' : param = "'"+param.replace(/(^|[^\\])'/g, "$1\\'")+"'";
+					case '##' : param = '##'+param;
+				temp += value.slice(0, m.index) + param;
+				value = value.substr(m.index+m[0].length);
+			value = (temp+value).replace(/"##"|'##'|##,|##/g, '');
+
+		return value;
+
+	function toRe(macro):
+		if !macro._args_re:
+			args = macro.args.join('\\b|\\b')
+			args = args ? '|\\b'+ args+'\\b' : '';
+			macro._args_re = new RegExp('(\#{0,3}@?)(\#(\\d+)|\\bARGR\\.\\.\\.'+args+')');
+		return macro._args_re;
+
+	function getParams(handle, src):
+		a = src.index;
+		node = handle.parse( '(\\(∅ (\\)∅ | ,* #ParamsSub \\)) | #is_token(--1, BLANK) → #not_token(--2, END) → #ParamsSub)@@ParamsExpr');
+		if node && node.type == 'ParamsExpr':
+			b = src.index;
+			text = src.join(a, b).trim();
+			if text[0] == '(' && SText.indexPair(text, '(', ')', 0)[1] == text.length-1:
+				text = text.slice(1, -1)
+			params = SText.split(text, ',', true);
+			return params;
+

@@ -1,6 +1,4 @@
 
-// module.exports = SText;
-
 pair    = {'(':')', '[':']', '{':'}', '\'':'\'', '\"':'\"', '`':'`'};
 
 pair_re = new RegExp( '\\'+Object.keys(pair).join('|\\'), 'g' );
@@ -96,11 +94,12 @@ export split(text, separator, _trim, _cesc, _pair):
 	if !sep_cache[separator]:
 		sep_cache[separator] = new RegExp( '(\\\\*)('+ (separator ? re(separator) : ' ')+')' );
 	separator = sep_cache[separator];
+
 	slices    = [];
 	a         = 0;
 	if _pair:
 		_pair_re = new RegExp( '\\'+Object.keys(_pair).join('|\\'), 'g' );
-	else:
+	else _pair !== false:
 		_pair    = pair;
 		_pair_re = pair_re;
 
@@ -112,13 +111,11 @@ export split(text, separator, _trim, _cesc, _pair):
 
 			b   = a + m.index + m[1].length;
 
-			// _pair_re.lastIndex = a;
-			if p = matchCheckESC(text, _pair_re, a):
+			if _pair_re && p = matchCheckESC(text, _pair_re, a):
 				ab = indexPair(text, p[0], _pair[p[0]], p.index, true);
 				if ab && b > ab[0]:
 					a = ab[1]+1;
 					continue;
-
 
 			slices.push( text.slice(0, b) );
 			if _trim === false:
@@ -261,50 +258,6 @@ export toUnicode(text):
 		u = text.charCodeAt( i );
 		texts.push( u <= 0 ? text[i] : "\\u"+('0000'+u.toString(16)).slice(-4) ); 
 	return texts.join('');
-
-// 
-
-export isPath(text):
-	// var winpath = /^[a-zA-Z];[\\/]((?! )(?![^\\/]*\s+[\\/])[\w -]+[\\/])*(?! )(?![^.]+\s+\.)[\w -]+$/; 
-	// var lnxPath = /^([\/] [\w-]+)*$/; 
-	return /^([^\*\s]|\\[ \t])*(\/([^\*\s]|\\[ \t])+)+$/.test(text);
-
-export readFile(file, encoding, linenum):
-	if encoding as 'number':
-		linenum = encoding, encoding = 'utf-8';
-	fs = require 'fs';
-	if fs.existsSync( file ) && fs.statSync(file).isFile():
-		text = fs.readFileSync(file, encoding||'utf-8');
-		if linenum:
-			text = readLine(text, linenum);
-		return text;
-	// throw 'SText read the file is not exist';
-
-export writeFile(content, file, encoding):
-	fs   = require 'fs';
-	path = require 'path';
-	dir  = path.dirname(file);
-	if !fs.existsSync( dir ) || !fs.statSync(dir).isDirectory():
-		mkdir(dir, 0755);
-	return fs.writeFileSync(file, content, encoding||'utf8');
-
-export readLine(text, something):
-	if something as 'number':
-		lines = text.split('\n');
-		return lines[ something-1 ];
-	if something as 'string':
-		if index == text.indexOf(something):
-			if index >= 0:
-				return indexLine(text, text.indexOf(something))[0];
-
-function mkdir(to, mode):
-	fs   = require 'fs';
-	path = require 'path';
-	if !fs.existsSync(to):
-		base_dir = path.dirname(to);
-		if !fs.existsSync(base_dir):
-			mkdir(base_dir, mode);
-		return fs.mkdirSync(to, mode || 0755);
 
 function matchCheckESC(text, re, last):
 	if last || last === 0:

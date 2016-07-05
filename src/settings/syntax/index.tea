@@ -12,158 +12,128 @@
 }
 
 module.exports = {
+	"Root"					: require("./root.js")
+	"BlockNode"             : require("./block.js")
+	"ForConditionExpr"		: require('./for_condition.js')
+	"Block"					: <#BlockNode | #Statement@:BlockStam>
+	"Statement"				: <#caller_is(Class) → [#Control #ConstructorDecl #MethodDecl] |
+								#LabelStam |
+								[#sugar_box(stam), #Control, #Execute, #Declare]\n ((?=CLOSE) | #SeleteLeft@@SeleteStam | END∅∆1101) |
+								#Sequence\n ((?=CLOSE) | ..@@LinkStam → #before(Value) #LinkPatt+ | [#SeleteLeft #SeleteRight]@@SeleteStam | END∅∆1101) |
+								\{ → #BlockNode>
+	"Declare"				: <[var         → #VarDecl,         let    → #LetDecl,    const  → #ConstDecl,
+								function    → #FunctionDecl,    class  → #Class,      export → #ExportDecl,
+								static      → #StaticDecl,      get    → #GetterDecl, set    → #SetterDecl,
+								constructor → #ConstructorDecl, import → #ImportDecl] |
+								#MethodDecl>
+	"Control"				: <[if → #IfStam, while → #WhileStam, do → #DoWhileStam, with → #WithStam, try → #TryStam, switch → #SwitchStam, for → #ForStam]>
+	"Execute"				: <[return → #ReturnStam, break → #BreakStam, continue → #ContinueStam, throw → #ThrowStam, debugger → #DebuggerStam, yield → #YieldStam]>
+	"Sequence"			    : <#Express (,∅ #Express∆1125)*@@SequenceExpr>
+	"Express"				: <class → #Class(ClassExpr) | \.\.\. → #SpreadExpr | #Binary (\?@@TernaryExpr [#Execute #Express] (: [#Execute #Express])? | #ParamsExpr@@CallExpr)?>
+	"Ternary"			    : <#Logic (\?@@TernaryExpr [#Execute #Express] (: [#Execute #Express])?)?>
+	"Binary"			    : <#Assign | #Logic>
+	"Assign"				: <\[ → #ArrayDest | \{ → #JsonDest | #Value ASSIGN → #before(Access, SliceExpr)∆1130 (\=@@AssignExpr | ASSIGN@@AssignPatt) #Express∆1107>
+	"Unary"					: <not #Express@@NotExpr | PREFIX #Value@@PrefixExpr #before(Access)∆1128 | new #Value@@NewExpr | UNARY #Unary@@UnaryExpr | #Value POSTFIX?@@PostfixExpr → #before(-2, Access)∆1129>
+	"Value"					: <[super → #SuperExpr, require → #RequireExpr, \@ → #AtExpr, #Object] (\( → #ParamsExpr@~CallExpr | #Member@~AccessExpr)* #Slice?@~SliceExpr>
+	"Access"				: <#Variable (#Member@~AccessExpr)*>
+	"Object"				: <#ArrowExpr | [\( → #GroupExpr, \[ → #ArrayExpr, \{ → #JsonExpr, function → #FunctionExpr, #sugar_box(expr), #Const, #Variable]>
+	"Variable"				: <IDENTIFIER@:VariableExpr>
+	"Const"					: <[CONST, REGEXP, STRING, TAG]>
 
-	"COMMENT"             : require("./comment.js")
+// ------------------------------------------------------------------
 
-	"Root"                : require("./root.js")
+	"COMMENT"               : <#is_token(COMMENT) | \/\*...\*\/ | \/\/ **?\n (?=[LF EOT])>
+	"REGEXP"				: <[\/ \/=] → \/=\|\/...\*\/\|\/ [[g i m y u]*]>
+	"STRING"				: <QUOTE → *...*>
+	"TAG"					: <# → #+ [IDENTIFIER KEYWORD]>
 
-	"Block"               : require("./block.js")
+	"SpreadExpr"            : <#caller_is(-1, ArrayExpr, ParamsSub )∆1116 \.\.\. #Express>
+	"ArrayExpr"				: <\[∅ (\]∅ | #Express (,?∅ #Express)* ,*∅ \]∆1124∅)>
+	"JsonExpr"				: <\{∅ (\}∅ | #JsonItem (,?∅ #JsonItem)* ,*∅ \}∅)>
+		"JsonItem"			: <set→ #SetterDecl | get→ #GetterDecl | #NameExpr → (#is_token(+1, \() → #MethodDecl | #NameExpr (: #Express)?@@PropertyInit) | [NUMBER STRING] : #Express@@PropertyInit>
+	"AtExpr"				: <@ [IDENTIFIER KEYWORD]?>
+	"SuperExpr"				: <super #Member? #ParamsExpr?>
+	"GroupExpr"			    : <\(∅ #Sequence@:SequenceExpr \)∅∆1126>
 
-	"StamBlock"           : <Block | Statement@:BlockStam>
+	"Member"				: <[ . → `. [IDENTIFIER KEYWORD]∆1108`, \[ → `\\[ Sequence@:SequenceExpr \\]`, :: → `:: [IDENTIFIER KEYWORD]?`]@@MemberExpr>
+	"ParamsExpr"			: <\(∅ (\)∅ | ,* #ParamsSub \)∅∆1104) | #is_token(--1, BLANK) → #not_token(--2, END) → #before(before, Access, Variable, IDENTIFIER, KEYWORD) → #ParamsSub>
+		"ParamsSub"			: <(#Express (\, (?=[\, \)]))*) (\,∅ #Express (, (?=[\, \)]))*)*>
+	"Slice"					: <\[∅ (\]∅ | (#Compute? : #Compute?) \]∆1109∅)@@SlicePatt>
 
-	"Statement"           : <LabelStam |
-							(	\{ → [JsonAssignExpr JsonExpr Block] |
-								\[ → ArrayAssignExpr                 |
-								#SUGAR(stam)                    |
-								[Declaration Keyword MethodDecl LinkStam Comma]
-							)\n (CLOSE → | #CHECK(last, ==, Expression) [SeleteLeft SeleteRight]@@SeleteStam | SeleteLeft@@SeleteStam | END∅∆1101)>
+	// priority
+	"Compute_H"				: <#Unary (PREC0 #Unary@~ComputeExpr)*>             // *  /  %  **  \\\\
+	"Compute_M"				: <#Compute_H (PREC1 #Compute_H@~ComputeExpr)*>     // +  -
+	"Compute_L"				: <#Compute_M (PREC2 #Compute_M@~ComputeExpr)*>     // >>  <<  >>>
+	"Compare_H"				: <#Compute_L (PREC3 #Compute_L@~CompareExpr)*>     // >  <  >=  <=  instanceof  in  of  as  @
+	"Compare"				: <#Compare_H (PREC4 #Compare_H@~CompareExpr)*>     // !=  !==  ==  ===  is  not is
+	"Compute"				: <#Compare (PREC5 #Compare@~ComputeExpr)*>         // ^  ~  &  |
+	"Logic"					: <#Compute (PREC6 [#Execute #Assign #Compute]@~LogicExpr)*> // and  or  &&  ||
 
-	"Expression"           : <[class → Class, Ternary] (#CHECK(last, ==, Access) (Params@@CallExpr | (=@@AssignExpr | ASSIGN@@AssignPatt) Expression∆1107))?>
 
-	"Object"              : <CONST | ArrowExpr | [\@ → AtExpr, \[ → ArrayExpr,\( → CompelExpr,\{ → JsonExpr, super → SuperExpr, require → RequireExpr, function → FunctionExpr, VariableExpr, #SUGAR(expr)]>
-	"Access"              : <Object (MemberExpr@~AccessExpr)*>
-	"Value"               : <[@ this]?@@ThisExpr → Object (MemberExpr@~AccessExpr | ParamsExpr@~CallExpr)* SlicePatt?@~SliceExpr>
+	"ArrayDest"				: <#ArrayPatt = #Express>
+	"JsonDest"				: <#JsonPatt = #Express>
+		"Rest"				: <\.\.\.∅@@RestPatt IDENTIFIER | IDENTIFIER (= #Express | as IDENTIFIER)?@@PropertyInit>
+		"ArrayPatt"			: <\[∅ (#Rest (\,∅ #Rest)*) \]∅>
+		"JsonPatt"			: <\{∅ (#Rest (\,∅ #Rest)*) \}∅>
+	"NameExpr"				: <IDENTIFIER | KEYWORD #has_param(id)!∆1006>
 
-	"CONST"               : <REGEXP | STRING | TAG>
-	"REGEXP"              : <[\/ \/=] → #CONCAT( \/=\\|\/...*\/\\|\/ [g i m y]*, , REGEXP CONST)>
-	"STRING"              : <QUOTE → #CONCAT( , , STRING CONST)>
-	"TAG"                 : <# → #CONCAT(#+ [IDENTIFIER KEYWORD], , TAG CONST)>
+	"ArgusExpr"				: <\(∅ (\)∅ | #ArgusItem (,∅ #ArgusItem)* \)∅)>
+		"ArgusItem"			: <[\.\.\. → #Rest, `#Variable (= #Express)?@@AssignExpr`]>
+		
 
-	
-	"MemberExpr"    	  : <[ . → . [IDENTIFIER KEYWORD]∆1108, \[ → \\[ CommaExpr \\], :: → :: [IDENTIFIER KEYWORD]?]>
-	"AtExpr"              : <@ [IDENTIFIER KEYWORD]?>
-	"SuperExpr"           : <super (MemberExpr*)@:SuperMember Params?>
-	"SlicePatt"           : <\[∅ \]∅ | \[∅ (Compute? : Compute?) \]∆1109∅>
+	"SequenceDecl"				: <#SequenceItem (,∅ #SequenceItem)*>
+		"SequenceItem"			: <[\[ → #ArrayDest, \{ → #JsonDest, `#Variable (= #Express)?@@AssignExpr`]>
 
-	"JsonExpr"            : <\{∅ ( \}∅ | JsonItem (,?∅ JsonItem)* ,*∅ \}∆1123∅)>
-	"JsonItem"            : <set→ SetterDecl | get→ GetterDecl | IDENTIFIER→ #IS(+1, \() → MethodDecl | ([NameExpr NUMBER STRING] : Expression)@:AssignExpr>
-
-	"ArrayExpr"           : <\[∅ \]∅ | \[∅ Expression (,?∅ Expression)* ,*∅ \]∆1124∅>
-	"VariableExpr"        : <IDENTIFIER>
-	"NameExpr"            : <IDENTIFIER | KEYWORD #ARGU(id)!∆1006>
-
-	"Declaration"         : <[
-							var          → VarStam,
-							let          → LetStam,
-							const        → ConstStam,
-							function     → FunctionDecl,
-							class        → Class,
-							import       → ImportStam,
-							export       → ExportDecl,
-							static       → StaticDecl,
-							get          → GetterDecl,
-							set          → SetterDecl,
-							prototype    → ProtoDecl,
-							property     → PropertyDecl,
-							constructor  → ConstructorDecl]>
-
-	"Keyword"             : <[
-							return       → ReturnStam,
-							break        → BreakStam,
-							continue     → ContinueStam,
-							throw        → ThrowStam,
-							debugger     → DebuggerStam,
-							if           → IfStam,
-							while        → WhileStam,
-							do           → DoWhileStam,
-							with         → WithStam,
-							try          → TryStam,
-							switch       → SwitchStam,
-							for          → ForStam,
-							yield        → YieldStam]>
-
-	// TODO: coming soon for support syntax  
-	"YieldStam"           : <yield Expression>
-	"ImportStam"          : <import!∆1>
-	"ExportDecl"          : <export∅ (default [MethodDecl Declaration Expression] | [MethodDecl Declaration ArgusStam])∆1011>
-	// -----------------------------
-
-	"Unary"               : <not Expression@@NotExpr | PREFIX Value@@PrefixExpr | new Value@@NewExpr | UNARY #Unary@@UnaryExpr | Value POSTFIX?@@PostfixExpr>
-
-	"ComputeLv0"          : <Unary (PREC0 Unary@~ComputeExpr)*>             // *  /  %  **  \\\\
-	"ComputeLv1"          : <ComputeLv0 (PREC1 ComputeLv0@~ComputeExpr)*>   // +  -
-	"ComputeLv2"          : <ComputeLv1 (PREC2 ComputeLv1@~ComputeExpr)*>   // >>  <<  >>>
-	"CompareLv3"          : <ComputeLv2 (PREC3 ComputeLv2@~CompareExpr)*>   // >  <  >=  <=  instanceof  in  of  as  @
-	"Compare"             : <CompareLv3 (PREC4 CompareLv3@~CompareExpr)*>   // !=  !==  ==  ===  is  not is
-	"Compute"             : <Compare (PREC5 Compare@~ComputeExpr)*>         // ^  ~  &  |
-	"Operate"             : <Compute (PREC6 [return → ReturnStam, break → BreakStam, continue → ContinueStam, throw → ThrowStam, debugger → DebuggerStam, Assign, Compute]@~LogicExpr)*> // and  or  &&  ||
-	"Binary"              : <Assign | Operate>
-	"Ternary"             : <Operate (\?@@TernaryExpr [Declaration Keyword Expression] (: [Declaration Keyword Expression])?)?>
-	
-	"Rest"                : <...?∅@@RestExpr IDENTIFIER>
-	"ArrayAssignExpr"     : <[∅ (Rest (,∅ Rest)*)@:ArrayPatt ]∅ = Expression>
-	"JsonAssignExpr"      : <{∅ ((IDENTIFIER (\: IDENTIFIER)?)@?AssignExpr (,∅ (IDENTIFIER (\: IDENTIFIER)?)@?AssignExpr)*)@:JsonPatt }∅ = Expression>
-	"Assign"              : <[\[ → ArrayAssignExpr, \{ → JsonAssignExpr, Access (=@@AssignExpr | ASSIGN@@AssignPatt) Expression∆1107 ]>
-
-	"ArgusItem"           : <[ ... → Rest, \[  → ArrayAssignExpr, \{  → JsonAssignExpr, VariableExpr (= Expression)?@@AssignExpr ]>
-	"Argus"               : <ArgusItem (,∅ ArgusItem)*>
-	"ArgusStam"           : <ArgusItem (,∅ ArgusItem)*>
-	"ArgusExpr"           : <\(∅ (\)∅ | ArgusItem (,∅ ArgusItem)* \)∅)>
-	
-	"ParamsGroup"         : <(Expression (, [\, \)]→)*) (,∅ Expression (, [\, \)]→)*)*>
-	"ParamsExpr"          : <\(∅ ( \)∅ | ,* ParamsGroup \)∆1104∅)>
-	"Params"              : <ParamsExpr | #IS(--1, BLANK) → #NOT(--2, END) → ParamsGroup@:ParamsExpr>
-
-	"CommaExpr"           : <Expression (,∅ Expression∆1125)*>
-	"Comma"               : <Expression (,∅ Expression∆1125)*@@CommaExpr>
-	"CompelExpr"          : <(∅ CommaExpr∆1126 )∅>
-	"LabelStam"           : <IDENTIFIER : Statement>
-	"SeleteLeft"          : <(<- | if\n) Comma∆1127>
-	"SeleteRight"         : <[&& || and or ->] Statement∆1127>
-	"LinkStam"            : <Access (..∅ (Access Params?)@:LinkPatt)+>
-
+	"LabelStam"				: <IDENTIFIER : #Statement>
+	"SeleteLeft"			: <(<- | if\n) #Sequence∆1127>
+	"SeleteRight"			: <[->] #Statement∆1127>
+	"LinkPatt"				: <..∅ (#Access [\( → #ParamsExpr]?|#GroupExpr)>
 	// 
-	
-	
-	"VarStam"             : <var∅      ArgusStam∆1007>
-	"LetStam"             : <let∅      ArgusStam∆1009>
-	"ConstStam"           : <const∅    ArgusStam∆1010>
 
-	"ReturnStam"          : <return\n   CommaExpr?>
-	"BreakStam"           : <break\n    IDENTIFIER?>
-	"ContinueStam"        : <continue\n IDENTIFIER?>
-	"ThrowStam"           : <throw\n    CommaExpr?>
-	"RequireExpr"         : <require    Params>
-	"DebuggerStam"        : <debugger>
-	
-	"FunctionExpr"        : <function \*?@@GeneratorExpr  #NameExpr(id)?@@FunctionDecl ArgusExpr Block>
-	"FunctionDecl"        : <function \*?@@GeneratorDecl  #NameExpr(id)∆1024 ArgusExpr Block>
-	"MethodDecl"          : <NameExpr     ArgusExpr [\{ :] → Block∆1106>
-	"ArrowExpr"           : <(ArgusExpr | IDENTIFIER@:ArgusExpr) =>∅ (\{→ [JsonExpr Block] | ReturnStam | ThrowStam | Expression)>
+	"VarDecl"				: <var∅       #SequenceDecl@=VarDecl∆1007>
+	"LetDecl"				: <let∅       #SequenceDecl@=LetDecl∆1009>
+	"ConstDecl"				: <const∅     #SequenceDecl@=ConstDecl∆1010>
 
-	"Class"               : <class@@ClassExpr (extends! → #NameExpr(id)?@@ClassDecl) (extends Params∆1021)?@:ExtendsExpr Block>
-	"GetterDecl"          : <get∅        NameExpr ArgusExpr?@!ArgusExpr Block>
-	"SetterDecl"          : <set∅        NameExpr ArgusExpr Block>
-	"StaticDecl"          : <static∅     [MethodDecl ArgusStam]>
-	"ProtoDecl"           : <prototype∅  [MethodDecl ArgusStam]>
-	"PropertyDecl"        : <property∅   [MethodDecl ArgusStam]>
-	"ConstructorDecl"     : <constructor@:NameExpr  ArgusExpr [\{ :] → Block∆1106>
+	"ReturnStam"			: <return\n   #Sequence?@:SequenceExpr>
+	"BreakStam"				: <break\n    IDENTIFIER?>
+	"ContinueStam"			: <continue\n IDENTIFIER?>
+	"ThrowStam"				: <throw\n    #Sequence?@:SequenceExpr>
+	"DebuggerStam"			: <debugger>
+	"YieldStam"				: <yield      #Express>
 	
-	"If"                  : <if ConditionExpr StamBlock∆1012@@IfPatt>
-	"Else"                : <else@@ElsePatt (if∅ ConditionExpr@@ElseIfPatt | ConditionExpr [\{ :]→@@ElseIfPatt)? StamBlock∆1019>
-	"Try"                 : <try     StamBlock∆1016@@TryPatt>
-	"Catch"           	  : <catch   ConditionExpr StamBlock@@CatchPatt>
-	"Finally"             : <finally StamBlock@@FinallyPatt>
-	"WhileStam"           : <while   ConditionExpr StamBlock∆1013>
-	"WithStam"            : <with    ConditionExpr StamBlock∆1014>
-	"SwitchStam"          : <switch  ConditionExpr (\:∅ #Case(indent)* | \{∅ #Case* \}∆1110∅)@:BlockNode∆1017>
-	"Case"                : <(case@@CaseStam CommaExpr | default@@DefaultStam) \:∆1020∅ (#ARGU(indent) #Block(indent, case, default) | #ARGU(indent)! #Block(brace, case, default))?>
+	"ImportDecl"			: <import∅ ((#Variable@:DefaultSpecifiers)? ,?∅ ((\* as #Variable)@:All | \{ → #JsonPatt)?@:Specifiers (from∅ STRING)@:From | STRING@:From)∆1134>
+	"RequireExpr"			: <require@@VariableExpr #ParamsExpr?@@RequireExpr>
+	"ExportDecl"			: <export∅ (default∅@@ExportDefaultDecl [function → #FunctionExpr, #Express] | \*∅@@ExportAllDecl (from∅ #Express)@:From | \{ → #JsonPatt (from∅ #Express)?@:From | [#Declare #SequenceDecl])∆1011>
 	
-	"ConditionExpr"       : <Comma #CHECK(last, ==, CompelExpr)?@@=ConditionExpr>
+	"FunctionExpr"			: <function \*?@@GeneratorExpr  #NameExpr(id)?@@FunctionDecl #ArgusExpr∆1025 #BlockNode>
+	"FunctionDecl"			: <function \*?@@GeneratorDecl  #NameExpr(id)∆1024 #ArgusExpr∆1025 #BlockNode>
+	"MethodDecl"			: <#NameExpr #ArgusExpr [\{ :] → #BlockNode∆1106>
+	"ArrowExpr"				: <(#ArgusExpr | IDENTIFIER@:ArgusExpr) =>∅ [\{ → #BlockNode, #ReturnStam, #ThrowStam, #Express]>
 
-	"ForStam"             : <for ForCondition∆1022 StamBlock∆1106>
-	"ForCondition"        : require('./for.js')
-	"IfStam"              : <If  (#INDENT Else)*>
-	"TryStam"             : <Try (#INDENT Catch)? (#INDENT Finally)?>
-	"DoWhileStam"         : <do  StamBlock∆1015 (#INDENT while ConditionExpr)?>
+	"Class"					: <class@@ClassExpr (extends! → #NameExpr(id)?@@ClassDecl) #ExtendsExpr? #BlockNode>
+	"ExtendsExpr"			: <extends     (mix∅@@ExtendsMix #ParamsExpr | #ParamsExpr)>
+	"GetterDecl"			: <get∅        #NameExpr #ArgusExpr?@!ArgusExpr #BlockNode>
+	"SetterDecl"			: <set∅        #NameExpr #ArgusExpr #BlockNode>
+	"StaticDecl"			: <static∅     [#MethodDecl #SequenceDecl]>
+	"ConstructorDecl"		: <constructor@:NameExpr  #ArgusExpr [\{ :] → #BlockNode∆1106>
+	
+	"IfStam"				: <#IfPatt (#check_indent #ElsePatt)*>
+		"IfPatt"			: <if      #ConditionExpr #Block∆1012>
+		"ElsePatt"			: <else (if∅ #ConditionExpr@@ElseIfPatt | #ConditionExpr [\{ :]→@@ElseIfPatt)? #Block∆1019>
+	"TryStam"				: <#TryPatt (#check_indent #CatchPatt)? (#check_indent #FinallyPatt)?>
+		"TryPatt"			: <try     #Block∆1016>
+		"CatchPatt"			: <catch   #ConditionExpr #Block>
+		"FinallyPatt"		: <finally #Block>
+	"WhileStam"				: <while   #ConditionExpr #Block∆1013>
+	"DoWhileStam"			: <do      #Block∆1015 (#check_indent while #ConditionExpr)?>
+	"WithStam"				: <with    #ConditionExpr #Block∆1014>
+	"SwitchStam"			: <switch  #ConditionExpr (\:∅ (#check_indent(in) #Case(indent))* | \{∅ #Case* \}∅∆1110)@:SwitchNode∆1017>
+	"Case"					: <(case@@CaseStam #Sequence@:SequenceExpr | default@@DefaultStam) \:∅∆1020 [indent → `#BlockNode(indent, case, default)`, `#BlockNode(brace, case, default)`]?>
+	"ForStam"				: <for     #ForConditionExpr∆1022 #Block∆1106>
+
+	"ConditionExpr"			: <(\(...\) JOINT!) → \(∅ #Sequence \)∅ | #Sequence>
+
+	"ForCondition"			: <(\(...\) JOINT!) → \(∅ #ForConditionSub \)∅ | #ForConditionSub>
+		"ForConditionSub"	: <((?=;) | var∅ #SequenceDecl@=VarDecl | let∅ #SequenceDecl@=LetDecl | #SequenceDecl@=InitPatt) (;∅ ((?=;) | #Sequence) ;∆1022∅ #Sequence? | [in of -> => <- <= \> \< >= ...] #Sequence ) |
+								#Sequence@:SequenceExpr (\.\.\. #Sequence)?>
 }

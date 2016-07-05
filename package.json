@@ -1,6 +1,6 @@
 {
 	"name"        : "tea-js",
-	"version"     : "0.2.0",
+	"version"     : "0.2.1",
 	"author"      : "Liang Wang",
 	"description" : "Unfancy JavaScript like coffeescript",
 	"keywords"    : ["javascript", "language", "teascript", "compiler" ],
@@ -10,7 +10,10 @@
     },
 	"devDependencies" : {
 		"source-map"  : "*",
-		"uglify-js"   : "*"
+		"uglify-js"   : "*",
+		"lodash": "^3.10.0",
+    	"mocha": "^2.3.3",
+    	"json-diff": "~0.3.1"
 	},
 	"main"        : "./lib/tea.js",
 	"directories" : {
@@ -22,7 +25,9 @@
 	"scripts"         : {
 		"installstp" : "node ./plugin/install.js",
 		"build"      : "node ./lib/index.js -p ./src/ -d define.tea -f index.tea -o ./bin/tea.js -j -v --clear --test",
-		"build-lib"  : "node ./lib/index.js -p ./src/ -d define.tea -o ./lib -v --test"
+		"build-lib"  : "node ./lib/index.js -p ./src/ -d define.tea -o ./lib -v --test",
+		
+		"test-tokenizer" : "node --expose_gc test/tokenizer.js"
 	},
 	"license"         : "MIT"
 }

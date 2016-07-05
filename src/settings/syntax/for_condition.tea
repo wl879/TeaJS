@@ -1,0 +1,21 @@
+
+module.exports = function(heap, src, params):
+	ref = @.parse('ForCondition');
+	if Array.isArray(ref):
+		[exp1, exp2, exp3] = ref;
+	else:
+		exp1 = ref;
+	if exp1 && !exp2 && !exp3:
+		temp = exp1;
+		do:
+			if temp.is('CompareExpr') && temp[1] && temp[1].isToken && temp[1].text in ['<=', 'in', 'of', '...', '>', '<', '>=']:
+				exp2 = temp[1];
+				exp3 = temp[2];
+				if temp == exp1:
+					exp1 = temp[0];
+				else:
+					temp[0].parent = temp.parent;
+					temp.parent[ -1 ] = temp[0];
+				break;
+		while temp = temp[-1];
+	return @.node('ForConditionExpr', exp1, exp2, exp3);

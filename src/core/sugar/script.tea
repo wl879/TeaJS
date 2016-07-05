@@ -1,0 +1,50 @@
+
+export default class Script:
+
+	constructor(script, args):
+		@.fragment = Script.create(script, args);
+
+	value():
+		value  = '';
+		for item => @.fragment:
+			if item as 'function':
+				item = item.apply(@, arguments);
+			if typeof item == 'string':
+				value += item;
+			else if item:
+				return item;
+		return value;
+
+	static create(text, args):
+		temps = [];
+		if text.indexOf('#script') != -1:
+			while (a = text.indexOf('#script')) != -1:
+				if ab = SText.indexPair(text, '#script', '#end', a):
+					b = ab[1];
+				else:
+					b = text.length;
+				if a:
+					temps.push( text.substr(0, a) );
+
+				if script = Script.createScript( text.slice(a + 7, b), args ):
+					temps.push( script );
+				text = text.substr(b + 4);
+			if text:
+				temps.push(text);
+		else:
+			temps = [text];
+		return temps;
+
+	static createScript(script, args = [], sugarBox):
+		script = Tea.compile(script, sugarBox);
+		temp = "
+			(function(${args.join(',')}){
+				var __output__  = '', echo = write;
+				function write(){
+					for(var i=0; i<arguments.length; i++)
+						__output__ += arguments[i];
+				}
+				${script};
+				return __output__;
+			})";
+		return eval( temp );

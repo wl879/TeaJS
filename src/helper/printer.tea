@@ -1,21 +1,14 @@
 
-print.register('Token', tokenPrinter);
-
-print.register('Source', sourcePrinter);
-
 print.register('Location', locationPrinter);
+print.register('Token',    tokenPrinter);
+print.register('Source',   sourcePrinter);
+print.register('Node',     nodePrinter);
+print.register('Scope',    scopePrinter);
+print.register('Card',     cardPrinter);
 
-print.register('Pattern', patternPrinter);
-
-print.register('Syntax', syntaxPrinter);
-
-print.register('Scope', scopePrinter);
-
-print.register('Card', cardPrinter);
-
-print.register('Asset', assetPrinter);
-
-print.register('GrammarStack', grammarStackPrinter);
+print.register('Syntax',  syntaxPrinter);
+print.register('Pattern',  patternPrinter);
+print.register('Standard', standardPrinter);
 
 function locationPrinter(loc):
 	text = loc.source,
@@ -25,7 +18,7 @@ function locationPrinter(loc):
 	return printer( 'Location', print.fragment(text, code, pos, file));
 
 function tokenPrinter(token):
-	return "(<g:${token.types.join(' ').replace(/\b(\w{3})\w+\b/g, '$1')}:> '${SText(token.text)}')";
+	return "(${token.indent>=0?'*':''}<g:${token.types.join(' ').replace(/\b(\w{3})\w+\b/g, '$1')}:> '${SText(token.text)}')";
 
 function sourcePrinter(src):
 	texts = [];
@@ -36,50 +29,7 @@ function sourcePrinter(src):
 			texts.push( ( i && token.is('HEAD') ? '\n' : '' ) + tokenPrinter(token) );
 	return printer('Source', texts.join(' '));
 
-function assetPrinter(asset, __level = 0):
-	texts = [ asset.type ];
-
-	conf = asset.config;
-	for key in conf:
-		if conf[key]:
-			texts.push( key+':"'+conf[key]+'"' );
-	switch asset.type:
-		case '*', 'Code Test', 'Node Test':
-			texts[0] += ': "'+asset.content+'"';
-		case 'Codes Test':
-			texts[0] += ': ["'+asset.content.join('" "')+'"]';
-		case 'Method Test':
-			texts[0] += ': '+asset.content+'('+asset.param.join(', ')+')';
-		case 'Sub':
-			texts.push('\n'+patternPrinter(asset.content, __level+1).replace(/^/mg, SText.tabsize)+'\n');
-		case 'Pair Test':
-			texts[0] += ': "'+asset.content[0]+'" ... "'+asset.content[1]+'"';
-		case 'Set Test':
-			temp = [];
-			for key in asset.content:
-				if key[0] != '_':
-					temp.push(key+'→'+asset.content[key].patt);
-			texts[0] += ': ['+temp.join(',')+']';	
-	text = '['+texts.join(' ')+']';
-	return text;
-
-function patternPrinter(patt, __level = 0):
-	switch isClass(patt):
-		case 'Asset':
-			return assetPrinter(patt, __level);
-		case 'Pattern':
-			texts = [];
-			for i -> patt:
-				texts.push( patternPrinter(patt[i], __level+1) );
-			if isClass(patt[0]) == 'Pattern':
-				text = texts.join('\n[r{or}]----\n');
-			else:
-				text = texts.join('\n').replace(/^/mg, '|  ');
-	if __level === 0:
-		text = printer('Grammar Pattern', '"<'+patt.string+'>"' + '\n'+text);
-	return text;
-
-function syntaxPrinter(node, __level = 0, __indent = 0):
+function nodePrinter(node, __level = 0, __indent = 0):
 	indent = '';
 	texts = [];
 	if /root|block/i.test( node.type ) && node.length:
@@ -89,15 +39,15 @@ function syntaxPrinter(node, __level = 0, __indent = 0):
 		if node[i].isToken:
 			texts.push( "'"+SText(node[i].text)+"'" );
 		else:				
-			texts.push( indent + syntaxPrinter(node[i], __level+1, indent ? __indent+1 : __indent ));
+			texts.push( indent + nodePrinter(node[i], __level+1, indent ? __indent+1 : __indent ));
 	text = "[(<g:${node.type}:>) "+texts.join(', ')+(indent?'\n'+SText.copy(SText.tabsize, __indent):'')+']'
 	if __level === 0:
-		return printer('Syntax Tree', text);
+		return printer('Node Tree', text);
 	return text;
 
 function scopePrinter(scope, __level = 0):
 	texts = [];
-	texts.push( scope.type + (scope.name?' "'+scope.name+'"' :'') );
+	texts.push( scope.type + ' < '+scope.target.type + (scope.name ? ' < "'+scope.name+'"' : '') );
 	undefineds = Object.keys(scope.undefines);
 	if undefineds.length:
 		texts.push( '  undefineds : "'+undefineds.join('", "')+'"');
@@ -107,12 +57,13 @@ function scopePrinter(scope, __level = 0):
 			for k, v in c:
 				if v:
 					m[v[0]] |= [];
-					m[v[0]].push( k );
-			
+					m[v[0]].push( v[1] ? k+'('+v[1]+')' : k );
+
 			if !Jsop.isEmpty(m):
 				texts.push( '  '+type+' :');
+			
 			for k, v in m:
-				texts.push( '      "'+k+'" : "'+v.join('", "')+'"' );
+				texts.push( '      "'+k+'" : '+v.join(', ') );
 	if scope.subs:
 		texts.push('<-->');
 		for i -> scope.subs:
@@ -123,48 +74,121 @@ function scopePrinter(scope, __level = 0):
 		return printer('Scope Object', text);
 	return text;
 
-function cardPrinter(data, __level = 0, __circular = []):
-	__circular.push(data);
+function cardPrinter(card, __level = 0):
 	texts = [];
-	for i, item -> data:
+	for item => card:
 		if item.isToken:
 			texts.push('"'+SText( item.text )+'"');
 		else if typeof item == 'string':
-			texts.push(SText(item));
+			texts.push('"'+SText(item)+'"');
 		else:
-			if __circular.indexOf(item) != -1:
-				return '[Circular]';
-			texts.push( cardPrinter(item, __level+1, __circular));
-	isblock = /root|block/i.test(data.type);
-	text ='[('+data.type.replace(/(Expr|Stam|Decl|Patt)$/g, '')+')'+(data.type=='Root'?'\n':'');
-	text += texts.join(isblock ? '\n' : '');
-	text += ']';
-	if /block/i.test(data.type):
-		text = text.replace(/^/mg, '\t')
+			if item = cardPrinter(item, __level+1):
+				texts.push( item );
+
+	lf = /root|node/i.test(card.type) ? '\n' : '';
+	text = texts.join(lf);
+	if text && lf:
+		text = text.replace(/^/mg, '\t');
+	text ='[('+(card.type||'??').replace(/(Expr|Stam|Decl|Patt)$/g, '')+')' + (text?lf+text+lf:'') + ']';
 
 	if __level === 0:
-		return printer('Script Card', text);
+		return printer('Transform Card', text);
+
 	return text;
 
-function grammarStackPrinter(stack, __level = 0):
+
+
+function syntaxPrinter(syntax):
+	if syntax.pattern:
+		text = syntaxPatternPrinter(syntax.pattern, 1);
+		return printer( syntax.name +' syntax pattern', '"<'+syntax.pattern.string+'>"' + '\n'+text);
+
+function patternPrinter(patt):
+	if patt.isSyntaxPattern:
+		return syntaxPatternPrinter(patt);
+	if patt.isTransformPattern:
+		return transformPatternPrinter(patt);
+
+function syntaxPatternPrinter(patt, __level = 0):
 	texts = [];
-	if stack.name:
-		texts.push( stack.name );
-
-	for item => stack.subs:
-		if item as 'string':
-			texts.push(item);
+	for asset => patt:
+		if asset.isSyntaxPattern:
+			texts.push( syntaxPatternPrinter(asset, __level+1) );
 		else:
-			texts.push( grammarStackPrinter(item, __level+1) );
-
-	if texts.length > 2:
-		text = ('*'+texts.join('\n    > ')).replace(/^(?!\*)/mg, '  ');
+			texts.push( syntaxAssetPrinter(asset, __level) );
+	if patt.type == 'Or':
+		text = texts.join('\n|································\n');
 	else:
-		text = texts.join(' - ');
-	if __level == 0:
-		return printer('Grammar stack', text);
+		text = texts.join('\n').replace(/^/mg, '|  ');
+	
+	if patt.type == 'Or' || patt.type == 'Group':
+		text = text.replace(/^\|  /g, '|- ').replace(/\n\|  (.*)$/g, '\n|- $1');
+
+	if __level === 0:
+		text = printer('syntax pattern', '"<'+patt.string+'>"' + '\n'+text);
 	return text;
+
+function syntaxAssetPrinter(asset, __level = 0):
+	texts = [ asset.type ];
+	for key, value in asset.config:
+		if value:
+			texts.push( key+':"'+value+'"' );
+	title = '['+texts.join(' ')+']';
+	texts = [];
+	value = asset.value;
+	switch asset.type:
+		case 'Group':
+			texts.push('\n'+ syntaxPatternPrinter(asset.value, __level+1) );
+		case '*', 'Code Test':
+			texts.push( '"'+value+'"' );
+		case 'Codes Test':
+			texts.push( '["'+value.join('" "')+'"]' );
+		case 'Node Test':
+			texts.push( value );
+		case 'Pair Test':
+			texts.push( '"'+value[0]+'" ... "'+value[1]+'"' );
+		case 'Method Test':
+			texts.push( value+'('+asset.params.join(', ')+')' );
+		case 'Set Test':
+			for key in value:
+				if key[0] != '_':
+					texts.push( "      \"${key}\"<> → <${value[key].value}>" );
+			for patt => value.__Defaults__:
+				texts.push( "       -<> → <${patt.value}>" );
+			return title+ ' [\n'+print.format(texts.join('\n'))+'\n    ]';
+	return title + ' ' +texts.join(' ');
+
+function standardPrinter(std, __level = 0):
+	texts = [];
+	if std.pattern:
+		return '    '+std.pattern;
+	if std.control:
+		texts.push( '['+std.control +'] '+ (std.condition||std.target||'')+':' );
+	if std.branch && std.branch.length:
+		for i -> std.branch:
+			texts.push( standardPrinter(std.branch[i], __level + 1));
+
+	if __level === 0:
+		return printer( 'standard object', texts.join('\n'));
+	return texts.join('\n').replace(/^/mg, '    ');
+
+function transformPatternPrinter(patt):
+	texts = [];
+	for asset => patt:
+		if !asset.isAsset:
+			texts.push( '         "'+asset+'"' );
+			continue;
+		texts.push( transformAssetPrinter(asset) );
+	return printer('transform pattern', texts.join('\n').replace(/^/mg, '    '));
+
+	
+function transformAssetPrinter(asset):
+	return "[${asset.type}]${SText.copy(' ', 6-asset.type.length)} "+asset.string
+
 
 function printer(title, text):
-	text = "| * ${title} Printer\n${text.replace(/^/mg, '  *  ')}\n| * End\n";
+	text = ("[<b:${title}:>]\n${text}\n[<b:End:>]").replace(/^/mg, '  <r:*:>  ')+'\n';
+	if print.isTerminal:
+		text = text.replace(/(\[[^\]]+\])/g, '<b:$1:>');
+		text = text.replace(/("(?:\\"|[^"])+")/g, '<g:$1:>');
 	return text;

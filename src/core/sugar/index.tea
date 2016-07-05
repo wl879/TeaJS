@@ -1,0 +1,87 @@
+var Source    = null;
+
+export default class SugarBox:
+	var Macro     = require "./macro";
+	var Script    = require "./script";
+	var Grammar   = require "../grammar";
+	var Transform = require "../transform";
+	constructor():
+		Source |= require "../source";
+		@.map     = {};
+		@._std_   = {};
+		@._expr_  = {};
+		@._stam_  = {};
+		@._sugar_ = {};
+		@._macro_ = {};
+
+	get length():
+		return Object.keys(@.map).length;
+
+	extend():
+		for box => arguments:
+			if !box:
+				continue;
+			for type, data in box:
+				Jsop.extend( @[type], data );
+		return @;
+
+	add(type, name, args, body, location):
+		switch type:
+			case 'sugar', 'expr', 'stam':
+				@.map[name]   = type = '_'+type+'_';
+				@[type][name] = Grammar.syntax(name, args, type == 'sugar' ? '' : 'package node');
+				continue;
+			case 'std':
+				@._std_[name] = new Script(body, ['handle', 'node', 'scope']);
+			case 'macro':
+				@.map[name]   = '_macro_';
+				@._macro_[name] = new Macro(name, args, body, location);
+
+	undef():
+		for name => arguments:
+			name = name.trim();
+			if @.map[name]:
+				delete @[@.map[name]][name];
+				delete @.map[name];
+				delete @._std_[name];
+
+	get(name, limit):
+		mark = name.match(/^(#*)/)[1];
+		if mark:
+			name = name.substr(mark.length);
+		if limit:
+			limit = '_'+limit+'_';
+			if name in @[limit]:
+				return @[limit][name];
+			if name in public[limit]:
+				return public[limit][name];
+
+		if name in @.map:
+			return @[ @.map[name] ][name];
+		if name in public.map:
+			return public[ public.map[name] ][name];
+
+	@::isSugarBox = true;
+
+export public = new SugarBox();
+
+export define( sugar ):
+	Source |= require "../source";
+	if typeof sugar == 'string':
+		if Fp.isPath(sugar):
+			Source.lexer( null, sugar, public );
+		else:
+			Source.lexer( sugar, null, public );
+	else if sugar:
+		public.extend( sugar );
+
+export box( extend ):
+	box = new SugarBox();
+	if extend:
+		if extend.isSource:
+			box.extend( extend.sugarBox );
+		else:
+			box.extend( extend );
+			box.parent = extend;
+	return box;
+

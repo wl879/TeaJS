@@ -1,54 +1,103 @@
 
 Code = require "./code.js";
 
-Error.create = function():
-	args = Jsop.toArray(arguments);
-	msg  = '';
+module.exports = function():
+	args = Jsop.toArray(arguments.length == 1 && arguments[0].length ? arguments[0] : arguments);
 	name = 'Parse error';
-	if args[-1] as Error:
-		err = args.pop();
+	msg  = '';
+
+	if args[-1] instanceof Error:
+		err    = args.pop();
 		stacks = print.stacks(err);
-		msg = err.message;
+		msg    = err.message;
 	else:
-		err  = new Error();
+		err    = new Error();
 		stacks = print.stacks(err);
 		stacks.shift();
+		
 	if args[0] as 'string':
 		msg = args.shift();
 	else if args[0] as 'number':
 		code = args.shift();
-		msg  = Code[ code ] || 'Undefined error code "'+code+'"';
-		name = (Code[ Math.floor(code/100)*100 ] || name) + ' (' + code + ')' ;
+		msg  = (Code[ code ] || "Undefined error code")+" · ${code}";
+		name = (Code[ Math.floor(code/1000)*1000 ] || name);
 
-	err.message = '['+name+']\n\n'+format(msg, args, stacks).replace(/^/mg, ' • ');
-	err.stacks = stacks;
-	err.__defineGetter__('stack', toStack)
+	err.code    = code;
+	err.message = print.format( format('<r:['+name+']:> '+msg, args, stacks).replace(/^/mg, '  ! ') );
+	err.stacks  = stacks;
+	err.__defineGetter__('stack', toText)
 	return err;
-
-Error.code = Code;
 
 function format(text, args, stacks):
 	for i, item -> args:
-		switch isClass(item):
+		switch Jsop.isClass(item):
 			case 'Number':
 				text = replace(text, '%d', item);
 			case 'String':
 				text = replace(text, '%s', item);
-		
 			case 'Standard':
 				text = replace(text, '%j', formatStandard(item));
-			case 'Syntax', 'Token', 'Source', 'Location':
+			case 'Node', 'Token', 'Source', 'Location', 'Array':
 				text = replace(text, '%j', formatLocation(item));
-
 			case 'Object': default:
 				text = replace(text, '%j', SText(item));
 
-
 	if text.indexOf('%e'):
-		i = 0;
-		text = text.replace(/%e/g, () => '<> at "'+stacks[i].fileName+':'+stacks[i].lineNumber+':'+stacks[i++].columnNumber+'"' );
+		text = text.replace(/%e/g, () => '<> at "'+stacks[0].fileName+':'+stacks[0].lineNumber+':'+stacks[0].columnNumber+'"' );
+	return text;
 
-	return print.format(text);
+function replace(text, substr, target):
+	if text.indexOf(substr) != -1:
+		return text.replace(substr, target);
+	return text+'\n'+target;
+
+function formatLocation(obj):
+	switch Jsop.isClass(obj):
+		case 'Node':
+			return formatLocation( obj.toList(0) );
+		case 'Source':
+			return formatLocation( obj.current );
+		case 'Token':
+			return formatLocation( obj.location );
+		case 'Array':
+			source = obj[0];
+			index  = obj[1];
+			code   = obj[2];
+			num    = SText.indexLine( source, index );
+			return formatFragment( source, code || source[index], num[1], num[2], '');
+		case 'Location':
+			return formatFragment( obj.source, obj.code, obj.lineNumber, obj.columnNumber, obj.fileName);
+	return 'undefined';
+
+function formatFragment(text = '', code = '', line = 0, col = 0, file):
+	if arguments.length == 1 && text as 'object':
+		file = text.fileName || text.file;
+		col  = text.columnNumber || text.column || text.col;
+		line = text.lineNumber || text.line || text.number;
+		code = text.code || text.text;
+		text = null;
+
+	if arguments.length == 4:
+		file = col;
+	if !text:
+		text = Fp.readFile(file);
+	if /\n/.test(text):
+		if arguments.length == 4:
+			[text, line, col] = SText.indexLine(text, line);
+		else if !line && code:
+			[text, line, col] = SText.indexLine(text, text.indexOf(code));
+		else:
+			text = text.split('\n')[line - 1];
+	if !code && col:
+		code =  SText.split( text.substr( col-1 ), /[\;\)\]\}\,]/)[0];
+
+	text = text.replace(/\n+$/g, '');
+	str = '  '+line+' | '+text+'\\n\n';
+	str += str.substr(0, str.length-3-text.length+col).replace(/[^\s]/g, ' ');
+	str += '<r:'+SText.copy('^', code.length||1)+':>';
+	if file:
+		str = '"'+file+':'+line+':'+col+'"\n\n'+str;
+	return str;	
 
 function formatStandard(std):
 	cache = std.cache;
@@ -63,27 +112,10 @@ function formatStandard(std):
 		texts[i] = SText.copy('  ', i)+texts[i];
 	return texts.join('\n');
 
-function formatLocation(obj):
-	switch isClass(obj):
-		case 'Syntax':
-			return formatLocation( obj.tokens(0) );
-		case 'Source':
-			return formatLocation( obj.current );
-		case 'Token':
-			return formatLocation( obj.location );
-		case 'Location':
-			return print.fragment( obj.source, obj.code, obj.lineNumber, obj.columnNumber, obj.fileName);
-	return 'undefined';
-
-function replace(text, substr, target):
-	if text.indexOf(substr) != -1:
-		return text.replace(substr, target);
-	return text+'\n\n'+target;
-
-function toStack():
-	if toStack.caller:
+function toText():
+	if toText.caller:
 		return @.message;
-	console.log( @.message + '\n' );
+	console.log( '\n'+ @.message + '\n' );
 	console.log( print.toText(@.stacks) );
-	Tea.exit(99);
+	Tea.exit( @.code || 999);
 

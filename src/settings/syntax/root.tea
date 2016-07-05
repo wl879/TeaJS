@@ -1,10 +1,24 @@
 
-Syntax = require "../../core/syntax";
+module.exports = function(heap, src, params):
+	node = @.node('Root');
 
-module.exports = function(src, params):
-	@.parser('COMMENT', src, null, false, true);
-	if src.current && src.current.is('BLANK', 'END', 'COMM', 'COMMENT'):
-		@.next(src, 1);
-	node = @.parser('Block', src, ['brace'], false, true) || new Syntax('Root');
-	node.type = 'Root';
+	if comment = @.parse('COMMENT'):
+		src.next(1);
+		if comment.text[0] == '#':
+			node.add( comment );
+	
+	while src.index < src.length:
+		if src.current.type == 'EOT':
+			break;
+		
+		if src.current.is('BREAK', 'BLANK', 'COMMENT', 'COMM'):
+			src.next(1);
+			continue;
+			
+		if ref = @.parse('Statement'):
+			node.add(ref);
+			src.next(1);
+			continue;
+
+		return @.throw(1100, src.current);
 	return node;
