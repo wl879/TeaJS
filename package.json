@@ -11,7 +11,6 @@
 	"devDependencies" : {
 		"source-map"  : "*",
 		"uglify-js"   : "*",
-		"lodash": "^3.10.0",
     	"mocha": "^2.3.3",
     	"json-diff": "~0.3.1"
 	},
